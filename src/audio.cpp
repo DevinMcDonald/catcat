@@ -104,6 +104,16 @@ class AudioSystem::Impl {
   bool MusicEnabled() const { return music_enabled_; }
 
  private:
+  std::string ResolvePath(const std::string& base, const std::string& path) {
+    if (path.empty()) return path;
+    if (path[0] == '/' || (path.size() > 1 && path[1] == ':')) {
+      return path;  // absolute (unix or windows)
+    }
+    if (base.empty()) return path;
+    if (base.back() == '/') return base + path;
+    return base + "/" + path;
+  }
+
   void LoadConfig() {
     events_.clear();
     music_.clear();
@@ -112,6 +122,13 @@ class AudioSystem::Impl {
     if (!in) return;
     nlohmann::json j;
     in >> j;
+    std::string base_dir;
+    {
+      auto pos = config_path_.find_last_of("/\\");
+      if (pos != std::string::npos) {
+        base_dir = config_path_.substr(0, pos);
+      }
+    }
     if (j.contains("volume")) {
       const auto& v = j["volume"];
       if (v.contains("sfx")) sfx_volume_ = std::clamp(v["sfx"].get<float>(), 0.0F, 1.0F);
@@ -123,17 +140,17 @@ class AudioSystem::Impl {
       for (auto it = j["events"].begin(); it != j["events"].end(); ++it) {
         EventEntry entry;
         const auto& v = it.value();
-        if (v.is_array()) {
-          for (const auto& f : v) {
-            entry.files.push_back(f.get<std::string>());
-          }
-        } else if (v.is_object()) {
-          if (v.contains("files")) {
-            for (const auto& f : v["files"]) {
-              entry.files.push_back(f.get<std::string>());
+          if (v.is_array()) {
+            for (const auto& f : v) {
+            entry.files.push_back(ResolvePath(base_dir, f.get<std::string>()));
             }
-          }
-          if (v.contains("volume") && v["volume"].is_number()) {
+          } else if (v.is_object()) {
+            if (v.contains("files")) {
+              for (const auto& f : v["files"]) {
+              entry.files.push_back(ResolvePath(base_dir, f.get<std::string>()));
+              }
+            }
+            if (v.contains("volume") && v["volume"].is_number()) {
             entry.volume = std::clamp(v["volume"].get<float>(), 0.0F, 2.0F);
           }
         }
