@@ -183,7 +183,7 @@ class Game {
     }
 
     if (event == ftxui::Event::Character('h')) {
-      show_controls_ = true;
+      show_controls_ = !show_controls_;
       return true;
     }
 
@@ -254,16 +254,22 @@ class Game {
       handled = true;
     }
     if (event == ftxui::Event::Escape) {
+      view_shop_ = false;
+      show_controls_ = false;
       if (held_tower_) {
         CancelHold();
         overlay_enabled_ = false;
       } else {
-        overlay_enabled_ = !overlay_enabled_;
+        overlay_enabled_ = false;
       }
       handled = true;
     }
     if (event == ftxui::Event::Character('m')) {
-      PickUpTower();
+      if (held_tower_) {
+        TryPlaceHeld();
+      } else {
+        PickUpTower();
+      }
       handled = true;
     }
     if (event == ftxui::Event::Character('x')) {
@@ -280,17 +286,11 @@ class Game {
   ftxui::Element Render() const {
     auto board = RenderBoard();
     auto stats = RenderStats();
-    auto main = hbox({
+    return hbox({
         board | border,
         separator(),
         stats | border,
     });
-    if (!view_shop_) {
-      return main;
-    }
-
-    auto overlay = RenderShopOverlay();
-    return ftxui::dbox({main, overlay});
   }
 
   bool GameOver() const { return game_over_; }
@@ -337,7 +337,7 @@ class Game {
       return;
     }
     ++wave_;
-    spawn_remaining_ = 6 + wave_ * 2;
+    spawn_remaining_ = 6 + DifficultyLevel() * 2;
     spawn_cooldown_ms_ = 0;
     wave_active_ = true;
   }
@@ -358,8 +358,9 @@ class Game {
 
     Enemy e;
     e.path_progress = 0.0F;
-    e.speed = (0.65F + static_cast<float>(wave_) * 0.07F) * kSpeedFactor;
-    e.max_hp = 6 + wave_ * 3;
+    const int diff = DifficultyLevel();
+    e.speed = (0.65F + static_cast<float>(diff) * 0.07F) * kSpeedFactor;
+    e.max_hp = 6 + diff * 3;
     e.hp = e.max_hp;
     const int width = std::max(1, CurrentMap().path_width);
     if (width > 1) {
@@ -641,6 +642,12 @@ class Game {
   float NextCooldown(float base_rate) {
     const float scaled = base_rate / kSpeedFactor;
     return std::max(0.06F, scaled + Rand(-0.14F, 0.14F));
+  }
+
+  int DifficultyLevel() const {
+    const int local = (wave_ - 1) % 10 + 1;
+    const int map_bonus = map_index_ * 2;
+    return local + map_bonus;
   }
 
   const MapDef& CurrentMap() const { return maps_[static_cast<size_t>(map_index_)]; }
@@ -1261,43 +1268,6 @@ class Game {
     }
 
     return vbox(std::move(rows));
-  }
-
-  ftxui::Element RenderShopOverlay() const {
-    const std::array<TowerDef, 4> defs = {GetDef(Tower::Type::Default),
-                                          GetDef(Tower::Type::Thunder),
-                                          GetDef(Tower::Type::Fat),
-                                          GetDef(Tower::Type::Kitty)};
-    std::vector<ftxui::Element> lines;
-    lines.push_back(text("Shop (press p to close)"));
-    lines.push_back(separator());
-    for (size_t i = 0; i < defs.size(); ++i) {
-      const auto& d = defs[i];
-      const bool unlocked = IsUnlocked(d.type);
-      const int unlock_cost = d.cost * 10;
-      const char key = static_cast<char>('1' + static_cast<int>(i));
-      std::string line = "[";
-      line.push_back(key);
-      line += "] ";
-      line += d.name + (unlocked ? " unlocked" : " locked");
-      if (unlocked) {
-        line += " | " + std::to_string(d.cost) + " kib";
-      } else {
-        line += " | unlock " + std::to_string(unlock_cost) + " kib";
-      }
-      lines.push_back(text(line));
-    }
-    lines.push_back(separator());
-    lines.push_back(text("Press 1/2/3/4 to unlock/select"));
-
-    auto box = window(text(" Shop "), vbox(std::move(lines)));
-    auto centered = vbox({
-        ftxui::filler(),
-        hbox({ftxui::filler(), box | border, ftxui::filler()}),
-        ftxui::filler(),
-    });
-    auto dim = ftxui::filler() | bgcolor(ftxui::Color::GrayDark);
-    return ftxui::dbox({dim, centered});
   }
 
   ftxui::Element RenderStats() const {
