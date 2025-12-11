@@ -30,7 +30,7 @@ namespace {
 
 constexpr int kBoardWidth = 24;
 constexpr int kBoardHeight = 14;
-constexpr int kTickMs = 120;
+constexpr int kTickMs = 16;  // ~60 FPS
 constexpr float kTickSeconds = kTickMs / 1000.0F;
 constexpr int kStartingCoins = 90;
 constexpr int kStartingLives = 15;
@@ -45,6 +45,11 @@ float DistanceSquared(const Position& a, const Position& b) {
   const float dx = static_cast<float>(a.x - b.x);
   const float dy = static_cast<float>(a.y - b.y);
   return dx * dx + dy * dy;
+}
+
+ftxui::Color BlendColor(const ftxui::Color& base, const ftxui::Color& overlay,
+                        float alpha) {
+  return ftxui::Color::Interpolate(alpha, base, overlay);
 }
 
 struct Enemy {
@@ -67,6 +72,14 @@ struct HitSplat {
   float time_left = 0.25F;  // seconds
 };
 
+struct Projectile {
+  float x = 0.0F;
+  float y = 0.0F;
+  Position target{};
+  float speed = 17.0F;  // cells per second
+  int damage = 0;
+};
+
 class Game {
  public:
   Game() {
@@ -84,6 +97,8 @@ class Game {
     SpawnTick();
     MoveEnemies();
     TowersAct();
+    MoveProjectiles();
+    ResolveProjectiles();
     Cleanup();
     UpdateHitSplats();
     CheckWaveCompletion();
@@ -266,15 +281,71 @@ class Game {
       }
 
       auto& target = enemies_[*target_index];
-      target.hp -= t.damage;
-      t.cooldown = t.fire_rate;
-      if (target.hp <= 0) {
-        coins_ += 12;
-      } else {
-        const auto pos = EnemyCell(target);
-        hit_splats_.push_back({pos, 0.28F});
+      Projectile p;
+      p.x = static_cast<float>(t.pos.x);
+      p.y = static_cast<float>(t.pos.y);
+      p.target = EnemyCell(target);
+      p.speed = 9.5F;
+      p.damage = t.damage;
+      projectiles_.push_back(p);
+      t.cooldown = NextCooldown(t.fire_rate);
+    }
+  }
+
+  void MoveProjectiles() {
+    for (auto& p : projectiles_) {
+      const float dx = static_cast<float>(p.target.x) - p.x;
+      const float dy = static_cast<float>(p.target.y) - p.y;
+      const float dist = std::sqrt(dx * dx + dy * dy);
+      const float step = p.speed * kTickSeconds;
+      if (dist <= step || dist < 1e-3F) {
+        p.x = static_cast<float>(p.target.x);
+        p.y = static_cast<float>(p.target.y);
+        continue;
+      }
+      const float norm = step / dist;
+      p.x += dx * norm;
+      p.y += dy * norm;
+    }
+  }
+
+  void ResolveProjectiles() {
+    std::vector<Projectile> survivors;
+    survivors.reserve(projectiles_.size());
+    for (auto& p : projectiles_) {
+      const float dx = static_cast<float>(p.target.x) - p.x;
+      const float dy = static_cast<float>(p.target.y) - p.y;
+      const float dist2 = dx * dx + dy * dy;
+      if (dist2 > 0.05F) {  // not arrived yet
+        survivors.push_back(p);
+        continue;
+      }
+
+      // Find nearest enemy to impact point.
+      std::optional<size_t> hit_index;
+      float best_d2 = 1.0F;
+      for (size_t i = 0; i < enemies_.size(); ++i) {
+        const auto pos = EnemyCell(enemies_[i]);
+        const float ddx = static_cast<float>(pos.x) - p.x;
+        const float ddy = static_cast<float>(pos.y) - p.y;
+        const float d2 = ddx * ddx + ddy * ddy;
+        if (d2 < best_d2) {
+          best_d2 = d2;
+          hit_index = i;
+        }
+      }
+
+      if (hit_index.has_value()) {
+        auto& target = enemies_[*hit_index];
+        target.hp -= p.damage;
+        if (target.hp <= 0) {
+          coins_ += 12;
+        } else {
+          hit_splats_.push_back({EnemyCell(target), 0.28F});
+        }
       }
     }
+    projectiles_ = std::move(survivors);
   }
 
   void Cleanup() {
@@ -329,7 +400,8 @@ class Game {
     t.pos = cursor_;
     t.damage = 3;
     t.range = 3.5F;
-    t.fire_rate = 1.0F;
+    t.fire_rate = 0.85F;
+    t.cooldown = Rand(0.05F, t.fire_rate);  // offset starts for async cadence
     towers_.push_back(t);
     coins_ -= kCatCost;
   }
@@ -360,6 +432,13 @@ class Game {
     return DistanceSquared(center, cell) <= range * range;
   }
 
+  float Rand(float min, float max) {
+    std::uniform_real_distribution<float> dist(min, max);
+    return dist(rng_);
+  }
+
+  float NextCooldown(float base_rate) { return std::max(0.08F, base_rate + Rand(-0.18F, 0.18F)); }
+
   ftxui::Element RenderBoard() const {
     std::vector<std::vector<char>> glyphs(
         kBoardHeight, std::vector<char>(kBoardWidth, ' '));
@@ -369,6 +448,8 @@ class Game {
     std::vector<std::vector<ftxui::Color>> foregrounds(
         kBoardHeight, std::vector<ftxui::Color>(kBoardWidth, ftxui::Color::White));
     std::vector<std::vector<bool>> highlight(
+        kBoardHeight, std::vector<bool>(kBoardWidth, false));
+    std::vector<std::vector<bool>> enemy_mask(
         kBoardHeight, std::vector<bool>(kBoardWidth, false));
 
     // Range indicator: subtle for existing cats, brighter for cursor preview.
@@ -433,6 +514,19 @@ class Game {
       glyphs[yi][xi] = 'r';
       backgrounds[yi][xi] = ftxui::Color::Red3;
       foregrounds[yi][xi] = EnemyColor(e);
+      enemy_mask[yi][xi] = true;
+    }
+
+    for (const auto& p : projectiles_) {
+      const int px = static_cast<int>(std::round(p.x));
+      const int py = static_cast<int>(std::round(p.y));
+      if (py < 0 || py >= kBoardHeight || px < 0 || px >= kBoardWidth) {
+        continue;
+      }
+      const auto yi = static_cast<size_t>(py);
+      const auto xi = static_cast<size_t>(px);
+      glyphs[yi][xi] = '*';
+      foregrounds[yi][xi] = ftxui::Color::SkyBlue1;
     }
 
     for (const auto& hs : hit_splats_) {
@@ -447,15 +541,22 @@ class Game {
       foregrounds[yi][xi] = ftxui::Color::Red3;
     }
 
+    const auto apply_tint = [&](size_t yi, size_t xi, const ftxui::Color& tint,
+                                float alpha) {
+      backgrounds[yi][xi] = BlendColor(backgrounds[yi][xi], tint, alpha);
+    };
+
     for (int y = 0; y < kBoardHeight; ++y) {
       const auto yi = static_cast<size_t>(y);
       for (int x = 0; x < kBoardWidth; ++x) {
         const auto xi = static_cast<size_t>(x);
-        if (range_hint_base[yi][xi]) {
-          backgrounds[yi][xi] = ftxui::Color::DarkSeaGreen;
-        }
-        if (range_hint_preview[yi][xi]) {
-          backgrounds[yi][xi] = ftxui::Color::LightSkyBlue1;
+        if (!enemy_mask[yi][xi]) {
+          if (range_hint_base[yi][xi]) {
+            apply_tint(yi, xi, ftxui::Color::DarkSeaGreen, 0.25F);
+          }
+          if (range_hint_preview[yi][xi]) {
+            apply_tint(yi, xi, ftxui::Color::LightSkyBlue1, 0.45F);
+          }
         }
       }
     }
@@ -499,7 +600,8 @@ class Game {
     lines.push_back(separator());
     lines.push_back(text("Default Cat:"));
     lines.push_back(text("- Damage: 3, Range: 3.5"));
-    lines.push_back(text("- Fire Rate: 1.0s, Cost: " + std::to_string(kCatCost)));
+    lines.push_back(text("- Fire Rate: 0.85s (jittered), Cost: " +
+                         std::to_string(kCatCost)));
 
     if (game_over_) {
       lines.push_back(text("Game Over") | bold | color(ftxui::Color::RedLight));
@@ -523,7 +625,10 @@ class Game {
   std::vector<Enemy> enemies_;
   std::vector<Tower> towers_;
   std::vector<HitSplat> hit_splats_;
+  std::vector<Projectile> projectiles_;
   Position cursor_{};
+
+  std::mt19937 rng_{std::random_device{}()};
 
   int coins_ = 0;
   int lives_ = 0;
