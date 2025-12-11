@@ -4,6 +4,8 @@
 #include <chrono>
 #include <cmath>
 #include <functional>
+#include <memory>
+#include <unordered_map>
 #include <optional>
 #include <random>
 #include <string>
@@ -15,6 +17,8 @@
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/color.hpp>
+
+#include "audio.hpp"
 
 using namespace std::chrono_literals;
 using ftxui::bgcolor;
@@ -114,6 +118,7 @@ struct AreaHighlight {
   float time_left = 0.2F;
 };
 
+
 struct TowerDef {
   Tower::Type type;
   std::string name;
@@ -154,6 +159,11 @@ class Game {
     kibbles_ = kStartingKibbles;
     lives_ = kStartingLives;
     cursor_ = {3, kBoardHeight / 2};
+#ifdef ENABLE_AUDIO
+    audio_ = std::make_unique<AudioSystem>();
+    audio_->Init("audio.json");
+    audio_->SetMusicForMap(map_index_);
+#endif
   }
 
   void Tick() {
@@ -253,6 +263,18 @@ class Game {
       view_shop_ = !view_shop_;
       handled = true;
     }
+    if (event == ftxui::Event::Character('t')) {  // toggle sfx
+#ifdef ENABLE_AUDIO
+      audio_->ToggleSfx();
+#endif
+      handled = true;
+    }
+    if (event == ftxui::Event::Character('y')) {  // toggle music
+#ifdef ENABLE_AUDIO
+      audio_->ToggleMusic();
+#endif
+      handled = true;
+    }
     if (event == ftxui::Event::Escape) {
       view_shop_ = false;
       show_controls_ = false;
@@ -340,6 +362,7 @@ class Game {
     spawn_remaining_ = 6 + DifficultyLevel() * 2;
     spawn_cooldown_ms_ = 0;
     wave_active_ = true;
+    Sfx("wave_start");
   }
 
   void SpawnTick() {
@@ -374,6 +397,7 @@ class Game {
   }
 
   void MoveEnemies() {
+    int lives_before = lives_;
     for (auto& e : enemies_) {
       e.path_progress += e.speed * kTickSeconds;
     }
@@ -385,6 +409,11 @@ class Game {
         lives_ = std::max(0, lives_ - 1);
       }
     }
+#ifdef ENABLE_AUDIO
+    if (lives_ < lives_before) {
+      Sfx("life_lost");
+    }
+#endif
   }
 
   std::optional<size_t> FindTarget(const Tower& t) const {
@@ -435,18 +464,30 @@ class Game {
           p.speed = 17.0F;
           p.damage = t.damage;
           projectiles_.push_back(p);
+#ifdef ENABLE_AUDIO
+          audio_->PlayEvent("tower_default_shoot");
+#endif
           break;
         }
         case Tower::Type::Thunder: {
           FireLaser(t, enemies_[*target_index]);
+#ifdef ENABLE_AUDIO
+          audio_->PlayEvent("tower_thunder_shoot");
+#endif
           break;
         }
         case Tower::Type::Fat: {
           FireShockwave(t);
+#ifdef ENABLE_AUDIO
+          audio_->PlayEvent("tower_fat_shoot");
+#endif
           break;
         }
         case Tower::Type::Kitty: {
           FireKitty(t, enemies_[*target_index]);
+#ifdef ENABLE_AUDIO
+          audio_->PlayEvent("tower_kitty_shoot");
+#endif
           break;
         }
       }
@@ -501,7 +542,8 @@ class Game {
         auto& target = enemies_[*hit_index];
         target.hp -= p.damage;
         if (target.hp <= 0) {
-        kibbles_ += 12;
+          kibbles_ += 12;
+          Sfx("rat_die");
         } else {
           hit_splats_.push_back({EnemyCell(target), 0.28F});
         }
@@ -558,6 +600,10 @@ class Game {
     lives_ = kStartingLives;
     auto_waves_ = false;
     BuildPath();
+#ifdef ENABLE_AUDIO
+    audio_->SetMusicForMap(map_index_);
+    audio_->PlayEvent("map_change");
+#endif
   }
 
   void PlaceTower() {
@@ -590,6 +636,7 @@ class Game {
     t.size = def.size;
     towers_.push_back(t);
     kibbles_ -= def.cost;
+    Sfx("place");
   }
 
   Position EnemyCell(const Enemy& e) const {
@@ -652,6 +699,18 @@ class Game {
 
   const MapDef& CurrentMap() const { return maps_[static_cast<size_t>(map_index_)]; }
 
+  void Sfx(const std::string& name) {
+#ifdef ENABLE_AUDIO
+    if (audio_) audio_->PlayEvent(name);
+#endif
+  }
+
+  void SetMusic(int map_idx) {
+#ifdef ENABLE_AUDIO
+    if (audio_) audio_->SetMusicForMap(map_idx);
+#endif
+  }
+
   Vec2 TowerCenter(const Tower& t) const {
     const float cx = static_cast<float>(t.pos.x) + (static_cast<float>(t.size) - 1.0F) / 2.0F;
     const float cy = static_cast<float>(t.pos.y) + (static_cast<float>(t.size) - 1.0F) / 2.0F;
@@ -689,6 +748,7 @@ class Game {
       kibbles_ -= unlock_cost;
       Unlock(type);
       selected_type_ = type;
+      Sfx("unlock");
     }
   }
 
@@ -805,6 +865,7 @@ class Game {
     const int refund = static_cast<int>(std::round(def.cost * 0.6F));
     kibbles_ += refund;
     towers_.erase(towers_.begin() + static_cast<long>(*idx));
+    Sfx("sell");
   }
 
   void FireLaser(const Tower& t, Enemy& target) {
@@ -830,6 +891,7 @@ class Game {
         e.hp -= t.damage;
         if (e.hp <= 0) {
           kibbles_ += 12;
+          Sfx("rat_die");
         } else {
           hit_splats_.push_back({EnemyCell(e), 0.18F});
         }
@@ -869,6 +931,7 @@ class Game {
         e.hp -= t.damage;
         if (e.hp <= 0) {
           kibbles_ += 12;
+          Sfx("rat_die");
         } else {
           hit_splats_.push_back({pos, 0.22F});
         }
@@ -911,6 +974,7 @@ class Game {
       e.hp -= t.damage;
       if (e.hp <= 0) {
         kibbles_ += 12;
+        Sfx("rat_die");
       } else {
         hit_splats_.push_back({pos, 0.18F});
       }
@@ -1341,6 +1405,8 @@ class Game {
       lines.push_back(text("1/2/3/4     - select cat type"));
       lines.push_back(text("p           - toggle shop view"));
       lines.push_back(text("n/N         - next wave / auto waves"));
+      lines.push_back(text("t           - toggle sfx"));
+      lines.push_back(text("y           - toggle music"));
       lines.push_back(text("q           - quit"));
     } else {
       lines.push_back(separator());
@@ -1367,6 +1433,7 @@ class Game {
   Position cursor_{};
 
   std::mt19937 rng_{std::random_device{}()};
+  std::unique_ptr<AudioSystem> audio_;
 
   Tower::Type selected_type_ = Tower::Type::Default;
   bool unlocked_thunder_ = false;
