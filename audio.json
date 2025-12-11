@@ -13,16 +13,17 @@
     "place": { "files": ["audio/sfx/place.wav"], "volume": 0.8 },
     "sell": { "files": ["audio/sfx/sell.wav"], "volume": 0.8 }
   },
+
   "music": {
-    "map_0": { "files": ["audio/music/map_0.mp3"], "volume": 0.7 },
-    "map_1": { "files": ["audio/music/map_1.wav"], "volume": 0.7 },
-    "map_2": { "files": ["audio/music/map_2.wav"], "volume": 0.7 },
-    "map_3": { "files": ["audio/music/map_3.wav"], "volume": 0.7 },
-    "map_4": { "files": ["audio/music/map_4.wav"], "volume": 0.7 },
-    "map_5": { "files": ["audio/music/map_5.wav"], "volume": 0.7 },
-    "map_6": { "files": ["audio/music/map_6.wav"], "volume": 0.7 },
-    "map_7": { "files": ["audio/music/map_7.wav"], "volume": 0.7 },
-    "map_8": { "files": ["audio/music/map_8.wav"], "volume": 0.7 },
-    "map_9": { "files": ["audio/music/map_9.wav"], "volume": 0.7 }
+    "map_0": { "files": ["bass_crap.mp3"], "volume": 0.7 },
+    "map_1": { "files": ["bratwurst_summer.mp3"], "volume": 0.7 },
+    "map_2": { "files": ["dare_you.mp3"], "volume": 0.7 },
+    "map_3": { "files": ["deep_n_dark.mp3"], "volume": 0.7 },
+    "map_4": { "files": ["dundno.mp3"], "volume": 0.7 },
+    "map_5": { "files": ["theresbeenathirdplane.mp3"], "volume": 0.7 },
+    "map_6": { "files": ["plane2.mp3"], "volume": 0.7 },
+    "map_7": { "files": ["ploppin_around.mp3"], "volume": 0.7 },
+    "map_8": { "files": ["soft.mp3"], "volume": 0.7 },
+    "map_9": { "files": ["marios.mp3"], "volume": 0.7 }
   }
 }

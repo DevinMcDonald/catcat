@@ -40,6 +40,7 @@ class AudioSystem::Impl {
   }
 
   void Shutdown() {
+    CleanupSounds(true);
     StopMusic();
     if (engine_init_) {
       ma_engine_uninit(&engine_);
@@ -57,7 +58,16 @@ class AudioSystem::Impl {
     const auto& list = entry.files;
     const size_t idx = list.size() == 1 ? 0 : static_cast<size_t>(dist_(rng_) % list.size());
     const float vol = std::clamp(entry.volume, 0.0F, 2.0F);
-    ma_engine_play_sound_ex(&engine_, list[idx].c_str(), nullptr, 0, 0, vol, 0, 1);
+    CleanupSounds(false);
+
+    auto sound = std::make_unique<ma_sound>();
+    if (ma_sound_init_from_file(&engine_, list[idx].c_str(), MA_SOUND_FLAG_ASYNC, nullptr, nullptr,
+                                sound.get()) != MA_SUCCESS) {
+      return;
+    }
+    ma_sound_set_volume(sound.get(), sfx_volume_ * vol);
+    ma_sound_start(sound.get());
+    active_sounds_.push_back(std::move(sound));
   }
 
   void SetMusicForMap(int map_index) {
@@ -166,6 +176,21 @@ class AudioSystem::Impl {
     }
   }
 
+  void CleanupSounds(bool force_all) {
+    if (active_sounds_.empty()) return;
+    active_sounds_.erase(
+        std::remove_if(active_sounds_.begin(), active_sounds_.end(),
+                       [&](std::unique_ptr<ma_sound>& s) {
+                         if (!s) return true;
+                         if (force_all || ma_sound_is_playing(s.get()) == MA_FALSE) {
+                           ma_sound_uninit(s.get());
+                           return true;
+                         }
+                         return false;
+                       }),
+        active_sounds_.end());
+  }
+
   ma_engine engine_{};
   bool engine_init_ = false;
   bool music_loaded_ = false;
@@ -178,6 +203,7 @@ class AudioSystem::Impl {
   bool sfx_enabled_ = true;
   bool music_enabled_ = true;
   float current_music_gain_ = 1.0F;
+  std::vector<std::unique_ptr<ma_sound>> active_sounds_;
   std::mt19937 rng_{std::random_device{}()};
   std::uniform_int_distribution<int> dist_;
 };
