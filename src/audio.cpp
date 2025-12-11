@@ -1,6 +1,7 @@
 #include "audio.hpp"
 
 #include <memory>
+#include <algorithm>
 #include <random>
 #include <unordered_map>
 #include <vector>
@@ -10,6 +11,16 @@
 #include "miniaudio.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
+
+struct EventEntry {
+  std::vector<std::string> files;
+  float volume = 1.0F;
+};
+
+struct MusicEntry {
+  std::vector<std::string> files;
+  float volume = 1.0F;
+};
 
 class AudioSystem::Impl {
  public:
@@ -41,10 +52,12 @@ class AudioSystem::Impl {
   void PlayEvent(const std::string& name) {
     if (!engine_init_ || !sfx_enabled_) return;
     auto it = events_.find(name);
-    if (it == events_.end() || it->second.empty()) return;
-    const auto& list = it->second;
+    if (it == events_.end() || it->second.files.empty()) return;
+    const auto& entry = it->second;
+    const auto& list = entry.files;
     const size_t idx = list.size() == 1 ? 0 : static_cast<size_t>(dist_(rng_) % list.size());
-    ma_engine_play_sound(&engine_, list[idx].c_str(), nullptr);
+    const float vol = std::clamp(entry.volume, 0.0F, 2.0F);
+    ma_engine_play_sound_ex(&engine_, list[idx].c_str(), nullptr, 0, 0, vol, 0, 1);
   }
 
   void SetMusicForMap(int map_index) {
@@ -52,8 +65,8 @@ class AudioSystem::Impl {
     StopMusic();
     if (!music_enabled_) return;
     const auto it = music_.find(map_index);
-    if (it == music_.end() || it->second.empty()) return;
-    const auto& tracks = it->second;
+    if (it == music_.end() || it->second.files.empty()) return;
+    const auto& tracks = it->second.files;
     const size_t idx = tracks.size() == 1 ? 0 : static_cast<size_t>(dist_(rng_) % tracks.size());
     const std::string& path = tracks[idx];
     if (ma_sound_init_from_file(&engine_, path.c_str(),
@@ -62,8 +75,9 @@ class AudioSystem::Impl {
       music_loaded_ = false;
       return;
     }
+    current_music_gain_ = std::clamp(it->second.volume, 0.0F, 2.0F);
     ma_sound_set_looping(&music_sound_, MA_TRUE);
-    ma_sound_set_volume(&music_sound_, music_volume_);
+    ma_sound_set_volume(&music_sound_, music_volume_ * current_music_gain_);
     ma_sound_start(&music_sound_);
     music_loaded_ = true;
   }
@@ -97,11 +111,23 @@ class AudioSystem::Impl {
     }
     if (j.contains("events")) {
       for (auto it = j["events"].begin(); it != j["events"].end(); ++it) {
-        std::vector<std::string> files;
-        for (const auto& f : it.value()) {
-          files.push_back(f.get<std::string>());
+        EventEntry entry;
+        const auto& v = it.value();
+        if (v.is_array()) {
+          for (const auto& f : v) {
+            entry.files.push_back(f.get<std::string>());
+          }
+        } else if (v.is_object()) {
+          if (v.contains("files")) {
+            for (const auto& f : v["files"]) {
+              entry.files.push_back(f.get<std::string>());
+            }
+          }
+          if (v.contains("volume") && v["volume"].is_number()) {
+            entry.volume = std::clamp(v["volume"].get<float>(), 0.0F, 2.0F);
+          }
         }
-        events_[it.key()] = std::move(files);
+        events_[it.key()] = std::move(entry);
       }
     }
     if (j.contains("music")) {
@@ -112,11 +138,23 @@ class AudioSystem::Impl {
         } catch (...) {
           continue;
         }
-        std::vector<std::string> files;
-        for (const auto& f : it.value()) {
-          files.push_back(f.get<std::string>());
+        MusicEntry entry;
+        const auto& v = it.value();
+        if (v.is_array()) {
+          for (const auto& f : v) {
+            entry.files.push_back(f.get<std::string>());
+          }
+        } else if (v.is_object()) {
+          if (v.contains("files")) {
+            for (const auto& f : v["files"]) {
+              entry.files.push_back(f.get<std::string>());
+            }
+          }
+          if (v.contains("volume") && v["volume"].is_number()) {
+            entry.volume = std::clamp(v["volume"].get<float>(), 0.0F, 2.0F);
+          }
         }
-        music_[map_idx] = std::move(files);
+        music_[map_idx] = std::move(entry);
       }
     }
   }
@@ -132,13 +170,14 @@ class AudioSystem::Impl {
   bool engine_init_ = false;
   bool music_loaded_ = false;
   ma_sound music_sound_{};
-  std::unordered_map<std::string, std::vector<std::string>> events_;
-  std::unordered_map<int, std::vector<std::string>> music_;
+  std::unordered_map<std::string, EventEntry> events_;
+  std::unordered_map<int, MusicEntry> music_;
   std::string config_path_;
   float sfx_volume_ = 1.0F;
   float music_volume_ = 1.0F;
   bool sfx_enabled_ = true;
   bool music_enabled_ = true;
+  float current_music_gain_ = 1.0F;
   std::mt19937 rng_{std::random_device{}()};
   std::uniform_int_distribution<int> dist_;
 };
@@ -169,4 +208,3 @@ bool AudioSystem::SfxEnabled() const { return false; }
 bool AudioSystem::MusicEnabled() const { return false; }
 
 #endif
-

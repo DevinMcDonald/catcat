@@ -272,6 +272,9 @@ class Game {
     if (event == ftxui::Event::Character('y')) {  // toggle music
 #ifdef ENABLE_AUDIO
       audio_->ToggleMusic();
+      if (audio_->MusicEnabled()) {
+        audio_->SetMusicForMap(map_index_);
+      }
 #endif
       handled = true;
     }

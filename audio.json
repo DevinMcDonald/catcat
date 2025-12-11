@@ -1,28 +1,28 @@
 {
   "volume": { "sfx": 1.0, "music": 0.8 },
   "events": {
-    "rat_die": ["audio/sfx/rat_die1.ogg"],
-    "tower_default_shoot": ["audio/sfx/default_shoot.ogg"],
-    "tower_thunder_shoot": ["audio/sfx/thunder_shoot.ogg"],
-    "tower_fat_shoot": ["audio/sfx/fat_shock.ogg"],
-    "tower_kitty_shoot": ["audio/sfx/kitty_swipe.ogg"],
-    "wave_start": ["audio/sfx/wave_start.ogg"],
-    "map_change": ["audio/sfx/map_change.ogg"],
-    "life_lost": ["audio/sfx/life_lost.ogg"],
-    "unlock": ["audio/sfx/unlock.ogg"],
-    "place": ["audio/sfx/place.ogg"],
-    "sell": ["audio/sfx/sell.ogg"]
+    "rat_die": { "files": ["audio/sfx/rat_die.wav"], "volume": 0.9 },
+    "tower_default_shoot": { "files": ["audio/sfx/tower_default_shoot.wav"], "volume": 0.85 },
+    "tower_thunder_shoot": { "files": ["audio/sfx/tower_thunder_shoot.wav"], "volume": 1.0 },
+    "tower_fat_shoot": { "files": ["audio/sfx/tower_fat_shoot.wav"], "volume": 0.9 },
+    "tower_kitty_shoot": { "files": ["audio/sfx/tower_kitty_shoot.wav"], "volume": 0.9 },
+    "wave_start": { "files": ["audio/sfx/wave_start.wav"], "volume": 0.8 },
+    "map_change": { "files": ["audio/sfx/map_change.wav"], "volume": 0.75 },
+    "life_lost": { "files": ["audio/sfx/life_lost.wav"], "volume": 0.8 },
+    "unlock": { "files": ["audio/sfx/unlock.wav"], "volume": 0.85 },
+    "place": { "files": ["audio/sfx/place.wav"], "volume": 0.8 },
+    "sell": { "files": ["audio/sfx/sell.wav"], "volume": 0.8 }
   },
   "music": {
-    "map_0": ["audio/music/map0.ogg"],
-    "map_1": ["audio/music/map1.ogg"],
-    "map_2": ["audio/music/map2.ogg"],
-    "map_3": ["audio/music/map3.ogg"],
-    "map_4": ["audio/music/map4.ogg"],
-    "map_5": ["audio/music/map5.ogg"],
-    "map_6": ["audio/music/map6.ogg"],
-    "map_7": ["audio/music/map7.ogg"],
-    "map_8": ["audio/music/map8.ogg"],
-    "map_9": ["audio/music/map9.ogg"]
+    "map_0": { "files": ["audio/music/map_0.mp3"], "volume": 0.7 },
+    "map_1": { "files": ["audio/music/map_1.wav"], "volume": 0.7 },
+    "map_2": { "files": ["audio/music/map_2.wav"], "volume": 0.7 },
+    "map_3": { "files": ["audio/music/map_3.wav"], "volume": 0.7 },
+    "map_4": { "files": ["audio/music/map_4.wav"], "volume": 0.7 },
+    "map_5": { "files": ["audio/music/map_5.wav"], "volume": 0.7 },
+    "map_6": { "files": ["audio/music/map_6.wav"], "volume": 0.7 },
+    "map_7": { "files": ["audio/music/map_7.wav"], "volume": 0.7 },
+    "map_8": { "files": ["audio/music/map_8.wav"], "volume": 0.7 },
+    "map_9": { "files": ["audio/music/map_9.wav"], "volume": 0.7 }
   }
 }
