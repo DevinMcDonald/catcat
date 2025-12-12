@@ -3,8 +3,8 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
-#include <limits>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <random>
@@ -36,10 +36,10 @@ namespace {
 
 constexpr int kBoardWidth = 48;
 constexpr int kBoardHeight = 28;
-constexpr int kTickMs = 16;  // ~60 FPS
+constexpr int kTickMs = 16; // ~60 FPS
 constexpr float kTickSeconds = kTickMs / 1000.0F;
 constexpr int kStartingKibbles = 90;
-constexpr float kSpeedFactor = 1.3F;  // Global pacing multiplier (~30% faster).
+constexpr float kSpeedFactor = 1.3F; // Global pacing multiplier (~30% faster).
 constexpr float kFastForwardMultiplier = 5.0F;
 constexpr int kStartingLives = 9;
 constexpr float kCatSleepBase = 0.5F;
@@ -155,8 +155,8 @@ struct MapDef {
 
 TowerDef GetDef(Tower::Type type) {
   switch (type) {
-    case Tower::Type::Default:
-      return {type, "Default Cat", 35, 3, 4.5F, 0.85F, true, 1};
+  case Tower::Type::Default:
+    return {type, "Default Cat", 35, 3, 4.5F, 0.85F, true, 1};
   case Tower::Type::Fat:
     return {type, "Fat Cat", 55, 4, 2.4F, 1.4F, true, 2};
   case Tower::Type::Kitty:
@@ -175,19 +175,52 @@ class Game {
 public:
   explicit Game(bool dev_mode = false) : dev_mode_(dev_mode) {
     BuildMaps();
-    BuildPath();
-    kibbles_ = dev_mode_ ? 1000000 : kStartingKibbles;
-    lives_ = kStartingLives;
-    cursor_ = {3, kBoardHeight / 2};
-    if (dev_mode_) {
-      unlocked_thunder_ = unlocked_fat_ = unlocked_kitty_ = true;
-      unlocked_catatonic_ = unlocked_galactic_ = true;
-    }
+    ResetState();
 #ifdef ENABLE_AUDIO
     audio_ = std::make_unique<AudioSystem>();
     audio_->Init("audio.json");
     audio_->SetMusicForMap(map_index_);
 #endif
+  }
+
+  void ResetState() {
+    wave_active_ = false;
+    game_over_ = false;
+    wave_ = 0;
+    map_index_ = 0;
+    kibbles_ = dev_mode_ ? 1000000 : kStartingKibbles;
+    lives_ = kStartingLives;
+    spawn_remaining_ = 0;
+    spawn_cooldown_ms_ = 0;
+    auto_waves_ = false;
+    fast_forward_ = false;
+    cursor_ = {3, kBoardHeight / 2};
+    selected_type_ = Tower::Type::Default;
+    view_shop_ = false;
+    overlay_enabled_ = true;
+    show_controls_ = false;
+    towers_.clear();
+    enemies_.clear();
+    hit_splats_.clear();
+    projectiles_.clear();
+    shockwaves_.clear();
+    beams_.clear();
+    area_highlights_.clear();
+    held_tower_.reset();
+    rng_ = std::mt19937(std::random_device{}());
+    unlocked_thunder_ = unlocked_fat_ = unlocked_kitty_ = false;
+    unlocked_catatonic_ = unlocked_galactic_ = false;
+    if (dev_mode_) {
+      unlocked_thunder_ = unlocked_fat_ = unlocked_kitty_ = true;
+      unlocked_catatonic_ = unlocked_galactic_ = true;
+    }
+    BuildPath();
+#ifdef ENABLE_AUDIO
+    if (audio_) {
+      audio_->SetMusicForMap(map_index_);
+    }
+#endif
+    title_screen_ = true;
   }
 
   std::vector<std::vector<bool>>
@@ -198,8 +231,8 @@ public:
         skip_lookup[idx] = true;
       }
     }
-    std::vector<std::vector<bool>> mask(
-        kBoardHeight, std::vector<bool>(kBoardWidth, false));
+    std::vector<std::vector<bool>> mask(kBoardHeight,
+                                        std::vector<bool>(kBoardWidth, false));
     for (size_t i = 0; i < towers_.size(); ++i) {
       if (skip_lookup[i]) {
         continue;
@@ -230,8 +263,8 @@ public:
     const int perp_y = horizontal ? primary_x : 0;
 
     std::vector<Position> area_cells;
-    for (int step = 1; step <= 3; ++step) {      // depth 3
-      for (int off = -1; off <= 0; ++off) {      // width 2
+    for (int step = 1; step <= 3; ++step) { // depth 3
+      for (int off = -1; off <= 0; ++off) { // width 2
         const int gx = static_cast<int>(std::round(center.x)) +
                        primary_x * step + perp_x * off;
         const int gy = static_cast<int>(std::round(center.y)) +
@@ -251,9 +284,10 @@ public:
         continue;
       }
       const auto pos = EnemyCell(e);
-      const bool hit = std::any_of(
-          cells.begin(), cells.end(),
-          [&](const Position &c) { return c.x == pos.x && c.y == pos.y; });
+      const bool hit =
+          std::any_of(cells.begin(), cells.end(), [&](const Position &c) {
+            return c.x == pos.x && c.y == pos.y;
+          });
       if (hit) {
         return true;
       }
@@ -303,9 +337,10 @@ public:
     return true;
   }
 
-  std::optional<Position> ChooseKittyLanding(
-      size_t tower_index, const std::vector<std::vector<bool>> &static_blocked,
-      std::vector<std::vector<bool>> &reserved) {
+  std::optional<Position>
+  ChooseKittyLanding(size_t tower_index,
+                     const std::vector<std::vector<bool>> &static_blocked,
+                     std::vector<std::vector<bool>> &reserved) {
     const Tower &t = towers_[tower_index];
     const Vec2 origin = TowerCenter(t);
     const float jump_range = t.range + kKittyJumpBonusRange;
@@ -455,11 +490,11 @@ public:
     for (size_t idx : kitty_indices) {
       Tower &t = towers_[idx];
       if (t.pos.x == t.home.x && t.pos.y == t.home.y) {
-        reserved[static_cast<size_t>(t.pos.y)][static_cast<size_t>(t.pos.x)] = true;
+        reserved[static_cast<size_t>(t.pos.y)][static_cast<size_t>(t.pos.x)] =
+            true;
         continue;
       }
-      Position dest =
-          NearestOpenCell(t.home, static_blocked, reserved, t.pos);
+      Position dest = NearestOpenCell(t.home, static_blocked, reserved, t.pos);
       t.pos = dest;
     }
   }
@@ -494,6 +529,16 @@ public:
   }
 
   bool HandleEvent(const ftxui::Event &event) {
+    if (game_over_ && event != ftxui::Event::Custom) {
+      ResetState();
+      return true;
+    }
+
+    if (title_screen_ && event != ftxui::Event::Custom) {
+      title_screen_ = false;
+      return true;
+    }
+
     if (game_over_) {
       return false;
     }
@@ -643,7 +688,7 @@ public:
   }
 
   ftxui::Element Render() const {
-    auto board = RenderBoard();
+    auto board = title_screen_ ? BlankBoard() : RenderBoard();
     if (game_over_) {
       auto big_letters =
           ftxui::vbox({ftxui::text("┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼"),
@@ -661,12 +706,38 @@ public:
                        ftxui::text("┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼")}) |
           color(ftxui::Color::DarkRed) | bgcolor(ftxui::Color::Black) | bold |
           ftxui::center;
-      auto overlay = ftxui::center(ftxui::vbox({
-                                        ftxui::filler(),
-                                        big_letters | border | bgcolor(ftxui::Color::Black),
-                                        ftxui::filler(),
-                                    }) |
-                                    ftxui::center);
+      auto overlay =
+          ftxui::center(ftxui::vbox({
+                            ftxui::filler(),
+                            big_letters | border | bgcolor(ftxui::Color::Black),
+                            ftxui::filler(),
+                        }) |
+                        ftxui::center);
+      board = ftxui::dbox({board, overlay});
+    } else if (title_screen_) {
+      auto title =
+          ftxui::vbox(
+              {ftxui::text("            __..--''``---....___   _..._    __"),
+               ftxui::text("    /// //_.-'    .-/\";  `        ``<._  ``.''_ "
+                           "`. / // /"),
+               ftxui::text(
+                   "   ///_.-' _..--.'_    \\                    `( ) ) // //"),
+               ftxui::text(
+                   "   / (_..-' // (< _     ;_..__               ; `' / ///"),
+               ftxui::text("    / // // //  `-._,_)' // / ``--...____..-' /// "
+                           "/ // ")}) |
+          color(ftxui::Color::YellowLight) | bgcolor(ftxui::Color::Black) |
+          bold | ftxui::center;
+      auto subtitle = ftxui::text("don't let the vermin into your den!") |
+                      color(ftxui::Color::Grey70) | ftxui::center;
+      auto overlay =
+          ftxui::center(ftxui::vbox({
+                            ftxui::filler(),
+                            title | border | bgcolor(ftxui::Color::Black),
+                            subtitle,
+                            ftxui::filler(),
+                        }) |
+                        ftxui::center);
       board = ftxui::dbox({board, overlay});
     }
     auto stats = RenderStats();
@@ -678,6 +749,7 @@ public:
   }
 
   bool GameOver() const { return game_over_; }
+  bool TitleScreen() const { return title_screen_; }
 
 private:
   void BuildPath() {
@@ -781,8 +853,7 @@ private:
 #endif
   }
 
-  std::optional<size_t> FindTargetAt(const Tower &t,
-                                     const Vec2 &center) const {
+  std::optional<size_t> FindTargetAt(const Tower &t, const Vec2 &center) const {
     std::optional<size_t> best;
     float best_progress = -1.0F;
     const float range2 = t.range * t.range;
@@ -853,7 +924,8 @@ private:
     }
     std::shuffle(best.begin(), best.end(), rng_);
     const auto chosen = best.front();
-    reserved[static_cast<size_t>(chosen.y)][static_cast<size_t>(chosen.x)] = true;
+    reserved[static_cast<size_t>(chosen.y)][static_cast<size_t>(chosen.x)] =
+        true;
     return chosen;
   }
 
@@ -1204,7 +1276,9 @@ private:
     return 12;
   }
 
-  float TimeScale() const { return fast_forward_ ? kFastForwardMultiplier : 1.0F; }
+  float TimeScale() const {
+    return fast_forward_ ? kFastForwardMultiplier : 1.0F;
+  }
   float Dt() const { return kTickSeconds * TimeScale(); }
 
   float NextCooldown(float base_rate) {
@@ -1214,7 +1288,7 @@ private:
 
   int DifficultyLevel() const {
     const int local = (wave_ - 1) % 10 + 1;
-    const int map_bonus = map_index_ * 2;  // Softer ramp to allow longer runs.
+    const int map_bonus = map_index_ * 2; // Softer ramp to allow longer runs.
     return local + map_bonus;
   }
 
@@ -1261,7 +1335,9 @@ private:
     return {cx, cy};
   }
 
-  Vec2 TowerCenter(const Tower &t) const { return TowerCenterAt(t.pos, t.size); }
+  Vec2 TowerCenter(const Tower &t) const {
+    return TowerCenterAt(t.pos, t.size);
+  }
 
   std::string PadRight(const std::string &s, size_t w) const {
     if (s.size() >= w)
@@ -1288,12 +1364,10 @@ private:
   }
 
   std::vector<TowerDef> SortedDefs() const {
-    std::vector<TowerDef> defs = {GetDef(Tower::Type::Default),
-                                  GetDef(Tower::Type::Fat),
-                                  GetDef(Tower::Type::Kitty),
-                                  GetDef(Tower::Type::Thunder),
-                                  GetDef(Tower::Type::Catatonic),
-                                  GetDef(Tower::Type::Galactic)};
+    std::vector<TowerDef> defs = {
+        GetDef(Tower::Type::Default),   GetDef(Tower::Type::Fat),
+        GetDef(Tower::Type::Kitty),     GetDef(Tower::Type::Thunder),
+        GetDef(Tower::Type::Catatonic), GetDef(Tower::Type::Galactic)};
     std::sort(defs.begin(), defs.end(),
               [](const TowerDef &a, const TowerDef &b) {
                 if (a.cost == b.cost)
@@ -1387,8 +1461,9 @@ private:
       return false;
     }
     const float candidate_range = range + (upgraded ? 0.8F : 0.0F);
-    const Vec2 center = {static_cast<float>(p.x) + (static_cast<float>(size) - 1.0F) / 2.0F,
-                         static_cast<float>(p.y) + (static_cast<float>(size) - 1.0F) / 2.0F};
+    const Vec2 center = {
+        static_cast<float>(p.x) + (static_cast<float>(size) - 1.0F) / 2.0F,
+        static_cast<float>(p.y) + (static_cast<float>(size) - 1.0F) / 2.0F};
     for (const auto &t : towers_) {
       if (t.type != Tower::Type::Catatonic) {
         continue;
@@ -1397,7 +1472,8 @@ private:
       const float dx = center.x - other.x;
       const float dy = center.y - other.y;
       const float dist2 = dx * dx + dy * dy;
-      const float max_r = candidate_range + t.range + (t.upgraded ? 0.8F : 0.0F);
+      const float max_r =
+          candidate_range + t.range + (t.upgraded ? 0.8F : 0.0F);
       if (dist2 <= max_r * max_r) {
         return true;
       }
@@ -1405,8 +1481,8 @@ private:
     return false;
   }
 
-  bool CanPlace(const Position &p, int size, Tower::Type type,
-                float range, bool upgraded) const {
+  bool CanPlace(const Position &p, int size, Tower::Type type, float range,
+                bool upgraded) const {
     if (p.x < 0 || p.y < 0 || p.x + size - 1 >= kBoardWidth ||
         p.y + size - 1 >= kBoardHeight) {
       return false;
@@ -1621,19 +1697,19 @@ private:
 
   void FireCatatonic(const Tower &t) {
     const float radius = t.upgraded ? t.range + 0.8F : t.range;
-    const float sleep_dur =
-        std::clamp(t.upgraded ? kCatSleepUpgrade : kCatSleepBase, 0.0F, kCatSleepCap);
+    const float sleep_dur = std::clamp(
+        t.upgraded ? kCatSleepUpgrade : kCatSleepBase, 0.0F, kCatSleepCap);
     std::vector<Position> cells;
     for (auto &e : enemies_) {
       const auto pos = EnemyCell(e);
       if (InRange(TowerCenter(t), pos, radius)) {
-        e.sleep_timer = std::min(kCatSleepCap, std::max(e.sleep_timer, sleep_dur));
+        e.sleep_timer =
+            std::min(kCatSleepCap, std::max(e.sleep_timer, sleep_dur));
         cells.push_back(pos);
       }
     }
     if (!cells.empty()) {
-      area_highlights_.push_back(
-          {cells, 0.6F, ftxui::Color::Purple, '~'});
+      area_highlights_.push_back({cells, 0.6F, ftxui::Color::Purple, '~'});
     }
   }
 
@@ -1669,14 +1745,16 @@ private:
     bool void_proc = t.upgraded && Rand(0.0F, 1.0F) < kGalacticVoidChance;
     for (auto &e : enemies_) {
       const auto pos = EnemyCell(e);
-      const bool hit = std::any_of(
-          cells.begin(), cells.end(),
-          [&](const Position &c) { return c.x == pos.x && c.y == pos.y; });
+      const bool hit =
+          std::any_of(cells.begin(), cells.end(), [&](const Position &c) {
+            return c.x == pos.x && c.y == pos.y;
+          });
       if (!hit)
         continue;
       const bool teleported = void_proc;
       if (teleported) {
-        e.path_progress = std::max(0.0F, e.path_progress - kGalacticVoidBackstep);
+        e.path_progress =
+            std::max(0.0F, e.path_progress - kGalacticVoidBackstep);
       }
       e.hp -= t.damage;
       if (e.hp <= 0) {
@@ -1898,12 +1976,12 @@ private:
 
     for (const auto &t : towers_) {
       const char glyph =
-          t.type == Tower::Type::Thunder    ? (t.upgraded ? 'T' : 't')
-          : t.type == Tower::Type::Fat      ? (t.upgraded ? 'F' : 'f')
-          : t.type == Tower::Type::Kitty    ? (t.upgraded ? 'K' : 'k')
+          t.type == Tower::Type::Thunder     ? (t.upgraded ? 'T' : 't')
+          : t.type == Tower::Type::Fat       ? (t.upgraded ? 'F' : 'f')
+          : t.type == Tower::Type::Kitty     ? (t.upgraded ? 'K' : 'k')
           : t.type == Tower::Type::Catatonic ? (t.upgraded ? 'C' : 'c')
-          : t.type == Tower::Type::Galactic ? (t.upgraded ? 'G' : 'g')
-                                            : (t.upgraded ? 'D' : 'd');
+          : t.type == Tower::Type::Galactic  ? (t.upgraded ? 'G' : 'g')
+                                             : (t.upgraded ? 'D' : 'd');
       const ftxui::Color bg =
           t.type == Tower::Type::Thunder     ? ftxui::Color::Blue1
           : t.type == Tower::Type::Fat       ? ftxui::Color::DarkOliveGreen3
@@ -2115,6 +2193,17 @@ private:
     return board_elem;
   }
 
+  ftxui::Element BlankBoard() const {
+    std::vector<ftxui::Element> rows;
+    rows.reserve(kBoardHeight);
+    const std::string empty_row(static_cast<size_t>(kBoardWidth) * 2, ' ');
+    for (int y = 0; y < kBoardHeight; ++y) {
+      rows.push_back(text(empty_row) | bgcolor(ftxui::Color::Black) |
+                     color(ftxui::Color::Black));
+    }
+    return vbox(std::move(rows));
+  }
+
   ftxui::Element RenderStats() const {
     std::string wave_text =
         wave_active_ ? "Wave " + std::to_string(wave_) : "Waiting";
@@ -2155,11 +2244,22 @@ private:
         size_t name_w = 0;
         size_t cost_w = 0;
         std::vector<std::string> cost_cols(locked.size());
+        size_t num_w = 0;
         for (size_t i = 0; i < locked.size(); ++i) {
           const auto &d = locked[i];
           const int unlock_cost = d.cost * 10;
           name_w = std::max(name_w, d.name.size() + 3); // account for key
-          cost_cols[i] = "unlock " + std::to_string(unlock_cost);
+          const std::string num = std::to_string(unlock_cost);
+          num_w = std::max(num_w, num.size());
+        }
+        for (size_t i = 0; i < locked.size(); ++i) {
+          const auto &d = locked[i];
+          const int unlock_cost = d.cost * 10;
+          const std::string num = std::to_string(unlock_cost);
+          const std::string spaced_num =
+              num +
+              std::string(num_w > num.size() ? num_w - num.size() : 0, ' ');
+          cost_cols[i] = spaced_num + " kib";
           cost_w = std::max(cost_w, cost_cols[i].size());
         }
         for (size_t i = 0; i < locked.size(); ++i) {
@@ -2188,13 +2288,41 @@ private:
     } else {
       lines.push_back(text("press p to view shop"));
       lines.push_back(text("unlocked cats:"));
+      std::vector<TowerDef> unlocked_defs;
       for (const auto &d : defs) {
         if (!IsUnlocked(d.type)) {
           continue;
         }
-        std::string line = std::to_string(TypeKey(d.type)) + ") " + d.name +
-                           " (" + std::to_string(d.cost) + " kib)";
-        lines.push_back(text(line));
+        unlocked_defs.push_back(d);
+      }
+      if (!unlocked_defs.empty()) {
+        size_t name_w = 0;
+        size_t cost_w = 0;
+        std::vector<std::string> cost_cols(unlocked_defs.size());
+        size_t num_w = 0;
+        for (size_t i = 0; i < unlocked_defs.size(); ++i) {
+          const auto &d = unlocked_defs[i];
+          const std::string key = std::to_string(TypeKey(d.type)) + ") ";
+          name_w = std::max(name_w, key.size() + d.name.size());
+          const std::string num = std::to_string(d.cost);
+          num_w = std::max(num_w, num.size());
+        }
+        for (size_t i = 0; i < unlocked_defs.size(); ++i) {
+          const auto &d = unlocked_defs[i];
+          const std::string num = std::to_string(d.cost);
+          const std::string spaced_num =
+              num +
+              std::string(num_w > num.size() ? num_w - num.size() : 0, ' ');
+          cost_cols[i] = spaced_num + " kib";
+          cost_w = std::max(cost_w, cost_cols[i].size());
+        }
+        for (size_t i = 0; i < unlocked_defs.size(); ++i) {
+          const auto &d = unlocked_defs[i];
+          const std::string key = std::to_string(TypeKey(d.type)) + ") ";
+          const std::string line = PadRight(key + d.name, name_w + 2) +
+                                   PadRight(cost_cols[i], cost_w + 2);
+          lines.push_back(text(line));
+        }
       }
     }
 
@@ -2220,14 +2348,13 @@ private:
       if (dev_mode_) {
         lines.push_back(text(">           - skip to next map (dev)"));
       }
-      lines.push_back(text("q           - quit"));
+      lines.push_back(text("q q q       - quit"));
     } else {
       lines.push_back(separator());
       lines.push_back(text("press h for controls"));
     }
 
     lines.push_back(separator());
-    lines.push_back(text("Goal: Keep rats from reaching the burrow!"));
 
     return vbox(std::move(lines));
   }
@@ -2260,6 +2387,7 @@ private:
   bool auto_waves_ = false;
   bool fast_forward_ = false;
   bool dev_mode_ = false;
+  bool title_screen_ = true;
   int map_index_ = 0;
   int kibbles_ = 0;
   int lives_ = 0;
@@ -2292,20 +2420,22 @@ public:
   ftxui::Element Render() override { return game_.Render(); }
 
   bool OnEvent(ftxui::Event event) override {
-    if (event == ftxui::Event::Character('q')) {
-      running_ = false;
-      screen_.Exit();
+    if (event == ftxui::Event::Character('q') && !game_.TitleScreen() &&
+        !game_.GameOver()) {
+      quit_presses_++;
+      if (quit_presses_ >= 3) {
+        running_ = false;
+        screen_.Exit();
+      }
       return true;
     }
 
     if (event == ftxui::Event::Custom) {
       game_.Tick();
-      if (game_.GameOver()) {
-        running_ = false;
-      }
       return true;
     }
 
+    quit_presses_ = 0;
     return game_.HandleEvent(event);
   }
 
@@ -2314,11 +2444,12 @@ private:
   ftxui::ScreenInteractive &screen_;
   std::atomic<bool> running_{true};
   std::thread ticker_;
+  int quit_presses_ = 0;
 };
 
 } // namespace
 
-int main(int argc, const char* argv[]) {
+int main(int argc, const char *argv[]) {
   bool dev_mode = false;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dev") {
