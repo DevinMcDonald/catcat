@@ -139,14 +139,14 @@ struct MapDef {
 
 TowerDef GetDef(Tower::Type type) {
   switch (type) {
-  case Tower::Type::Default:
-    return {type, "Default Cat", 35, 3, 3.5F, 0.85F, true, 1};
+    case Tower::Type::Default:
+      return {type, "Default Cat", 35, 3, 4.5F, 0.85F, true, 1};
   case Tower::Type::Thunder:
-    return {type, "Thundercat", 75, 6, 999.0F, 2.6F, false, 1};
+    return {type, "Thundercat", 350, 6, 999.0F, 2.6F, false, 1};
   case Tower::Type::Fat:
     return {type, "Fat Cat", 55, 4, 2.4F, 1.4F, true, 2};
   case Tower::Type::Kitty:
-    return {type, "Kitty Cat", 65, 3, 5.5F, 1.0F, true, 1};
+    return {type, "Kitty Cat", 100, 3, 3.0F, 1.0F, true, 1};
   }
   return {Tower::Type::Default, "Default Cat", 35, 3, 3.5F, 0.85F, true, 1};
 }
@@ -341,8 +341,11 @@ public:
           color(ftxui::Color::RedLight) | bgcolor(ftxui::Color::Black) | bold |
           ftxui::center;
       auto overlay = ftxui::center(ftxui::vbox({
-          big_letters | border | bgcolor(ftxui::Color::Black),
-      }));
+                                        ftxui::filler(),
+                                        big_letters | border | bgcolor(ftxui::Color::Black),
+                                        ftxui::filler(),
+                                    }) |
+                                    ftxui::center);
       board = ftxui::dbox({board, overlay});
     }
     auto stats = RenderStats();
@@ -633,7 +636,7 @@ private:
     enemies_.clear();
     towers_.clear();
     held_tower_.reset();
-    kibbles_ = kStartingKibbles;
+    // Preserve kibbles across maps to let players invest between stages.
     lives_ = kStartingLives;
     auto_waves_ = false;
     BuildPath();
@@ -733,7 +736,7 @@ private:
 
   int DifficultyLevel() const {
     const int local = (wave_ - 1) % 10 + 1;
-    const int map_bonus = map_index_ * 2;
+    const int map_bonus = map_index_ * 3;  // Slightly steeper ramp to offset kibbles carryover.
     return local + map_bonus;
   }
 
@@ -761,6 +764,12 @@ private:
     const float cy = static_cast<float>(t.pos.y) +
                      (static_cast<float>(t.size) - 1.0F) / 2.0F;
     return {cx, cy};
+  }
+
+  std::string PadRight(const std::string &s, size_t w) const {
+    if (s.size() >= w)
+      return s;
+    return s + std::string(w - s.size(), ' ');
   }
 
   bool IsUnlocked(Tower::Type type) const {
@@ -965,18 +974,17 @@ private:
   }
 
   void FireShockwave(const Tower &t) {
-    const auto def = GetDef(t.type);
     Shockwave sw;
     sw.center = TowerCenter(t);
     sw.radius = 0.0F;
-    sw.max_radius = def.range;
+    sw.max_radius = t.range;
     sw.speed = 10.0F;
     sw.time_left = 0.45F;
     shockwaves_.push_back(sw);
 
     for (auto &e : enemies_) {
       const auto pos = EnemyCell(e);
-      if (InRange(sw.center, pos, def.range + 0.2F)) {
+      if (InRange(sw.center, pos, t.range)) {
         e.hp -= t.damage;
         if (e.hp <= 0) {
           kibbles_ += 12;
@@ -1000,8 +1008,8 @@ private:
     const int perp_y = horizontal ? primary_x : 0;
 
     std::vector<Position> area_cells;
-    for (int step = 1; step <= 6; ++step) {
-      for (int off = -2; off <= 1; ++off) {
+    for (int step = 1; step <= 3; ++step) {      // depth 3
+      for (int off = -1; off <= 0; ++off) {      // width 2
         const int gx = static_cast<int>(std::round(center.x)) +
                        primary_x * step + perp_x * off;
         const int gy = static_cast<int>(std::round(center.y)) +
@@ -1437,22 +1445,35 @@ private:
 
     if (view_shop_) {
       lines.push_back(text("shop (press 1/2/3/4, p to return)"));
-      for (const auto &d : defs) {
+      size_t name_w = 0;
+      size_t cost_w = 0;
+      std::array<std::string, 4> cost_cols{};
+      for (size_t i = 0; i < defs.size(); ++i) {
+        const auto &d = defs[i];
         const bool unlocked = IsUnlocked(d.type);
         const int unlock_cost = d.cost * 10;
-        std::string line = d.name + (unlocked ? " (unlocked)" : " (locked)");
-        if (unlocked) {
-          line += " - " + std::to_string(d.cost) + " kib";
-        } else {
-          line += " | unlock " + std::to_string(unlock_cost) + " kib";
-        }
+        name_w = std::max(name_w, d.name.size());
+        cost_cols[i] = unlocked ? (std::to_string(d.cost) + " kib")
+                                : ("unlock " + std::to_string(unlock_cost));
+        cost_w = std::max(cost_w, cost_cols[i].size());
+      }
+      for (size_t i = 0; i < defs.size(); ++i) {
+        const auto &d = defs[i];
+        const bool unlocked = IsUnlocked(d.type);
+        std::string desc;
         if (d.type == Tower::Type::Thunder) {
-          line += " | Laser, dmg " + std::to_string(d.damage) + ", slow fire";
+          desc = "Laser, dmg " + std::to_string(d.damage) + ", slow fire";
         } else if (d.type == Tower::Type::Fat) {
-          line += " | 2x2 AOE, dmg " + std::to_string(d.damage);
+          desc = "2x2 AOE, dmg " + std::to_string(d.damage);
+        } else if (d.type == Tower::Type::Kitty) {
+          desc = "Swipe 4x6, dmg " + std::to_string(d.damage);
         } else {
-          line += " | dmg " + std::to_string(d.damage);
+          desc = "dmg " + std::to_string(d.damage);
         }
+        const std::string line = PadRight(d.name, name_w + 2) +
+                                 PadRight(cost_cols[i], cost_w + 2) +
+                                 (unlocked ? "[unlocked] " : "[locked]   ") +
+                                 desc;
         lines.push_back(text(line));
       }
     } else {
