@@ -221,7 +221,7 @@ public:
       audio_->SetMusicForMap(map_index_);
     }
 #endif
-    title_screen_ = true;
+    intro_stage_ = IntroStage::Title;
   }
 
   std::vector<std::vector<bool>>
@@ -541,8 +541,10 @@ public:
       return true;
     }
 
-    if (title_screen_ && event != ftxui::Event::Custom) {
-      title_screen_ = false;
+    if (!game_over_ && intro_stage_ != IntroStage::Playing &&
+        event != ftxui::Event::Custom) {
+      intro_stage_ = intro_stage_ == IntroStage::Title ? IntroStage::Instructions
+                                                       : IntroStage::Playing;
       return true;
     }
 
@@ -695,7 +697,8 @@ public:
   }
 
   ftxui::Element Render() const {
-    auto board = title_screen_ ? BlankBoard() : RenderBoard();
+    const bool intro = intro_stage_ != IntroStage::Playing;
+    auto board = intro ? BlankBoard() : RenderBoard();
     if (game_over_) {
       auto big_letters =
           ftxui::vbox({ftxui::text("┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼"),
@@ -721,7 +724,7 @@ public:
                         }) |
                         ftxui::center);
       board = ftxui::dbox({board, overlay});
-    } else if (title_screen_) {
+    } else if (intro_stage_ == IntroStage::Title) {
       auto title =
           // clang-format off
           ftxui::vbox(
@@ -747,14 +750,29 @@ public:
           bold | ftxui::center;
       auto subtitle = ftxui::text("don't let the vermin into your den!") |
                       color(ftxui::Color::YellowLight) | ftxui::center;
-      auto overlay =
-          ftxui::center(ftxui::vbox({
-                            ftxui::filler(),
-                            title | border | bgcolor(ftxui::Color::Blue3),
-                            subtitle,
-                            ftxui::filler(),
-                        }) |
-                        ftxui::center | bgcolor(ftxui::Color::DarkBlue));
+      auto overlay = ftxui::center(
+          ftxui::vbox(
+              {ftxui::filler(), title | border | bgcolor(ftxui::Color::Blue3),
+               subtitle, ftxui::filler()}) |
+          ftxui::center | bgcolor(ftxui::Color::DarkBlue));
+      board = ftxui::dbox({board, overlay});
+    } else if (intro_stage_ == IntroStage::Instructions) {
+      auto card = ftxui::vbox({
+                      text("how to play") | bold | color(ftxui::Color::YellowLight),
+                      separator(),
+                      text("Place cats with space/c. Start waves with n."),
+                      text("Earn kibbles, buy more cats, upgrade/sell."),
+                      text("Keep vermin from reaching your burrow."),
+                      text("Press h any time for the controls menu."),
+                      separator(),
+                      text("press any key to begin") |
+                          color(ftxui::Color::YellowLight) | bold,
+                  }) |
+                  bgcolor(ftxui::Color::DarkBlue) | border |
+                  color(ftxui::Color::White) | ftxui::center;
+      auto overlay = ftxui::center(ftxui::vbox(
+                                       {ftxui::filler(), card, ftxui::filler()}) |
+                                   ftxui::center);
       board = ftxui::dbox({board, overlay});
     }
     auto stats = RenderStats();
@@ -766,7 +784,7 @@ public:
   }
 
   bool GameOver() const { return game_over_; }
-  bool TitleScreen() const { return title_screen_; }
+  bool InIntro() const { return intro_stage_ != IntroStage::Playing; }
 
 private:
   void BuildPath() {
@@ -2463,7 +2481,8 @@ private:
   bool auto_waves_ = false;
   bool fast_forward_ = false;
   bool dev_mode_ = false;
-  bool title_screen_ = true;
+  enum class IntroStage { Title, Instructions, Playing };
+  IntroStage intro_stage_ = IntroStage::Title;
   std::string warning_text_;
   float warning_timer_ = 0.0F;
   int map_index_ = 0;
@@ -2498,7 +2517,7 @@ public:
   ftxui::Element Render() override { return game_.Render(); }
 
   bool OnEvent(ftxui::Event event) override {
-    if (event == ftxui::Event::Character('q') && !game_.TitleScreen() &&
+    if (event == ftxui::Event::Character('q') && !game_.InIntro() &&
         !game_.GameOver()) {
       quit_presses_++;
       if (quit_presses_ >= 3) {
