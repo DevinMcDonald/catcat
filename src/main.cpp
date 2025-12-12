@@ -598,7 +598,7 @@ private:
 
   void UpdateHitSplats() {
     for (auto &hs : hit_splats_) {
-      hs.time_left -= kTickSeconds;
+      hs.time_left -= Dt();
     }
     hit_splats_.erase(
         std::remove_if(hit_splats_.begin(), hit_splats_.end(),
@@ -1035,8 +1035,8 @@ private:
 
   void UpdateShockwaves() {
     for (auto &sw : shockwaves_) {
-      sw.radius += sw.speed * kTickSeconds;
-      sw.time_left -= kTickSeconds;
+      sw.radius += sw.speed * Dt();
+      sw.time_left -= Dt();
     }
     shockwaves_.erase(std::remove_if(shockwaves_.begin(), shockwaves_.end(),
                                      [](const Shockwave &sw) {
@@ -1048,7 +1048,7 @@ private:
 
   void UpdateBeams() {
     for (auto &b : beams_) {
-      b.time_left -= kTickSeconds;
+      b.time_left -= Dt();
     }
     beams_.erase(
         std::remove_if(beams_.begin(), beams_.end(),
@@ -1058,7 +1058,7 @@ private:
 
   void UpdateAreas() {
     for (auto &a : area_highlights_) {
-      a.time_left -= kTickSeconds;
+      a.time_left -= Dt();
     }
     area_highlights_.erase(std::remove_if(area_highlights_.begin(),
                                           area_highlights_.end(),

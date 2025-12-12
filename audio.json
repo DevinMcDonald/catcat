@@ -15,8 +15,8 @@
   },
 
   "music": {
-    "map_0": { "files": ["audio/music/bass_crap.mp3"], "volume": 0.7 },
-    "map_1": { "files": ["audio/music/bratwurst_summer.mp3"], "volume": 0.7 },
+    "map_0": { "files": ["audio/music/bratwurst_summer.mp3"], "volume": 0.7 },
+    "map_1": { "files": ["audio/music/bass_crap.mp3"], "volume": 0.7 },
     "map_2": { "files": ["audio/music/dare_you.mp3"], "volume": 0.7 },
     "map_3": { "files": ["audio/music/deep_n_dark.mp3"], "volume": 0.7 },
     "map_4": { "files": ["audio/music/dundno.mp3"], "volume": 0.7 },
