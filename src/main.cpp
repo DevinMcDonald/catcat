@@ -46,6 +46,7 @@ constexpr float kCatSleepUpgrade = 1.0F;
 constexpr float kCatSleepCap = 5.0F;
 constexpr float kGalacticVoidChance = 0.20F;
 constexpr float kGalacticVoidBackstep = 6.0F;
+constexpr float kKittyJumpBonusRange = 1.5F; // extra reach for upgraded jumps
 
 struct Position {
   int x = 0;
@@ -185,6 +186,253 @@ public:
     audio_->Init("audio.json");
     audio_->SetMusicForMap(map_index_);
 #endif
+  }
+
+  std::vector<std::vector<bool>>
+  TowerOccupancyMaskSkipping(const std::vector<size_t> &skip_indices) const {
+    std::vector<bool> skip_lookup(towers_.size(), false);
+    for (size_t idx : skip_indices) {
+      if (idx < skip_lookup.size()) {
+        skip_lookup[idx] = true;
+      }
+    }
+    std::vector<std::vector<bool>> mask(
+        kBoardHeight, std::vector<bool>(kBoardWidth, false));
+    for (size_t i = 0; i < towers_.size(); ++i) {
+      if (skip_lookup[i]) {
+        continue;
+      }
+      const auto &t = towers_[i];
+      for (int dy = 0; dy < t.size; ++dy) {
+        for (int dx = 0; dx < t.size; ++dx) {
+          const int cx = t.pos.x + dx;
+          const int cy = t.pos.y + dy;
+          if (cx < 0 || cy < 0 || cx >= kBoardWidth || cy >= kBoardHeight) {
+            continue;
+          }
+          mask[static_cast<size_t>(cy)][static_cast<size_t>(cx)] = true;
+        }
+      }
+    }
+    return mask;
+  }
+
+  std::vector<Position> KittyAttackArea(const Vec2 &center,
+                                        const Position &target_cell) const {
+    const float dx = static_cast<float>(target_cell.x) - center.x;
+    const float dy = static_cast<float>(target_cell.y) - center.y;
+    const bool horizontal = std::abs(dx) >= std::abs(dy);
+    const int primary_x = horizontal ? ((dx > 0) - (dx < 0)) : 0;
+    const int primary_y = horizontal ? 0 : ((dy > 0) - (dy < 0));
+    const int perp_x = horizontal ? 0 : -primary_y;
+    const int perp_y = horizontal ? primary_x : 0;
+
+    std::vector<Position> area_cells;
+    for (int step = 1; step <= 3; ++step) {      // depth 3
+      for (int off = -1; off <= 0; ++off) {      // width 2
+        const int gx = static_cast<int>(std::round(center.x)) +
+                       primary_x * step + perp_x * off;
+        const int gy = static_cast<int>(std::round(center.y)) +
+                       primary_y * step + perp_y * off;
+        if (gx < 0 || gy < 0 || gx >= kBoardWidth || gy >= kBoardHeight) {
+          continue;
+        }
+        area_cells.push_back({gx, gy});
+      }
+    }
+    return area_cells;
+  }
+
+  bool KittyAreaHitsEnemy(const std::vector<Position> &cells) const {
+    for (const auto &e : enemies_) {
+      if (e.hp <= 0) {
+        continue;
+      }
+      const auto pos = EnemyCell(e);
+      const bool hit = std::any_of(
+          cells.begin(), cells.end(),
+          [&](const Position &c) { return c.x == pos.x && c.y == pos.y; });
+      if (hit) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool KittyCellBlocked(
+      const Position &p, const std::vector<std::vector<bool>> &static_blocked,
+      const std::vector<std::vector<bool>> &reserved,
+      const std::optional<Position> &ignore_reserved = std::nullopt) const {
+    if (p.x < 0 || p.y < 0 || p.x >= kBoardWidth || p.y >= kBoardHeight) {
+      return true;
+    }
+    if (OccupiesPath(p, 1)) {
+      return true;
+    }
+    const bool reserved_here =
+        reserved[static_cast<size_t>(p.y)][static_cast<size_t>(p.x)];
+    if (reserved_here) {
+      if (!ignore_reserved.has_value() || ignore_reserved->x != p.x ||
+          ignore_reserved->y != p.y) {
+        return true;
+      }
+    }
+    return static_blocked[static_cast<size_t>(p.y)][static_cast<size_t>(p.x)];
+  }
+
+  bool CanKittyOccupyCell(size_t kitty_index, const Position &p) const {
+    if (p.x < 0 || p.y < 0 || p.x >= kBoardWidth || p.y >= kBoardHeight) {
+      return false;
+    }
+    if (OccupiesPath(p, 1)) {
+      return false;
+    }
+    for (size_t i = 0; i < towers_.size(); ++i) {
+      if (i == kitty_index) {
+        continue;
+      }
+      const auto &t = towers_[i];
+      const int tx2 = t.pos.x + t.size - 1;
+      const int ty2 = t.pos.y + t.size - 1;
+      if (p.x >= t.pos.x && p.x <= tx2 && p.y >= t.pos.y && p.y <= ty2) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  std::optional<Position> ChooseKittyLanding(
+      size_t tower_index, const std::vector<std::vector<bool>> &static_blocked,
+      std::vector<std::vector<bool>> &reserved) {
+    const Tower &t = towers_[tower_index];
+    const Vec2 origin = TowerCenter(t);
+    const float jump_range = t.range + kKittyJumpBonusRange;
+    const float jump_r2 = jump_range * jump_range;
+
+    std::vector<Position> candidates;
+    for (int y = 0; y < kBoardHeight; ++y) {
+      for (int x = 0; x < kBoardWidth; ++x) {
+        Position cell{x, y};
+        if (KittyCellBlocked(cell, static_blocked, reserved, t.pos)) {
+          continue;
+        }
+        const float d2 = DistanceSquared(origin, cell);
+        if (d2 > jump_r2) {
+          continue;
+        }
+
+        const Vec2 landing_center = TowerCenterAt(cell, t.size);
+        const auto target_idx = FindTargetAt(t, landing_center);
+        if (!target_idx.has_value()) {
+          continue;
+        }
+        const auto area =
+            KittyAttackArea(landing_center, EnemyCell(enemies_[*target_idx]));
+        if (!KittyAreaHitsEnemy(area)) {
+          continue;
+        }
+
+        candidates.push_back(cell);
+      }
+    }
+
+    if (candidates.empty()) {
+      const auto yi = static_cast<size_t>(t.pos.y);
+      const auto xi = static_cast<size_t>(t.pos.x);
+      if (!KittyCellBlocked(t.pos, static_blocked, reserved, t.pos)) {
+        reserved[yi][xi] = true;
+        return t.pos;
+      }
+      return std::nullopt;
+    }
+
+    std::shuffle(candidates.begin(), candidates.end(), rng_);
+    for (const auto &c : candidates) {
+      const auto yi = static_cast<size_t>(c.y);
+      const auto xi = static_cast<size_t>(c.x);
+      if (reserved[yi][xi] && !(c.x == t.pos.x && c.y == t.pos.y)) {
+        continue;
+      }
+      reserved[yi][xi] = true;
+      return c;
+    }
+    return std::nullopt;
+  }
+
+  void HandleKittyAttacks() {
+    std::vector<size_t> ready_kitties;
+    for (size_t i = 0; i < towers_.size(); ++i) {
+      Tower &t = towers_[i];
+      if (t.type != Tower::Type::Kitty || t.cooldown > 0.0F) {
+        continue;
+      }
+      if (enemies_.empty()) {
+        continue;
+      }
+      ready_kitties.push_back(i);
+    }
+    if (ready_kitties.empty()) {
+      return;
+    }
+
+    std::vector<size_t> jumping_kitties;
+    for (size_t idx : ready_kitties) {
+      if (towers_[idx].upgraded) {
+        jumping_kitties.push_back(idx);
+      }
+    }
+
+    auto static_blocked = TowerOccupancyMaskSkipping(jumping_kitties);
+    std::vector<std::vector<bool>> reserved(
+        kBoardHeight, std::vector<bool>(kBoardWidth, false));
+    for (size_t idx : jumping_kitties) {
+      const auto &p = towers_[idx].pos;
+      if (p.y >= 0 && p.y < kBoardHeight && p.x >= 0 && p.x < kBoardWidth) {
+        reserved[static_cast<size_t>(p.y)][static_cast<size_t>(p.x)] = true;
+      }
+    }
+    std::unordered_map<size_t, Position> planned_landings;
+
+    std::vector<size_t> jump_order = jumping_kitties;
+    std::shuffle(jump_order.begin(), jump_order.end(), rng_);
+    for (size_t idx : jump_order) {
+      auto landing = ChooseKittyLanding(idx, static_blocked, reserved);
+      if (landing.has_value()) {
+        planned_landings[idx] = *landing;
+      }
+    }
+
+    for (size_t idx : ready_kitties) {
+      Tower &t = towers_[idx];
+      const Position original = t.pos;
+      Position destination = t.pos;
+      if (t.upgraded) {
+        const auto it = planned_landings.find(idx);
+        if (it != planned_landings.end()) {
+          destination = it->second;
+        }
+        const bool destination_changed =
+            destination.x != t.pos.x || destination.y != t.pos.y;
+        if (destination_changed && !CanKittyOccupyCell(idx, destination)) {
+          destination = t.pos;
+        }
+        if (destination.x != t.pos.x || destination.y != t.pos.y) {
+          t.pos = destination;
+        }
+      }
+
+      const auto target = FindTarget(t);
+      if (!target.has_value()) {
+        t.pos = original;
+        continue;
+      }
+
+      FireKitty(t, enemies_[*target]);
+#ifdef ENABLE_AUDIO
+      audio_->PlayEvent("tower_kitty_shoot");
+#endif
+      t.cooldown = NextCooldown(t.fire_rate);
+    }
   }
 
   void Tick() {
@@ -504,11 +752,11 @@ private:
 #endif
   }
 
-  std::optional<size_t> FindTarget(const Tower &t) const {
+  std::optional<size_t> FindTargetAt(const Tower &t,
+                                     const Vec2 &center) const {
     std::optional<size_t> best;
     float best_progress = -1.0F;
     const float range2 = t.range * t.range;
-    const Vec2 center = TowerCenter(t);
 
     for (size_t i = 0; i < enemies_.size(); ++i) {
       if (enemies_[i].hp <= 0) {
@@ -529,10 +777,18 @@ private:
     return best;
   }
 
+  std::optional<size_t> FindTarget(const Tower &t) const {
+    return FindTargetAt(t, TowerCenter(t));
+  }
+
   void TowersAct() {
     for (auto &t : towers_) {
       t.cooldown -= Dt();
-      if (t.cooldown > 0.0F) {
+    }
+
+    for (size_t i = 0; i < towers_.size(); ++i) {
+      Tower &t = towers_[i];
+      if (t.type == Tower::Type::Kitty || t.cooldown > 0.0F) {
         continue;
       }
 
@@ -599,13 +855,6 @@ private:
 #endif
         break;
       }
-      case Tower::Type::Kitty: {
-        FireKitty(t, enemies_[*target_index]);
-#ifdef ENABLE_AUDIO
-        audio_->PlayEvent("tower_kitty_shoot");
-#endif
-        break;
-      }
       case Tower::Type::Catatonic: {
         FireCatatonic(t);
 #ifdef ENABLE_AUDIO
@@ -620,9 +869,13 @@ private:
 #endif
         break;
       }
+      case Tower::Type::Kitty:
+        break; // handled separately
       }
       t.cooldown = NextCooldown(t.fire_rate);
     }
+
+    HandleKittyAttacks();
   }
 
   void MoveProjectiles() {
@@ -922,13 +1175,15 @@ private:
 #endif
   }
 
-  Vec2 TowerCenter(const Tower &t) const {
-    const float cx = static_cast<float>(t.pos.x) +
-                     (static_cast<float>(t.size) - 1.0F) / 2.0F;
-    const float cy = static_cast<float>(t.pos.y) +
-                     (static_cast<float>(t.size) - 1.0F) / 2.0F;
+  Vec2 TowerCenterAt(const Position &p, int size) const {
+    const float cx =
+        static_cast<float>(p.x) + (static_cast<float>(size) - 1.0F) / 2.0F;
+    const float cy =
+        static_cast<float>(p.y) + (static_cast<float>(size) - 1.0F) / 2.0F;
     return {cx, cy};
   }
+
+  Vec2 TowerCenter(const Tower &t) const { return TowerCenterAt(t.pos, t.size); }
 
   std::string PadRight(const std::string &s, size_t w) const {
     if (s.size() >= w)
@@ -1261,27 +1516,7 @@ private:
   void FireKitty(const Tower &t, Enemy &target) {
     const auto center = TowerCenter(t);
     const auto target_cell = EnemyCell(target);
-    const float dx = static_cast<float>(target_cell.x) - center.x;
-    const float dy = static_cast<float>(target_cell.y) - center.y;
-    const bool horizontal = std::abs(dx) >= std::abs(dy);
-    const int primary_x = horizontal ? ((dx > 0) - (dx < 0)) : 0;
-    const int primary_y = horizontal ? 0 : ((dy > 0) - (dy < 0));
-    const int perp_x = horizontal ? 0 : -primary_y;
-    const int perp_y = horizontal ? primary_x : 0;
-
-    std::vector<Position> area_cells;
-    for (int step = 1; step <= 3; ++step) {      // depth 3
-      for (int off = -1; off <= 0; ++off) {      // width 2
-        const int gx = static_cast<int>(std::round(center.x)) +
-                       primary_x * step + perp_x * off;
-        const int gy = static_cast<int>(std::round(center.y)) +
-                       primary_y * step + perp_y * off;
-        if (gx < 0 || gy < 0 || gx >= kBoardWidth || gy >= kBoardHeight) {
-          continue;
-        }
-        area_cells.push_back({gx, gy});
-      }
-    }
+    const auto area_cells = KittyAttackArea(center, target_cell);
 
     for (auto &e : enemies_) {
       const auto pos = EnemyCell(e);
@@ -1297,13 +1532,12 @@ private:
         PlayDeathSfx(e.type);
       } else {
         hit_splats_.push_back({pos, 0.18F});
-        if (t.upgraded && Rand(0.0F, 1.0F) < 0.10F) {
-          e.path_progress = std::max(0.0F, e.path_progress - 1.0F);
-        }
       }
     }
 
-    area_highlights_.push_back({area_cells, 0.22F});
+    if (!area_cells.empty()) {
+      area_highlights_.push_back({area_cells, 0.22F});
+    }
   }
 
   void FireCatatonic(const Tower &t) {
@@ -1846,7 +2080,8 @@ private:
           } else if (d.type == Tower::Type::Fat) {
             desc = "2x2 AOE, dmg " + std::to_string(d.damage);
           } else if (d.type == Tower::Type::Kitty) {
-            desc = "Swipe 4x6, dmg " + std::to_string(d.damage);
+            desc = "Swipe 4x6, dmg " + std::to_string(d.damage) +
+                   " (jumps when upgraded)";
           } else if (d.type == Tower::Type::Catatonic) {
             desc = "Sleep pulse, slows";
           } else if (d.type == Tower::Type::Galactic) {
