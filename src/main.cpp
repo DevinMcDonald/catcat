@@ -8,6 +8,7 @@
 #include <memory>
 #include <optional>
 #include <random>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -504,6 +505,12 @@ public:
     if (audio_)
       audio_->Update();
 #endif
+    if (warning_timer_ > 0.0F) {
+      warning_timer_ = std::max(0.0F, warning_timer_ - Dt());
+      if (warning_timer_ <= 0.0F) {
+        warning_text_.clear();
+      }
+    }
     if (game_over_) {
       return;
     }
@@ -1213,6 +1220,13 @@ private:
     if (kibbles_ < def.cost) {
       return;
     }
+    if (def.type == Tower::Type::Catatonic &&
+        CatatonicConflict(cursor_, def.size, def.type, def.range, false)) {
+      ShowWarning(
+          "Can't place two sleeping cats within range of each other.\nThey might wake each other up!",
+          4.0F);
+      return;
+    }
     if (!CanPlace(cursor_, def.size, def.type, def.range, false)) {
       return;
     }
@@ -1296,6 +1310,11 @@ private:
     return fast_forward_ ? kFastForwardMultiplier : 1.0F;
   }
   float Dt() const { return kTickSeconds * TimeScale(); }
+
+  void ShowWarning(const std::string &msg, float duration = 3.0F) {
+    warning_text_ = msg;
+    warning_timer_ = duration;
+  }
 
   float NextCooldown(float base_rate) {
     const float scaled = base_rate / kSpeedFactor;
@@ -1548,6 +1567,13 @@ private:
       return;
     }
     auto t = held_tower_->tower;
+    if (t.type == Tower::Type::Catatonic &&
+        CatatonicConflict(cursor_, t.size, t.type, t.range, t.upgraded)) {
+      ShowWarning(
+          "Can't place two sleeping cats within range of each other.\nThey might wake each other up!",
+          4.0F);
+      return;
+    }
     if (!CanPlace(cursor_, t.size, t.type, t.range, t.upgraded)) {
       return;
     }
@@ -2371,6 +2397,15 @@ private:
       lines.push_back(text("Game Over") | bold | color(ftxui::Color::RedLight));
     }
 
+    if (!warning_text_.empty() && warning_timer_ > 0.0F) {
+      lines.push_back(separator());
+      std::stringstream ss(warning_text_);
+      std::string line;
+      while (std::getline(ss, line)) {
+        lines.push_back(text(line) | color(ftxui::Color::YellowLight));
+      }
+    }
+
     if (show_controls_) {
       lines.push_back(separator());
       lines.push_back(text("controls (press h to hide):"));
@@ -2429,6 +2464,8 @@ private:
   bool fast_forward_ = false;
   bool dev_mode_ = false;
   bool title_screen_ = true;
+  std::string warning_text_;
+  float warning_timer_ = 0.0F;
   int map_index_ = 0;
   int kibbles_ = 0;
   int lives_ = 0;
