@@ -716,16 +716,26 @@ public:
       board = ftxui::dbox({board, overlay});
     } else if (title_screen_) {
       auto title =
+          // clang-format off
           ftxui::vbox(
-              {ftxui::text("            __..--''``---....___   _..._    __"),
-               ftxui::text("    /// //_.-'    .-/\";  `        ``<._  ``.''_ "
-                           "`. / // /"),
-               ftxui::text(
-                   "   ///_.-' _..--.'_    \\                    `( ) ) // //"),
-               ftxui::text(
-                   "   / (_..-' // (< _     ;_..__               ; `' / ///"),
-               ftxui::text("    / // // //  `-._,_)' // / ``--...____..-' /// "
-                           "/ // ")}) |
+              {
+                ftxui::text("                      .o8                              .o8   "),
+                ftxui::text(" .ooooo.   .oooo.   .o888oo       .ooooo.   .oooo.   .o888oo "),
+                ftxui::text("d88' `\"Y8 `P  )88b    888        d88' `\"Y8 `P  )88b    888   "),
+                ftxui::text("888        .oP\"888    888        888        .oP\"888    888   "),
+                ftxui::text("888   .o8 d8(  888    888 .      888   .o8 d8(  888    888 . "),
+                ftxui::text("`Y8bod8P' `Y888\"\"8o   \"888\"      `Y8bod8P' `Y888\"\"8o   \"888\" "),
+                ftxui::text(""),
+                ftxui::text(""),
+                ftxui::text(""),
+                ftxui::text(""),
+                ftxui::text(""),
+                ftxui::text("            __..--''``---....___   _..._    __"),
+                ftxui::text("    /// //_.-'    .-/\";  `        ``<._  ``.''_ `. / // /"),
+                ftxui::text("   ///_.-' _..--.'_    \\                    `( ) ) // //"),
+                ftxui::text("   / (_..-' // (< _     ;_..__               ; `' / ///"),
+                ftxui::text("    / // // //  `-._,_)' // / ``--...____..-' /// / // ")}) |
+          // clang-format on
           color(ftxui::Color::YellowLight) | bgcolor(ftxui::Color::Black) |
           bold | ftxui::center;
       auto subtitle = ftxui::text("don't let the vermin into your den!") |
