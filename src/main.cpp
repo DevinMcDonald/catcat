@@ -63,12 +63,15 @@ ftxui::Color BlendColor(const ftxui::Color &base, const ftxui::Color &overlay,
   return ftxui::Color::Interpolate(alpha, base, overlay);
 }
 
+enum class EnemyType { Mouse, Rat, BigRat, Dog };
+
 struct Enemy {
   float path_progress = 0.0F; // index along path cells
   float speed = 1.0F;         // cells per second
   int hp = 1;
   int max_hp = 1;
   int lane_offset = 0; // lateral offset from center path
+  EnemyType type = EnemyType::Rat;
 };
 
 struct Tower {
@@ -423,9 +426,8 @@ private:
     Enemy e;
     e.path_progress = 0.0F;
     const int diff = DifficultyLevel();
-    e.speed = (0.65F + static_cast<float>(diff) * 0.07F) * kSpeedFactor;
-    e.max_hp = 6 + diff * 3;
-    e.hp = e.max_hp;
+    e.type = SelectEnemyType(diff);
+    ApplyEnemyStats(e, diff);
     const int width = std::max(1, CurrentMap().path_width);
     if (width > 1) {
       std::uniform_int_distribution<int> dist(-(width - 1), width - 1);
@@ -583,7 +585,7 @@ private:
         auto &target = enemies_[*hit_index];
         target.hp -= p.damage;
         if (target.hp <= 0) {
-          kibbles_ += 12;
+          kibbles_ += Bounty(target.type);
           Sfx("rat_die");
         } else {
           hit_splats_.push_back({EnemyCell(target), 0.28F});
@@ -597,6 +599,47 @@ private:
     enemies_.erase(std::remove_if(enemies_.begin(), enemies_.end(),
                                   [](const Enemy &e) { return e.hp <= 0; }),
                    enemies_.end());
+  }
+
+  EnemyType SelectEnemyType(int diff) {
+    // Keep mice present throughout; taper their share as difficulty rises.
+    const float mouse_share =
+        std::clamp(0.40F - 0.015F * static_cast<float>(diff), 0.18F, 0.40F);
+    const float roll = Rand(0.0F, 1.0F);
+    if (roll < mouse_share) {
+      return EnemyType::Mouse;
+    }
+    // Occasional big rats as mid bosses.
+    if (diff >= 9 && Rand(0.0F, 1.0F) < 0.18F) {
+      return EnemyType::BigRat;
+    }
+    // Chance for scary dogs once the player is a few maps in.
+    if (map_index_ >= 3 && diff >= 16 && Rand(0.0F, 1.0F) < 0.08F) {
+      return EnemyType::Dog;
+    }
+    return EnemyType::Rat;
+  }
+
+  void ApplyEnemyStats(Enemy &e, int diff) {
+    switch (e.type) {
+    case EnemyType::Mouse:
+      e.max_hp = 2 + diff * 1;
+      e.speed = (0.95F + diff * 0.05F) * kSpeedFactor;
+      break;
+    case EnemyType::Rat:
+      e.max_hp = 5 + static_cast<int>(diff * 2.5F);
+      e.speed = (0.65F + diff * 0.065F) * kSpeedFactor;
+      break;
+    case EnemyType::BigRat:
+      e.max_hp = 15 + diff * 4;
+      e.speed = (0.55F + diff * 0.045F) * kSpeedFactor;
+      break;
+    case EnemyType::Dog:
+      e.max_hp = 28 + diff * 6;
+      e.speed = (0.9F + diff * 0.055F) * kSpeedFactor;
+      break;
+    }
+    e.hp = e.max_hp;
   }
 
   void UpdateHitSplats() {
@@ -726,6 +769,20 @@ private:
     return dist(rng_);
   }
 
+  int Bounty(const EnemyType type) const {
+    switch (type) {
+    case EnemyType::Mouse:
+      return 8;
+    case EnemyType::Rat:
+      return 12;
+    case EnemyType::BigRat:
+      return 20;
+    case EnemyType::Dog:
+      return 30;
+    }
+    return 12;
+  }
+
   float TimeScale() const { return fast_forward_ ? kFastForwardMultiplier : 1.0F; }
   float Dt() const { return kTickSeconds * TimeScale(); }
 
@@ -736,7 +793,7 @@ private:
 
   int DifficultyLevel() const {
     const int local = (wave_ - 1) % 10 + 1;
-    const int map_bonus = map_index_ * 3;  // Slightly steeper ramp to offset kibbles carryover.
+    const int map_bonus = map_index_ * 2;  // Softer ramp to allow longer runs.
     return local + map_bonus;
   }
 
@@ -948,7 +1005,7 @@ private:
       if (cross <= 0.35F) {
         e.hp -= t.damage;
         if (e.hp <= 0) {
-          kibbles_ += 12;
+          kibbles_ += Bounty(e.type);
           Sfx("rat_die");
         } else {
           hit_splats_.push_back({EnemyCell(e), 0.18F});
@@ -987,7 +1044,7 @@ private:
       if (InRange(sw.center, pos, t.range)) {
         e.hp -= t.damage;
         if (e.hp <= 0) {
-          kibbles_ += 12;
+          kibbles_ += Bounty(e.type);
           Sfx("rat_die");
         } else {
           hit_splats_.push_back({pos, 0.22F});
@@ -1031,7 +1088,7 @@ private:
       }
       e.hp -= t.damage;
       if (e.hp <= 0) {
-        kibbles_ += 12;
+        kibbles_ += Bounty(e.type);
         Sfx("rat_die");
       } else {
         hit_splats_.push_back({pos, 0.18F});
@@ -1273,9 +1330,35 @@ private:
       const auto pos = EnemyCell(e);
       const auto yi = static_cast<size_t>(pos.y);
       const auto xi = static_cast<size_t>(pos.x);
-      glyphs[yi][xi] = 'r';
-      backgrounds[yi][xi] = ftxui::Color::Red3;
-      foregrounds[yi][xi] = EnemyColor(e);
+      char g = 'r';
+      ftxui::Color fg = EnemyColor(e);
+      std::optional<ftxui::Color> bg_override;
+      switch (e.type) {
+      case EnemyType::Mouse:
+        g = 'm';
+        fg = ftxui::Color::Grey70;
+        bg_override = std::nullopt; // keep path background
+        break;
+      case EnemyType::Rat:
+        g = 'r';
+        fg = EnemyColor(e);
+        bg_override = ftxui::Color::Grey23;
+        break;
+      case EnemyType::BigRat:
+        g = 'R';
+        fg = ftxui::Color::RedLight;
+        bg_override = ftxui::Color::Grey35;
+        break;
+      case EnemyType::Dog:
+        g = 'D';
+        fg = ftxui::Color::White;
+        bg_override = ftxui::Color::DarkRed;
+        break;
+      }
+      glyphs[yi][xi] = g;
+      if (bg_override.has_value())
+        backgrounds[yi][xi] = *bg_override;
+      foregrounds[yi][xi] = fg;
       enemy_mask[yi][xi] = true;
     }
 
