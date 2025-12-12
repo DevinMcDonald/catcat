@@ -736,18 +736,18 @@ public:
                 ftxui::text("   / (_..-' // (< _     ;_..__               ; `' / ///"),
                 ftxui::text("    / // // //  `-._,_)' // / ``--...____..-' /// / // ")}) |
           // clang-format on
-          color(ftxui::Color::YellowLight) | bgcolor(ftxui::Color::Black) |
+          color(ftxui::Color::YellowLight) | bgcolor(ftxui::Color::Blue3) |
           bold | ftxui::center;
       auto subtitle = ftxui::text("don't let the vermin into your den!") |
-                      color(ftxui::Color::Grey70) | ftxui::center;
+                      color(ftxui::Color::YellowLight) | ftxui::center;
       auto overlay =
           ftxui::center(ftxui::vbox({
                             ftxui::filler(),
-                            title | border | bgcolor(ftxui::Color::Black),
+                            title | border | bgcolor(ftxui::Color::Blue3),
                             subtitle,
                             ftxui::filler(),
                         }) |
-                        ftxui::center);
+                        ftxui::center | bgcolor(ftxui::Color::DarkBlue));
       board = ftxui::dbox({board, overlay});
     }
     auto stats = RenderStats();
@@ -1000,7 +1000,13 @@ private:
         break;
       }
       case Tower::Type::Thunder: {
-        FireLaser(t, enemies_[*target_index]);
+        const auto targets = ThunderTargets(t);
+        if (targets.empty()) {
+          continue;
+        }
+        for (size_t idx : targets) {
+          FireLaser(t, enemies_[idx]);
+        }
 #ifdef ENABLE_AUDIO
         audio_->PlayEvent("tower_thunder_shoot");
 #endif
@@ -1601,9 +1607,6 @@ private:
     t.upgraded = true;
     if (t.type == Tower::Type::Fat) {
       t.range += 1.0F;
-    } else if (t.type == Tower::Type::Thunder) {
-      t.fire_rate = 0.2F;
-      t.cooldown = 0.0F;
     }
     Sfx("unlock");
   }
@@ -1653,6 +1656,34 @@ private:
       by += ndy * 0.5F;
     }
     beams_.push_back(std::move(b));
+  }
+
+  std::vector<size_t> ThunderTargets(const Tower &t) const {
+    std::vector<std::pair<float, size_t>> sorted;
+    for (size_t i = 0; i < enemies_.size(); ++i) {
+      if (enemies_[i].hp <= 0) {
+        continue;
+      }
+      sorted.push_back({enemies_[i].path_progress, i});
+    }
+    if (sorted.empty()) {
+      return {};
+    }
+    std::sort(sorted.begin(), sorted.end(),
+              [](auto &a, auto &b) { return a.first > b.first; });
+    std::vector<size_t> picks;
+    auto add_unique = [&](size_t idx) {
+      if (std::find(picks.begin(), picks.end(), idx) == picks.end()) {
+        picks.push_back(idx);
+      }
+    };
+    add_unique(sorted.front().second);
+    if (!t.upgraded) {
+      return picks;
+    }
+    add_unique(sorted[sorted.size() / 2].second);
+    add_unique(sorted.back().second);
+    return picks;
   }
 
   void FireShockwave(const Tower &t) {
