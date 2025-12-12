@@ -41,6 +41,11 @@ constexpr int kStartingKibbles = 90;
 constexpr float kSpeedFactor = 1.3F;  // Global pacing multiplier (~30% faster).
 constexpr float kFastForwardMultiplier = 5.0F;
 constexpr int kStartingLives = 9;
+constexpr float kCatSleepBase = 0.5F;
+constexpr float kCatSleepUpgrade = 1.0F;
+constexpr float kCatSleepCap = 5.0F;
+constexpr float kGalacticVoidChance = 0.20F;
+constexpr float kGalacticVoidBackstep = 6.0F;
 
 struct Position {
   int x = 0;
@@ -158,7 +163,7 @@ TowerDef GetDef(Tower::Type type) {
   case Tower::Type::Catatonic:
     return {type, "Catatonic", 500, 2, 3.2F, 2.2F, true, 1};
   case Tower::Type::Galactic:
-    return {type, "Galacticat", 1000, 5, 7.0F, 2.5F, false, 1};
+    return {type, "Galacticat", 1000, 9, 7.5F, 2.5F, false, 1};
   }
   return {Tower::Type::Default, "Default Cat", 35, 3, 3.5F, 0.85F, true, 1};
 }
@@ -599,10 +604,16 @@ private:
       }
       case Tower::Type::Catatonic: {
         FireCatatonic(t);
+#ifdef ENABLE_AUDIO
+        audio_->PlayEvent("tower_catatonic_shoot");
+#endif
         break;
       }
       case Tower::Type::Galactic: {
         FireGalactic(t, enemies_[*target_index]);
+#ifdef ENABLE_AUDIO
+        audio_->PlayEvent("tower_galactic_shoot");
+#endif
         break;
       }
       }
@@ -780,7 +791,7 @@ private:
     if (kibbles_ < def.cost) {
       return;
     }
-    if (!CanPlace(cursor_, def.size)) {
+    if (!CanPlace(cursor_, def.size, def.type, def.range, false)) {
       return;
     }
 
@@ -1033,7 +1044,32 @@ private:
     return false;
   }
 
-  bool CanPlace(const Position &p, int size) const {
+  bool CatatonicConflict(const Position &p, int size, Tower::Type type,
+                         float range, bool upgraded) const {
+    if (type != Tower::Type::Catatonic) {
+      return false;
+    }
+    const float candidate_range = range + (upgraded ? 0.8F : 0.0F);
+    const Vec2 center = {static_cast<float>(p.x) + (static_cast<float>(size) - 1.0F) / 2.0F,
+                         static_cast<float>(p.y) + (static_cast<float>(size) - 1.0F) / 2.0F};
+    for (const auto &t : towers_) {
+      if (t.type != Tower::Type::Catatonic) {
+        continue;
+      }
+      const Vec2 other = TowerCenter(t);
+      const float dx = center.x - other.x;
+      const float dy = center.y - other.y;
+      const float dist2 = dx * dx + dy * dy;
+      const float max_r = candidate_range + t.range + (t.upgraded ? 0.8F : 0.0F);
+      if (dist2 <= max_r * max_r) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool CanPlace(const Position &p, int size, Tower::Type type,
+                float range, bool upgraded) const {
     if (p.x < 0 || p.y < 0 || p.x + size - 1 >= kBoardWidth ||
         p.y + size - 1 >= kBoardHeight) {
       return false;
@@ -1042,6 +1078,9 @@ private:
       return false;
     }
     if (OverlapsTower(p, size)) {
+      return false;
+    }
+    if (CatatonicConflict(p, size, type, range, upgraded)) {
       return false;
     }
     return true;
@@ -1080,7 +1119,7 @@ private:
       return;
     }
     auto t = held_tower_->tower;
-    if (!CanPlace(cursor_, t.size)) {
+    if (!CanPlace(cursor_, t.size, t.type, t.range, t.upgraded)) {
       return;
     }
     t.pos = cursor_;
@@ -1268,12 +1307,13 @@ private:
 
   void FireCatatonic(const Tower &t) {
     const float radius = t.upgraded ? t.range + 0.8F : t.range;
-    const float sleep_dur = t.upgraded ? 4.0F : 2.5F;
+    const float sleep_dur =
+        std::clamp(t.upgraded ? kCatSleepUpgrade : kCatSleepBase, 0.0F, kCatSleepCap);
     std::vector<Position> cells;
     for (auto &e : enemies_) {
       const auto pos = EnemyCell(e);
       if (InRange(TowerCenter(t), pos, radius)) {
-        e.sleep_timer = std::max(e.sleep_timer, sleep_dur);
+        e.sleep_timer = std::min(kCatSleepCap, std::max(e.sleep_timer, sleep_dur));
         cells.push_back(pos);
       }
     }
@@ -1284,29 +1324,6 @@ private:
   }
 
   void FireGalactic(const Tower &t, Enemy &target) {
-    if (t.upgraded) {
-      // Full map pulse.
-      std::vector<Position> cells;
-      cells.reserve(kBoardWidth * kBoardHeight);
-      for (int y = 0; y < kBoardHeight; ++y) {
-        for (int x = 0; x < kBoardWidth; ++x) {
-          cells.push_back({x, y});
-        }
-      }
-      for (auto &e : enemies_) {
-        e.hp -= t.damage;
-        if (e.hp <= 0) {
-          kibbles_ += Bounty(e.type);
-          PlayDeathSfx(e.type);
-        } else {
-          hit_splats_.push_back({EnemyCell(e), 0.18F});
-        }
-      }
-      area_highlights_.push_back(
-          {cells, 0.5F, ftxui::Color::CyanLight, '*'});
-      return;
-    }
-
     const auto center = TowerCenter(t);
     const auto target_cell = EnemyCell(target);
     const float dx = static_cast<float>(target_cell.x) - center.x;
@@ -1335,6 +1352,7 @@ private:
       }
     }
 
+    bool void_proc = t.upgraded && Rand(0.0F, 1.0F) < kGalacticVoidChance;
     for (auto &e : enemies_) {
       const auto pos = EnemyCell(e);
       const bool hit = std::any_of(
@@ -1342,6 +1360,10 @@ private:
           [&](const Position &c) { return c.x == pos.x && c.y == pos.y; });
       if (!hit)
         continue;
+      const bool teleported = void_proc;
+      if (teleported) {
+        e.path_progress = std::max(0.0F, e.path_progress - kGalacticVoidBackstep);
+      }
       e.hp -= t.damage;
       if (e.hp <= 0) {
         kibbles_ += Bounty(e.type);
@@ -1353,7 +1375,9 @@ private:
 
     if (!cells.empty()) {
       area_highlights_.push_back(
-          {cells, 0.3F, ftxui::Color::LightSteelBlue, '*'});
+          {cells, void_proc ? 0.35F : 0.3F,
+           void_proc ? ftxui::Color::DarkMagenta : ftxui::Color::LightSteelBlue,
+           void_proc ? '~' : '*'});
     }
   }
 
@@ -1661,6 +1685,7 @@ private:
         const auto xi = static_cast<size_t>(cell.x);
         glyphs[yi][xi] = ah.glyph;
         foregrounds[yi][xi] = ah.color;
+        backgrounds[yi][xi] = BlendColor(backgrounds[yi][xi], ah.color, 0.08F);
       }
     }
 

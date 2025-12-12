@@ -3,6 +3,7 @@
 #include <memory>
 #include <algorithm>
 #include <random>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -19,7 +20,12 @@ struct EventEntry {
 
 struct MusicEntry {
   std::vector<std::string> files;
+  std::vector<std::string> intro_files;
   float volume = 1.0F;
+  float loop_start_sec = -1.0F;  // optional
+  float loop_end_sec = -1.0F;    // optional
+  float intro_start_sec = -1.0F; // optional slice start
+  float intro_end_sec = -1.0F;   // optional slice end
 };
 
 class AudioSystem::Impl {
@@ -37,6 +43,11 @@ class AudioSystem::Impl {
     }
     LoadConfig();
     return true;
+  }
+
+  static void IntroEnded(void* user_data, ma_sound* /*sound*/) {
+    if (user_data == nullptr) return;
+    static_cast<Impl*>(user_data)->OnIntroEnded();
   }
 
   void Shutdown() {
@@ -75,29 +86,36 @@ class AudioSystem::Impl {
     if (!engine_init_) return;
     StopMusic();
     if (!music_enabled_) return;
-    int key = map_index;
-    if (map_index < 0) {
-      key = map_index;  // allow negative for special cues (e.g., game over)
-    }
-    const auto it = music_.find(key);
+    current_music_path_.clear();
+    current_loop_start_sec_ = -1.0F;
+    current_loop_end_sec_ = -1.0F;
+    current_intro_start_sec_ = -1.0F;
+    current_intro_end_sec_ = -1.0F;
+    const auto it = music_.find(map_index);
     if (it == music_.end() || it->second.files.empty()) return;
     const auto& tracks = it->second.files;
     const size_t idx = tracks.size() == 1
                            ? 0U
                            : static_cast<size_t>(dist_(rng_) % static_cast<int>(tracks.size()));
     const std::string& path = tracks[idx];
-    constexpr ma_uint32 kMusicFlags =
-        MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_ASYNC;  // fully decode for seamless looping
-    if (ma_sound_init_from_file(&engine_, path.c_str(), kMusicFlags, nullptr, nullptr,
-                                &music_sound_) != MA_SUCCESS) {
-      music_loaded_ = false;
-      return;
-    }
+    current_music_path_ = path;
+    current_loop_start_sec_ = it->second.loop_start_sec;
+    current_loop_end_sec_ = it->second.loop_end_sec;
+    current_intro_start_sec_ = it->second.intro_start_sec;
+    current_intro_end_sec_ = it->second.intro_end_sec;
     current_music_gain_ = std::clamp(it->second.volume, 0.0F, 2.0F);
-    ma_sound_set_looping(&music_sound_, MA_TRUE);
-    ma_sound_set_volume(&music_sound_, music_volume_ * current_music_gain_);
-    ma_sound_start(&music_sound_);
-    music_loaded_ = true;
+    if (!it->second.intro_files.empty()) {
+      const auto& intro_list = it->second.intro_files;
+      const size_t intro_idx =
+          intro_list.size() == 1
+              ? 0U
+              : static_cast<size_t>(dist_(rng_) % static_cast<int>(intro_list.size()));
+      const std::string& intro_path = intro_list[intro_idx];
+      if (InitIntro(intro_path)) {
+        return;
+      }
+    }
+    StartMainMusic();
   }
 
   void ToggleSfx() { sfx_enabled_ = !sfx_enabled_; }
@@ -192,8 +210,29 @@ class AudioSystem::Impl {
               entry.files.push_back(ResolvePath(base_dir, f.get<std::string>()));
             }
           }
+          if (v.contains("intro")) {
+            if (v["intro"].is_array()) {
+              for (const auto& f : v["intro"]) {
+                entry.intro_files.push_back(ResolvePath(base_dir, f.get<std::string>()));
+              }
+            } else if (v["intro"].is_string()) {
+              entry.intro_files.push_back(ResolvePath(base_dir, v["intro"].get<std::string>()));
+            }
+          }
           if (v.contains("volume") && v["volume"].is_number()) {
             entry.volume = std::clamp(v["volume"].get<float>(), 0.0F, 2.0F);
+          }
+          if (v.contains("loop_start") && v["loop_start"].is_number()) {
+            entry.loop_start_sec = v["loop_start"].get<float>();
+          }
+          if (v.contains("loop_end") && v["loop_end"].is_number()) {
+            entry.loop_end_sec = v["loop_end"].get<float>();
+          }
+          if (v.contains("intro_start") && v["intro_start"].is_number()) {
+            entry.intro_start_sec = v["intro_start"].get<float>();
+          }
+          if (v.contains("intro_end") && v["intro_end"].is_number()) {
+            entry.intro_end_sec = v["intro_end"].get<float>();
           }
         }
         music_[map_idx] = std::move(entry);
@@ -202,10 +241,93 @@ class AudioSystem::Impl {
   }
 
   void StopMusic() {
+    if (intro_loaded_) {
+      ma_sound_uninit(&intro_sound_);
+      intro_loaded_ = false;
+    }
     if (music_loaded_) {
       ma_sound_uninit(&music_sound_);
       music_loaded_ = false;
     }
+  }
+
+  bool InitIntro(const std::string& path) {
+    constexpr ma_uint32 kFlags = MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_ASYNC;
+    if (ma_sound_init_from_file(&engine_, path.c_str(), kFlags, nullptr, nullptr,
+                                &intro_sound_) != MA_SUCCESS) {
+      intro_loaded_ = false;
+      return false;
+    }
+    ma_uint32 rate = 0;
+    ma_sound_get_data_format(&intro_sound_, nullptr, nullptr, &rate, nullptr, 0);
+    ma_uint64 length_frames = 0;
+    ma_sound_get_length_in_pcm_frames(&intro_sound_, &length_frames);
+    if (rate == 0) rate = 44100;
+    ma_uint64 start_frame = 0;
+    ma_uint64 end_frame = length_frames;
+    if (current_intro_start_sec_ >= 0.0F) {
+      start_frame = static_cast<ma_uint64>(current_intro_start_sec_ * static_cast<float>(rate));
+      start_frame = std::min(start_frame, length_frames);
+      ma_sound_seek_to_pcm_frame(&intro_sound_, start_frame);
+    }
+    if (current_intro_end_sec_ > 0.0F) {
+      end_frame = static_cast<ma_uint64>(current_intro_end_sec_ * static_cast<float>(rate));
+      end_frame = std::min(end_frame, length_frames);
+      if (end_frame > start_frame) {
+        ma_sound_set_stop_time_in_pcm_frames(&intro_sound_, end_frame);
+      }
+    }
+    ma_sound_set_end_callback(&intro_sound_, IntroEnded, this);
+    ma_sound_set_looping(&intro_sound_, MA_FALSE);
+    ma_sound_set_volume(&intro_sound_, music_volume_ * current_music_gain_);
+    ma_sound_start(&intro_sound_);
+    intro_loaded_ = true;
+    return true;
+  }
+
+  void OnIntroEnded() {
+    if (intro_loaded_) {
+      ma_sound_uninit(&intro_sound_);
+      intro_loaded_ = false;
+    }
+    StartMainMusic();
+  }
+
+  bool StartMainMusic() {
+    if (current_music_path_.empty()) return false;
+    constexpr ma_uint32 kMusicFlags =
+        MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_ASYNC;  // fully decode for seamless looping
+    if (ma_sound_init_from_file(&engine_, current_music_path_.c_str(), kMusicFlags, nullptr,
+                                nullptr, &music_sound_) != MA_SUCCESS) {
+      music_loaded_ = false;
+      return false;
+    }
+    ma_uint32 rate = 0;
+    ma_sound_get_data_format(&music_sound_, nullptr, nullptr, &rate, nullptr, 0);
+    ma_uint64 length_frames = 0;
+    ma_sound_get_length_in_pcm_frames(&music_sound_, &length_frames);
+    if (rate == 0) rate = 44100;
+    ma_uint64 start_frame = 0;
+    ma_uint64 end_frame = length_frames;
+    if (current_loop_start_sec_ >= 0.0F) {
+      start_frame = static_cast<ma_uint64>(current_loop_start_sec_ * static_cast<float>(rate));
+    }
+    if (current_loop_end_sec_ > 0.0F) {
+      end_frame = static_cast<ma_uint64>(current_loop_end_sec_ * static_cast<float>(rate));
+      end_frame = std::min(end_frame, length_frames);
+    }
+    if (start_frame < end_frame) {
+      ma_data_source_set_loop_point_in_pcm_frames(ma_sound_get_data_source(&music_sound_),
+                                                  start_frame, end_frame);
+    }
+    if (start_frame > 0) {
+      ma_sound_seek_to_pcm_frame(&music_sound_, start_frame);
+    }
+    ma_sound_set_looping(&music_sound_, MA_TRUE);
+    ma_sound_set_volume(&music_sound_, music_volume_ * current_music_gain_);
+    ma_sound_start(&music_sound_);
+    music_loaded_ = true;
+    return true;
   }
 
   void CleanupSounds(bool force_all) {
@@ -226,15 +348,22 @@ class AudioSystem::Impl {
   ma_engine engine_{};
   bool engine_init_ = false;
   bool music_loaded_ = false;
+  bool intro_loaded_ = false;
   ma_sound music_sound_{};
+  ma_sound intro_sound_{};
   std::unordered_map<std::string, EventEntry> events_;
   std::unordered_map<int, MusicEntry> music_;
   std::string config_path_;
+  std::string current_music_path_;
+  float current_loop_start_sec_ = -1.0F;
+  float current_loop_end_sec_ = -1.0F;
   float sfx_volume_ = 1.0F;
   float music_volume_ = 1.0F;
   bool sfx_enabled_ = true;
   bool music_enabled_ = true;
   float current_music_gain_ = 1.0F;
+  float current_intro_start_sec_ = -1.0F;
+  float current_intro_end_sec_ = -1.0F;
   std::vector<std::unique_ptr<ma_sound>> active_sounds_;
   std::mt19937 rng_{std::random_device{}()};
   std::uniform_int_distribution<int> dist_;

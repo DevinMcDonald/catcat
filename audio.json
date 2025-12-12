@@ -1,35 +1,35 @@
 {
   "volume": { "sfx": 1.0, "music": 0.8 },
   "events": {
-    "rat_die": { "files": ["audio/sfx/rat_die.wav"], "volume": 0.9 },
+    "rat_die": { "files": ["audio/sfx/rat_die.wav", "audio/sfx/rat_die1.wav", "audio/sfx/rat_die2.wav", "audio/sfx/rat_die3.wav"], "volume": 0.9 },
+    "mouse_die": { "files": ["audio/sfx/mouse_die.wav", "audio/sfx/mouse_die1.wav", "audio/sfx/mouse_die2.wav", "audio/sfx/mouse_die3.wav"], "volume": 0.9 },
+    "bigrat_die": { "files": ["audio/sfx/bigrat_die.wav", "audio/sfx/bigrat_die1.wav", "audio/sfx/bigrat_die2.wav", "audio/sfx/bigrat_die3.wav"], "volume": 0.9 },
+    "dog_die": { "files": ["audio/sfx/dog_die.wav", "audio/sfx/dog_die1.wav", "audio/sfx/dog_die2.wav", "audio/sfx/dog_die3.wav"], "volume": 0.9 },
     "tower_default_shoot": { "files": ["audio/sfx/tower_default_shoot.wav"], "volume": 0.85 },
     "tower_thunder_shoot": { "files": ["audio/sfx/tower_thunder_shoot.wav"], "volume": 1.0 },
     "tower_fat_shoot": { "files": ["audio/sfx/tower_fat_shoot.wav"], "volume": 0.9 },
     "tower_kitty_shoot": { "files": ["audio/sfx/tower_kitty_shoot.wav"], "volume": 0.9 },
     "tower_catatonic_shoot": { "files": ["audio/sfx/tower_catatonic_shoot.wav"], "volume": 0.9 },
     "tower_galactic_shoot": { "files": ["audio/sfx/tower_galactic_shoot.wav"], "volume": 0.9 },
-    "mouse_die": { "files": ["audio/sfx/mouse_die.wav"], "volume": 0.9 },
     "wave_start": { "files": ["audio/sfx/wave_start.wav"], "volume": 0.8 },
     "map_change": { "files": ["audio/sfx/map_change.wav"], "volume": 0.75 },
     "life_lost": { "files": ["audio/sfx/life_lost.wav"], "volume": 0.8 },
     "unlock": { "files": ["audio/sfx/unlock.wav"], "volume": 0.85 },
     "place": { "files": ["audio/sfx/place.wav"], "volume": 0.8 },
-    "sell": { "files": ["audio/sfx/sell.wav"], "volume": 0.8 },
-    "bigrat_die": { "files": ["audio/sfx/bigrat_die.wav"], "volume": 0.9 },
-    "dog_die": { "files": ["audio/sfx/dog_die.wav"], "volume": 0.9 }
+    "sell": { "files": ["audio/sfx/sell.wav"], "volume": 0.8 }
   },
 
   "music": {
-    "map_0": { "files": ["audio/music/bratwurst_summer.mp3"], "volume": 0.7 },
-    "map_1": { "files": ["audio/music/bass_crap.mp3"], "volume": 0.7 },
-    "map_2": { "files": ["audio/music/dare_you.mp3"], "volume": 0.7 },
-    "map_3": { "files": ["audio/music/deep_n_dark.mp3"], "volume": 0.7 },
-    "map_4": { "files": ["audio/music/dundno.mp3"], "volume": 0.7 },
-    "map_5": { "files": ["audio/music/theresbeenathirdplane.mp3"], "volume": 0.7 },
-    "map_6": { "files": ["audio/music/plane2.mp3"], "volume": 0.7 },
-    "map_7": { "files": ["audio/music/ploppin_around.mp3"], "volume": 0.7 },
-    "map_8": { "files": ["audio/music/soft.mp3"], "volume": 0.7 },
-    "map_9": { "files": ["audio/music/marios.mp3"], "volume": 0.7 },
-    "game_over": { "files": ["audio/music/soft.mp3"], "volume": 0.7 }
+    "map_0": { "intro": [], "files": ["audio/music/bratwurst_summer.mp3"], "volume": 0.7, "loop_start": 0.0, "loop_end": 16.0, "intro_start": -1.0, "intro_end": -1.0 },
+    "map_1": { "intro": [], "files": ["audio/music/bass_crap.mp3"], "volume": 0.7, "loop_start": 0.0, "loop_end": -1.0, "intro_start": -1.0, "intro_end": -1.0 },
+    "map_2": { "intro": [], "files": ["audio/music/dare_you.mp3"], "volume": 0.7, "loop_start": 32.0, "loop_end": 64.0, "intro_start": 0.0, "intro_end": 32.0 },
+    "map_3": { "intro": [], "files": ["audio/music/deep_n_dark.mp3"], "volume": 0.7, "loop_start": 32.0, "loop_end": 64.0, "intro_start": -1.0, "intro_end": -1.0 },
+    "map_4": { "intro": [], "files": ["audio/music/dundno.mp3"], "volume": 0.7, "loop_start": 0.0, "loop_end": -1.0, "intro_start": -1.0, "intro_end": -1.0 },
+    "map_5": { "intro": [], "files": ["audio/music/theresbeenathirdplane.mp3"], "volume": 0.7, "loop_start": 0.0, "loop_end": -1.0, "intro_start": -1.0, "intro_end": -1.0 },
+    "map_6": { "intro": [], "files": ["audio/music/plane2.mp3"], "volume": 0.7, "loop_start": 0.0, "loop_end": -1.0, "intro_start": -1.0, "intro_end": -1.0 },
+    "map_7": { "intro": [], "files": ["audio/music/ploppin_around.mp3"], "volume": 0.7, "loop_start": 0.0, "loop_end": -1.0, "intro_start": -1.0, "intro_end": -1.0 },
+    "map_8": { "intro": [], "files": ["audio/music/soft.mp3"], "volume": 0.7, "loop_start": 0.0, "loop_end": -1.0, "intro_start": -1.0, "intro_end": -1.0 },
+    "map_9": { "intro": [], "files": ["audio/music/marios.mp3"], "volume": 0.7, "loop_start": 0.0, "loop_end": -1.0, "intro_start": -1.0, "intro_end": -1.0 },
+    "game_over": { "intro": [], "files": ["audio/music/soft.mp3"], "volume": 0.7, "loop_start": 0.0, "loop_end": -1.0, "intro_start": -1.0, "intro_end": -1.0 }
   }
 }
