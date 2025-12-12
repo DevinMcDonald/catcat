@@ -1,4 +1,4 @@
-# Cat Burrow Defense
+# cat cat
 
 A colorful, fast-paced terminal tower defense inspired by Bloons, built with [FTXUI](https://github.com/ArthurSonzogni/ftxui) and modern C++20. Deploy an ever-growing roster of cats to stop waves of mice, rats, big rats, and the occasional terrifying dog from reaching your burrow.
 
@@ -40,8 +40,8 @@ A colorful, fast-paced terminal tower defense inspired by Bloons, built with [FT
 ```bash
 cmake -S . -B build
 cmake --build build
-./build/tuirDefense           # normal
-./build/tuirDefense --dev     # dev mode (unlocks, lots of kibbles)
+./build/catcat           # normal
+./build/catcat --dev     # dev mode (unlocks, lots of kibbles)
 ```
 
 ### Dependencies

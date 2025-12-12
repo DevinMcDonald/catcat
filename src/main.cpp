@@ -1798,7 +1798,7 @@ private:
       wave_text += " (auto)";
     }
     std::vector<ftxui::Element> lines;
-    lines.push_back(text("Cat Burrow Defense"));
+    lines.push_back(text("cat cat"));
     if (dev_mode_) {
       lines.push_back(text("DEV MODE"));
     }

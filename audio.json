@@ -147,7 +147,7 @@
       "files": ["audio/music/soft.mp3"],
       "volume": 0.7,
       "loop_start": 0.0,
-      "loop_end": 16.696,
+      "loop_end": -1.0,
       "intro_start": -1.0,
       "intro_end": -1.0
     },
@@ -165,7 +165,7 @@
       "files": ["audio/music/soft.mp3"],
       "volume": 0.7,
       "loop_start": 0.0,
-      "loop_end": 16.696,
+      "loop_end": -1.0,
       "intro_start": -1.0,
       "intro_end": -1.0
     }

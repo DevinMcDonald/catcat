@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(tuirDefense LANGUAGES CXX)
+project(catcat LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -29,9 +29,9 @@ if(ENABLE_AUDIO)
   FetchContent_MakeAvailable(nlohmann_json)
 endif()
 
-add_executable(tuirDefense src/main.cpp src/audio.cpp)
+add_executable(catcat src/main.cpp src/audio.cpp)
 
-target_link_libraries(tuirDefense PRIVATE ftxui::component ftxui::dom ftxui::screen)
+target_link_libraries(catcat PRIVATE ftxui::component ftxui::dom ftxui::screen)
 
 if(ENABLE_AUDIO)
   set(MINIAUDIO_DIR ${CMAKE_BINARY_DIR}/miniaudio_header)
@@ -45,17 +45,17 @@ if(ENABLE_AUDIO)
       SHOW_PROGRESS
     )
   endif()
-  target_include_directories(tuirDefense PRIVATE ${MINIAUDIO_DIR})
-  target_link_libraries(tuirDefense PRIVATE nlohmann_json::nlohmann_json)
-  target_compile_definitions(tuirDefense PRIVATE ENABLE_AUDIO=1)
+  target_include_directories(catcat PRIVATE ${MINIAUDIO_DIR})
+  target_link_libraries(catcat PRIVATE nlohmann_json::nlohmann_json)
+  target_compile_definitions(catcat PRIVATE ENABLE_AUDIO=1)
 endif()
 
 if(MSVC)
-  target_compile_options(tuirDefense PRIVATE /W4 /permissive- /Zc:__cplusplus /WX)
+  target_compile_options(catcat PRIVATE /W4 /permissive- /Zc:__cplusplus /WX)
 else()
-  target_compile_options(tuirDefense PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror)
+  target_compile_options(catcat PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror)
   # Silence warnings from third-party headers we don't control.
-  target_include_directories(tuirDefense SYSTEM PRIVATE
+  target_include_directories(catcat SYSTEM PRIVATE
     ${CMAKE_BINARY_DIR}/miniaudio_header
     ${ftxui_SOURCE_DIR}/include)
 endif()

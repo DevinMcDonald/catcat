@@ -104,6 +104,8 @@ class AudioSystem::Impl {
     current_loop_end_sec_ = -1.0F;
     current_intro_start_sec_ = -1.0F;
     current_intro_end_sec_ = -1.0F;
+    current_initial_seek_sec_ = -1.0F;
+    shared_intro_ = false;
     const auto it = music_.find(map_index);
     if (it == music_.end() || it->second.files.empty()) return;
     const auto& tracks = it->second.files;
@@ -124,7 +126,10 @@ class AudioSystem::Impl {
               ? 0U
               : static_cast<size_t>(dist_(rng_) % static_cast<int>(intro_list.size()));
       const std::string& intro_path = intro_list[intro_idx];
-      if (InitIntro(intro_path)) {
+      if (intro_path == current_music_path_) {
+        shared_intro_ = true;
+        current_initial_seek_sec_ = current_intro_start_sec_ >= 0.0F ? current_intro_start_sec_ : 0.0F;
+      } else if (InitIntro(intro_path)) {
         return;
       }
     }
@@ -320,34 +325,42 @@ class AudioSystem::Impl {
     ma_uint64 length_frames = 0;
     ma_sound_get_length_in_pcm_frames(&music_sound_, &length_frames);
     if (rate == 0) rate = 44100;
-    ma_uint64 start_frame = 0;
-    ma_uint64 end_frame = length_frames;
+    ma_uint64 loop_start_frame = 0;
+    ma_uint64 loop_end_frame = length_frames;
     if (current_loop_start_sec_ >= 0.0F) {
-      start_frame = static_cast<ma_uint64>(current_loop_start_sec_ * static_cast<float>(rate));
+      loop_start_frame = static_cast<ma_uint64>(current_loop_start_sec_ * static_cast<float>(rate));
     }
     if (current_loop_end_sec_ > 0.0F) {
-      end_frame = static_cast<ma_uint64>(current_loop_end_sec_ * static_cast<float>(rate));
+      loop_end_frame = static_cast<ma_uint64>(current_loop_end_sec_ * static_cast<float>(rate));
     }
 
     // Clamp and fallback sensibly if values are out of bounds.
     if (length_frames > 0) {
-      start_frame = std::min(start_frame, length_frames - 1);
-      end_frame = std::min(end_frame, length_frames);
+      loop_start_frame = std::min(loop_start_frame, length_frames - 1);
+      loop_end_frame = std::min(loop_end_frame, length_frames);
     } else {
-      start_frame = 0;
-      end_frame = 0;
+      loop_start_frame = 0;
+      loop_end_frame = 0;
     }
-    if (end_frame <= start_frame) {
-      start_frame = 0;
-      end_frame = length_frames;
+    if (loop_end_frame <= loop_start_frame) {
+      loop_start_frame = 0;
+      loop_end_frame = length_frames;
     }
 
-    if (start_frame < end_frame) {
+    if (loop_start_frame < loop_end_frame) {
       ma_data_source_set_loop_point_in_pcm_frames(ma_sound_get_data_source(&music_sound_),
-                                                  start_frame, end_frame);
+                                                  loop_start_frame, loop_end_frame);
     }
-    if (start_frame > 0) {
-      ma_sound_seek_to_pcm_frame(&music_sound_, start_frame);
+    float seek_sec = -1.0F;
+    if (current_initial_seek_sec_ >= 0.0F) {
+      seek_sec = current_initial_seek_sec_;
+    } else if (!shared_intro_ && current_loop_start_sec_ >= 0.0F) {
+      seek_sec = current_loop_start_sec_;
+    }
+    if (seek_sec > 0.0F) {
+      ma_uint64 seek_frame = static_cast<ma_uint64>(seek_sec * static_cast<float>(rate));
+      seek_frame = std::min(seek_frame, length_frames);
+      ma_sound_seek_to_pcm_frame(&music_sound_, seek_frame);
     }
     ma_sound_set_looping(&music_sound_, MA_TRUE);
     ma_sound_set_volume(&music_sound_, music_volume_ * current_music_gain_);
@@ -383,6 +396,7 @@ class AudioSystem::Impl {
   std::string current_music_path_;
   float current_loop_start_sec_ = -1.0F;
   float current_loop_end_sec_ = -1.0F;
+  float current_initial_seek_sec_ = -1.0F;
   float sfx_volume_ = 1.0F;
   float music_volume_ = 1.0F;
   bool sfx_enabled_ = true;
@@ -390,6 +404,7 @@ class AudioSystem::Impl {
   float current_music_gain_ = 1.0F;
   float current_intro_start_sec_ = -1.0F;
   float current_intro_end_sec_ = -1.0F;
+  bool shared_intro_ = false;
   std::vector<std::unique_ptr<ma_sound>> active_sounds_;
   std::mt19937 rng_{std::random_device{}()};
   std::uniform_int_distribution<int> dist_;
