@@ -5,11 +5,11 @@
 #include <cmath>
 #include <functional>
 #include <memory>
-#include <unordered_map>
 #include <optional>
 #include <random>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -39,6 +39,7 @@ constexpr int kTickMs = 16;  // ~60 FPS
 constexpr float kTickSeconds = kTickMs / 1000.0F;
 constexpr int kStartingKibbles = 90;
 constexpr float kSpeedFactor = 1.3F;  // Global pacing multiplier (~30% faster).
+constexpr float kFastForwardMultiplier = 5.0F;
 constexpr int kStartingLives = 9;
 
 struct Position {
@@ -51,23 +52,23 @@ struct Vec2 {
   float y = 0.0F;
 };
 
-float DistanceSquared(const Vec2& a, const Position& b) {
+float DistanceSquared(const Vec2 &a, const Position &b) {
   const float dx = a.x - static_cast<float>(b.x);
   const float dy = a.y - static_cast<float>(b.y);
   return dx * dx + dy * dy;
 }
 
-ftxui::Color BlendColor(const ftxui::Color& base, const ftxui::Color& overlay,
+ftxui::Color BlendColor(const ftxui::Color &base, const ftxui::Color &overlay,
                         float alpha) {
   return ftxui::Color::Interpolate(alpha, base, overlay);
 }
 
 struct Enemy {
-  float path_progress = 0.0F;  // index along path cells
-  float speed = 1.0F;          // cells per second
+  float path_progress = 0.0F; // index along path cells
+  float speed = 1.0F;         // cells per second
   int hp = 1;
   int max_hp = 1;
-  int lane_offset = 0;         // lateral offset from center path
+  int lane_offset = 0; // lateral offset from center path
 };
 
 struct Tower {
@@ -76,22 +77,22 @@ struct Tower {
   Position pos{};
   int damage = 2;
   float range = 3.2F;
-  float cooldown = 0.0F;       // time until next shot
-  float fire_rate = 1.2F;      // seconds between shots
+  float cooldown = 0.0F;  // time until next shot
+  float fire_rate = 1.2F; // seconds between shots
   Type type = Type::Default;
-  int size = 1;  // 1x1 or 2x2 for Fat
+  int size = 1; // 1x1 or 2x2 for Fat
 };
 
 struct HitSplat {
   Position pos{};
-  float time_left = 0.25F;  // seconds
+  float time_left = 0.25F; // seconds
 };
 
 struct Projectile {
   float x = 0.0F;
   float y = 0.0F;
   Position target{};
-  float speed = 17.0F;  // cells per second
+  float speed = 17.0F; // cells per second
   int damage = 0;
 };
 
@@ -118,7 +119,6 @@ struct AreaHighlight {
   float time_left = 0.2F;
 };
 
-
 struct TowerDef {
   Tower::Type type;
   std::string name;
@@ -139,20 +139,20 @@ struct MapDef {
 
 TowerDef GetDef(Tower::Type type) {
   switch (type) {
-    case Tower::Type::Default:
-      return {type, "Default Cat", 35, 3, 3.5F, 0.85F, true, 1};
-    case Tower::Type::Thunder:
-      return {type, "Thundercat", 75, 6, 999.0F, 1.35F, false, 1};
-    case Tower::Type::Fat:
-      return {type, "Fat Cat", 55, 4, 2.4F, 1.4F, true, 2};
-    case Tower::Type::Kitty:
-      return {type, "Kitty Cat", 65, 3, 5.5F, 1.0F, true, 1};
+  case Tower::Type::Default:
+    return {type, "Default Cat", 35, 3, 3.5F, 0.85F, true, 1};
+  case Tower::Type::Thunder:
+    return {type, "Thundercat", 75, 6, 999.0F, 2.6F, false, 1};
+  case Tower::Type::Fat:
+    return {type, "Fat Cat", 55, 4, 2.4F, 1.4F, true, 2};
+  case Tower::Type::Kitty:
+    return {type, "Kitty Cat", 65, 3, 5.5F, 1.0F, true, 1};
   }
   return {Tower::Type::Default, "Default Cat", 35, 3, 3.5F, 0.85F, true, 1};
 }
 
 class Game {
- public:
+public:
   Game() {
     BuildMaps();
     BuildPath();
@@ -183,11 +183,15 @@ class Game {
     UpdateHitSplats();
     CheckWaveCompletion();
     if (lives_ <= 0) {
-      game_over_ = true;
+      if (!game_over_) {
+        game_over_ = true;
+        auto_waves_ = false;
+        SetMusic(-1);
+      }
     }
   }
 
-  bool HandleEvent(const ftxui::Event& event) {
+  bool HandleEvent(const ftxui::Event &event) {
     if (game_over_) {
       return false;
     }
@@ -204,24 +208,29 @@ class Game {
 
     bool handled = false;
 
-    if (event == ftxui::Event::ArrowUp || event == ftxui::Event::Character('w')) {
+    if (event == ftxui::Event::ArrowUp ||
+        event == ftxui::Event::Character('w')) {
       move_cursor(0, -1);
       handled = true;
     }
-    if (event == ftxui::Event::ArrowDown || event == ftxui::Event::Character('s')) {
+    if (event == ftxui::Event::ArrowDown ||
+        event == ftxui::Event::Character('s')) {
       move_cursor(0, 1);
       handled = true;
     }
-    if (event == ftxui::Event::ArrowLeft || event == ftxui::Event::Character('a')) {
+    if (event == ftxui::Event::ArrowLeft ||
+        event == ftxui::Event::Character('a')) {
       move_cursor(-1, 0);
       handled = true;
     }
-    if (event == ftxui::Event::ArrowRight || event == ftxui::Event::Character('d')) {
+    if (event == ftxui::Event::ArrowRight ||
+        event == ftxui::Event::Character('d')) {
       move_cursor(1, 0);
       handled = true;
     }
 
-    if (event == ftxui::Event::Character('c') || event == ftxui::Event::Character(' ')) {
+    if (event == ftxui::Event::Character('c') ||
+        event == ftxui::Event::Character(' ')) {
       PlaceTower();
       handled = true;
     }
@@ -236,6 +245,10 @@ class Game {
       if (!wave_active_) {
         StartWave();
       }
+      handled = true;
+    }
+    if (event == ftxui::Event::Character('f')) {
+      fast_forward_ = !fast_forward_;
       handled = true;
     }
 
@@ -263,13 +276,13 @@ class Game {
       view_shop_ = !view_shop_;
       handled = true;
     }
-    if (event == ftxui::Event::Character('t')) {  // toggle sfx
+    if (event == ftxui::Event::Character('t')) { // toggle sfx
 #ifdef ENABLE_AUDIO
       audio_->ToggleSfx();
 #endif
       handled = true;
     }
-    if (event == ftxui::Event::Character('y')) {  // toggle music
+    if (event == ftxui::Event::Character('y')) { // toggle music
 #ifdef ENABLE_AUDIO
       audio_->ToggleMusic();
       if (audio_->MusicEnabled()) {
@@ -310,6 +323,28 @@ class Game {
 
   ftxui::Element Render() const {
     auto board = RenderBoard();
+    if (game_over_) {
+      auto big_letters =
+          ftxui::vbox({ftxui::text("┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼"),
+                       ftxui::text("███▀▀▀██┼███▀▀▀███┼███▀█▄█▀███┼██▀▀▀"),
+                       ftxui::text("██┼┼┼┼██┼██┼┼┼┼┼██┼██┼┼┼█┼┼┼██┼██┼┼┼"),
+                       ftxui::text("██┼┼┼▄▄▄┼██▄▄▄▄▄██┼██┼┼┼▀┼┼┼██┼██▀▀▀"),
+                       ftxui::text("██┼┼┼┼██┼██┼┼┼┼┼██┼██┼┼┼┼┼┼┼██┼██┼┼┼"),
+                       ftxui::text("███▄▄▄██┼██┼┼┼┼┼██┼██┼┼┼┼┼┼┼██┼██▄▄▄"),
+                       ftxui::text("┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼"),
+                       ftxui::text("███▀▀▀███┼▀███┼┼██▀┼██▀▀▀┼██▀▀▀▀██▄┼"),
+                       ftxui::text("██┼┼┼┼┼██┼┼┼██┼┼██┼┼██┼┼┼┼██┼┼┼┼┼██┼"),
+                       ftxui::text("██┼┼┼┼┼██┼┼┼██┼┼██┼┼██▀▀▀┼██▄▄▄▄▄▀▀┼"),
+                       ftxui::text("██┼┼┼┼┼██┼┼┼██┼┼█▀┼┼██┼┼┼┼██┼┼┼┼┼██┼"),
+                       ftxui::text("███▄▄▄███┼┼┼─▀█▀┼┼─┼██▄▄▄┼██┼┼┼┼┼██▄"),
+                       ftxui::text("┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼")}) |
+          color(ftxui::Color::RedLight) | bgcolor(ftxui::Color::Black) | bold |
+          ftxui::center;
+      auto overlay = ftxui::center(ftxui::vbox({
+          big_letters | border | bgcolor(ftxui::Color::Black),
+      }));
+      board = ftxui::dbox({board, overlay});
+    }
     auto stats = RenderStats();
     return hbox({
         board | border,
@@ -320,14 +355,14 @@ class Game {
 
   bool GameOver() const { return game_over_; }
 
- private:
+private:
   void BuildPath() {
-    const MapDef& map = CurrentMap();
+    const MapDef &map = CurrentMap();
     path_.clear();
     // Build center path.
     for (size_t i = 1; i < map.anchors.size(); ++i) {
-      const auto& from = map.anchors[i - 1];
-      const auto& to = map.anchors[i];
+      const auto &from = map.anchors[i - 1];
+      const auto &to = map.anchors[i];
       if (from.x == to.x) {
         const int dir = (to.y > from.y) ? 1 : -1;
         for (int y = from.y; y != to.y + dir; y += dir) {
@@ -342,7 +377,7 @@ class Game {
     }
 
     path_mask_.assign(kBoardHeight, std::vector<bool>(kBoardWidth, false));
-    for (const auto& p : path_) {
+    for (const auto &p : path_) {
       for (int dy = -map.path_width + 1; dy <= map.path_width - 1; ++dy) {
         for (int dx = -map.path_width + 1; dx <= map.path_width - 1; ++dx) {
           const int cx = p.x + dx;
@@ -377,7 +412,7 @@ class Game {
       return;
     }
 
-    spawn_cooldown_ms_ -= kTickMs;
+    spawn_cooldown_ms_ -= static_cast<int>(kTickMs * TimeScale());
     if (spawn_cooldown_ms_ > 0 || spawn_remaining_ <= 0) {
       return;
     }
@@ -401,11 +436,11 @@ class Game {
 
   void MoveEnemies() {
     int lives_before = lives_;
-    for (auto& e : enemies_) {
-      e.path_progress += e.speed * kTickSeconds;
+    for (auto &e : enemies_) {
+      e.path_progress += e.speed * Dt();
     }
 
-    for (auto& e : enemies_) {
+    for (auto &e : enemies_) {
       const int end_index = static_cast<int>(path_.size() - 1);
       if (static_cast<int>(std::floor(e.path_progress)) >= end_index) {
         e.hp = 0;
@@ -419,7 +454,7 @@ class Game {
 #endif
   }
 
-  std::optional<size_t> FindTarget(const Tower& t) const {
+  std::optional<size_t> FindTarget(const Tower &t) const {
     std::optional<size_t> best;
     float best_progress = -1.0F;
     const float range2 = t.range * t.range;
@@ -445,8 +480,8 @@ class Game {
   }
 
   void TowersAct() {
-    for (auto& t : towers_) {
-      t.cooldown -= kTickSeconds;
+    for (auto &t : towers_) {
+      t.cooldown -= Dt();
       if (t.cooldown > 0.0F) {
         continue;
       }
@@ -457,53 +492,53 @@ class Game {
       }
 
       switch (t.type) {
-        case Tower::Type::Default: {
-          auto& target = enemies_[*target_index];
-          Projectile p;
-          const auto c = TowerCenter(t);
-          p.x = static_cast<float>(c.x);
-          p.y = static_cast<float>(c.y);
-          p.target = EnemyCell(target);
-          p.speed = 17.0F;
-          p.damage = t.damage;
-          projectiles_.push_back(p);
+      case Tower::Type::Default: {
+        auto &target = enemies_[*target_index];
+        Projectile p;
+        const auto c = TowerCenter(t);
+        p.x = static_cast<float>(c.x);
+        p.y = static_cast<float>(c.y);
+        p.target = EnemyCell(target);
+        p.speed = 17.0F;
+        p.damage = t.damage;
+        projectiles_.push_back(p);
 #ifdef ENABLE_AUDIO
-          audio_->PlayEvent("tower_default_shoot");
+        audio_->PlayEvent("tower_default_shoot");
 #endif
-          break;
-        }
-        case Tower::Type::Thunder: {
-          FireLaser(t, enemies_[*target_index]);
+        break;
+      }
+      case Tower::Type::Thunder: {
+        FireLaser(t, enemies_[*target_index]);
 #ifdef ENABLE_AUDIO
-          audio_->PlayEvent("tower_thunder_shoot");
+        audio_->PlayEvent("tower_thunder_shoot");
 #endif
-          break;
-        }
-        case Tower::Type::Fat: {
-          FireShockwave(t);
+        break;
+      }
+      case Tower::Type::Fat: {
+        FireShockwave(t);
 #ifdef ENABLE_AUDIO
-          audio_->PlayEvent("tower_fat_shoot");
+        audio_->PlayEvent("tower_fat_shoot");
 #endif
-          break;
-        }
-        case Tower::Type::Kitty: {
-          FireKitty(t, enemies_[*target_index]);
+        break;
+      }
+      case Tower::Type::Kitty: {
+        FireKitty(t, enemies_[*target_index]);
 #ifdef ENABLE_AUDIO
-          audio_->PlayEvent("tower_kitty_shoot");
+        audio_->PlayEvent("tower_kitty_shoot");
 #endif
-          break;
-        }
+        break;
+      }
       }
       t.cooldown = NextCooldown(t.fire_rate);
     }
   }
 
   void MoveProjectiles() {
-    for (auto& p : projectiles_) {
+    for (auto &p : projectiles_) {
       const float dx = static_cast<float>(p.target.x) - p.x;
       const float dy = static_cast<float>(p.target.y) - p.y;
       const float dist = std::sqrt(dx * dx + dy * dy);
-      const float step = p.speed * kTickSeconds;
+      const float step = p.speed * Dt();
       if (dist <= step || dist < 1e-3F) {
         p.x = static_cast<float>(p.target.x);
         p.y = static_cast<float>(p.target.y);
@@ -518,11 +553,11 @@ class Game {
   void ResolveProjectiles() {
     std::vector<Projectile> survivors;
     survivors.reserve(projectiles_.size());
-    for (auto& p : projectiles_) {
+    for (auto &p : projectiles_) {
       const float dx = static_cast<float>(p.target.x) - p.x;
       const float dy = static_cast<float>(p.target.y) - p.y;
       const float dist2 = dx * dx + dy * dy;
-      if (dist2 > 0.05F) {  // not arrived yet
+      if (dist2 > 0.05F) { // not arrived yet
         survivors.push_back(p);
         continue;
       }
@@ -542,7 +577,7 @@ class Game {
       }
 
       if (hit_index.has_value()) {
-        auto& target = enemies_[*hit_index];
+        auto &target = enemies_[*hit_index];
         target.hp -= p.damage;
         if (target.hp <= 0) {
           kibbles_ += 12;
@@ -557,19 +592,18 @@ class Game {
 
   void Cleanup() {
     enemies_.erase(std::remove_if(enemies_.begin(), enemies_.end(),
-                                  [](const Enemy& e) { return e.hp <= 0; }),
+                                  [](const Enemy &e) { return e.hp <= 0; }),
                    enemies_.end());
   }
 
   void UpdateHitSplats() {
-    for (auto& hs : hit_splats_) {
+    for (auto &hs : hit_splats_) {
       hs.time_left -= kTickSeconds;
     }
-    hit_splats_.erase(std::remove_if(hit_splats_.begin(), hit_splats_.end(),
-                                     [](const HitSplat& hs) {
-                                       return hs.time_left <= 0.0F;
-                                     }),
-                      hit_splats_.end());
+    hit_splats_.erase(
+        std::remove_if(hit_splats_.begin(), hit_splats_.end(),
+                       [](const HitSplat &hs) { return hs.time_left <= 0.0F; }),
+        hit_splats_.end());
   }
 
   void CheckWaveCompletion() {
@@ -634,7 +668,7 @@ class Game {
     t.damage = def.damage;
     t.range = def.range;
     t.fire_rate = def.fire_rate;
-    t.cooldown = Rand(0.05F, t.fire_rate);  // offset starts for async cadence
+    t.cooldown = Rand(0.05F, t.fire_rate); // offset starts for async cadence
     t.type = def.type;
     t.size = def.size;
     towers_.push_back(t);
@@ -642,10 +676,10 @@ class Game {
     Sfx("place");
   }
 
-  Position EnemyCell(const Enemy& e) const {
-    const int idx = static_cast<int>(
-        std::clamp(std::floor(e.path_progress), 0.0F,
-                   static_cast<float>(path_.size() - 1)));
+  Position EnemyCell(const Enemy &e) const {
+    const int idx =
+        static_cast<int>(std::clamp(std::floor(e.path_progress), 0.0F,
+                                    static_cast<float>(path_.size() - 1)));
     const size_t i = static_cast<size_t>(idx);
     Position base = path_[i];
     int dx = 0;
@@ -665,9 +699,9 @@ class Game {
     return base;
   }
 
-  ftxui::Color EnemyColor(const Enemy& e) const {
-    const float ratio = static_cast<float>(e.hp) /
-                        static_cast<float>(std::max(1, e.max_hp));
+  ftxui::Color EnemyColor(const Enemy &e) const {
+    const float ratio =
+        static_cast<float>(e.hp) / static_cast<float>(std::max(1, e.max_hp));
     if (ratio > 0.75F) {
       return ftxui::Color::RedLight;
     }
@@ -680,7 +714,7 @@ class Game {
     return ftxui::Color::GrayLight;
   }
 
-  bool InRange(const Vec2& center, const Position& cell, float range) const {
+  bool InRange(const Vec2 &center, const Position &cell, float range) const {
     return DistanceSquared(center, cell) <= range * range;
   }
 
@@ -688,6 +722,9 @@ class Game {
     std::uniform_real_distribution<float> dist(min, max);
     return dist(rng_);
   }
+
+  float TimeScale() const { return fast_forward_ ? kFastForwardMultiplier : 1.0F; }
+  float Dt() const { return kTickSeconds * TimeScale(); }
 
   float NextCooldown(float base_rate) {
     const float scaled = base_rate / kSpeedFactor;
@@ -700,44 +737,53 @@ class Game {
     return local + map_bonus;
   }
 
-  const MapDef& CurrentMap() const { return maps_[static_cast<size_t>(map_index_)]; }
+  const MapDef &CurrentMap() const {
+    return maps_[static_cast<size_t>(map_index_)];
+  }
 
-  void Sfx(const std::string& name) {
+  void Sfx(const std::string &name) {
 #ifdef ENABLE_AUDIO
-    if (audio_) audio_->PlayEvent(name);
+    if (audio_)
+      audio_->PlayEvent(name);
 #endif
   }
 
   void SetMusic(int map_idx) {
 #ifdef ENABLE_AUDIO
-    if (audio_) audio_->SetMusicForMap(map_idx);
+    if (audio_)
+      audio_->SetMusicForMap(map_idx);
 #endif
   }
 
-  Vec2 TowerCenter(const Tower& t) const {
-    const float cx = static_cast<float>(t.pos.x) + (static_cast<float>(t.size) - 1.0F) / 2.0F;
-    const float cy = static_cast<float>(t.pos.y) + (static_cast<float>(t.size) - 1.0F) / 2.0F;
+  Vec2 TowerCenter(const Tower &t) const {
+    const float cx = static_cast<float>(t.pos.x) +
+                     (static_cast<float>(t.size) - 1.0F) / 2.0F;
+    const float cy = static_cast<float>(t.pos.y) +
+                     (static_cast<float>(t.size) - 1.0F) / 2.0F;
     return {cx, cy};
   }
 
   bool IsUnlocked(Tower::Type type) const {
     switch (type) {
-      case Tower::Type::Default:
-        return true;
-      case Tower::Type::Thunder:
-        return unlocked_thunder_;
-      case Tower::Type::Fat:
-        return unlocked_fat_;
-      case Tower::Type::Kitty:
-        return unlocked_kitty_;
+    case Tower::Type::Default:
+      return true;
+    case Tower::Type::Thunder:
+      return unlocked_thunder_;
+    case Tower::Type::Fat:
+      return unlocked_fat_;
+    case Tower::Type::Kitty:
+      return unlocked_kitty_;
     }
     return true;
   }
 
   void Unlock(Tower::Type type) {
-    if (type == Tower::Type::Thunder) unlocked_thunder_ = true;
-    if (type == Tower::Type::Fat) unlocked_fat_ = true;
-    if (type == Tower::Type::Kitty) unlocked_kitty_ = true;
+    if (type == Tower::Type::Thunder)
+      unlocked_thunder_ = true;
+    if (type == Tower::Type::Fat)
+      unlocked_fat_ = true;
+    if (type == Tower::Type::Kitty)
+      unlocked_kitty_ = true;
   }
 
   void TryUnlockOrSelect(Tower::Type type) {
@@ -755,8 +801,8 @@ class Game {
     }
   }
 
-  bool OverlapsTower(const Position& p, int size) const {
-    for (const auto& t : towers_) {
+  bool OverlapsTower(const Position &p, int size) const {
+    for (const auto &t : towers_) {
       const int tx1 = t.pos.x;
       const int ty1 = t.pos.y;
       const int tx2 = tx1 + t.size - 1;
@@ -771,7 +817,7 @@ class Game {
     return false;
   }
 
-  bool OccupiesPath(const Position& p, int size) const {
+  bool OccupiesPath(const Position &p, int size) const {
     for (int dy = 0; dy < size; ++dy) {
       for (int dx = 0; dx < size; ++dx) {
         const int cx = p.x + dx;
@@ -787,7 +833,7 @@ class Game {
     return false;
   }
 
-  bool CanPlace(const Position& p, int size) const {
+  bool CanPlace(const Position &p, int size) const {
     if (p.x < 0 || p.y < 0 || p.x + size - 1 >= kBoardWidth ||
         p.y + size - 1 >= kBoardHeight) {
       return false;
@@ -801,9 +847,9 @@ class Game {
     return true;
   }
 
-  std::optional<size_t> TowerIndexAt(const Position& p) const {
+  std::optional<size_t> TowerIndexAt(const Position &p) const {
     for (size_t i = 0; i < towers_.size(); ++i) {
-      const auto& t = towers_[i];
+      const auto &t = towers_[i];
       const int tx2 = t.pos.x + t.size - 1;
       const int ty2 = t.pos.y + t.size - 1;
       if (p.x >= t.pos.x && p.x <= tx2 && p.y >= t.pos.y && p.y <= ty2) {
@@ -826,7 +872,7 @@ class Game {
     hold.original = towers_[*idx].pos;
     held_tower_ = hold;
     towers_.erase(towers_.begin() + static_cast<long>(*idx));
-    overlay_enabled_ = true;  // ensure placement cues visible while holding
+    overlay_enabled_ = true; // ensure placement cues visible while holding
   }
 
   void TryPlaceHeld() {
@@ -863,7 +909,7 @@ class Game {
     if (!idx.has_value()) {
       return;
     }
-    const Tower& t = towers_[*idx];
+    const Tower &t = towers_[*idx];
     const auto def = GetDef(t.type);
     const int refund = static_cast<int>(std::round(def.cost * 0.6F));
     kibbles_ += refund;
@@ -871,7 +917,7 @@ class Game {
     Sfx("sell");
   }
 
-  void FireLaser(const Tower& t, Enemy& target) {
+  void FireLaser(const Tower &t, Enemy &target) {
     const auto center = TowerCenter(t);
     const auto target_cell = EnemyCell(target);
     const float dx = static_cast<float>(target_cell.x) - center.x;
@@ -881,7 +927,7 @@ class Game {
     const float ndy = dy / len;
 
     // Apply damage to enemies near the line in front of the cat.
-    for (auto& e : enemies_) {
+    for (auto &e : enemies_) {
       const auto pos = EnemyCell(e);
       const float vx = static_cast<float>(pos.x) - center.x;
       const float vy = static_cast<float>(pos.y) - center.y;
@@ -905,7 +951,7 @@ class Game {
     Beam b;
     float bx = static_cast<float>(center.x);
     float by = static_cast<float>(center.y);
-    for (int i = 0; i < 120; ++i) {  // generous to cross the board
+    for (int i = 0; i < 120; ++i) { // generous to cross the board
       const int cx = static_cast<int>(std::round(bx));
       const int cy = static_cast<int>(std::round(by));
       if (cx < 0 || cy < 0 || cx >= kBoardWidth || cy >= kBoardHeight) {
@@ -918,7 +964,7 @@ class Game {
     beams_.push_back(std::move(b));
   }
 
-  void FireShockwave(const Tower& t) {
+  void FireShockwave(const Tower &t) {
     const auto def = GetDef(t.type);
     Shockwave sw;
     sw.center = TowerCenter(t);
@@ -928,7 +974,7 @@ class Game {
     sw.time_left = 0.45F;
     shockwaves_.push_back(sw);
 
-    for (auto& e : enemies_) {
+    for (auto &e : enemies_) {
       const auto pos = EnemyCell(e);
       if (InRange(sw.center, pos, def.range + 0.2F)) {
         e.hp -= t.damage;
@@ -942,7 +988,7 @@ class Game {
     }
   }
 
-  void FireKitty(const Tower& t, Enemy& target) {
+  void FireKitty(const Tower &t, Enemy &target) {
     const auto center = TowerCenter(t);
     const auto target_cell = EnemyCell(target);
     const float dx = static_cast<float>(target_cell.x) - center.x;
@@ -956,8 +1002,10 @@ class Game {
     std::vector<Position> area_cells;
     for (int step = 1; step <= 6; ++step) {
       for (int off = -2; off <= 1; ++off) {
-        const int gx = static_cast<int>(std::round(center.x)) + primary_x * step + perp_x * off;
-        const int gy = static_cast<int>(std::round(center.y)) + primary_y * step + perp_y * off;
+        const int gx = static_cast<int>(std::round(center.x)) +
+                       primary_x * step + perp_x * off;
+        const int gy = static_cast<int>(std::round(center.y)) +
+                       primary_y * step + perp_y * off;
         if (gx < 0 || gy < 0 || gx >= kBoardWidth || gy >= kBoardHeight) {
           continue;
         }
@@ -965,12 +1013,11 @@ class Game {
       }
     }
 
-    for (auto& e : enemies_) {
+    for (auto &e : enemies_) {
       const auto pos = EnemyCell(e);
-      const bool hit = std::any_of(area_cells.begin(), area_cells.end(),
-                                   [&](const Position& c) {
-                                     return c.x == pos.x && c.y == pos.y;
-                                   });
+      const bool hit = std::any_of(
+          area_cells.begin(), area_cells.end(),
+          [&](const Position &c) { return c.x == pos.x && c.y == pos.y; });
       if (!hit) {
         continue;
       }
@@ -987,36 +1034,38 @@ class Game {
   }
 
   void UpdateShockwaves() {
-    for (auto& sw : shockwaves_) {
+    for (auto &sw : shockwaves_) {
       sw.radius += sw.speed * kTickSeconds;
       sw.time_left -= kTickSeconds;
     }
-    shockwaves_.erase(
-        std::remove_if(shockwaves_.begin(), shockwaves_.end(),
-                       [](const Shockwave& sw) {
-                         return sw.time_left <= 0.0F || sw.radius > sw.max_radius;
-                       }),
-        shockwaves_.end());
+    shockwaves_.erase(std::remove_if(shockwaves_.begin(), shockwaves_.end(),
+                                     [](const Shockwave &sw) {
+                                       return sw.time_left <= 0.0F ||
+                                              sw.radius > sw.max_radius;
+                                     }),
+                      shockwaves_.end());
   }
 
   void UpdateBeams() {
-    for (auto& b : beams_) {
+    for (auto &b : beams_) {
       b.time_left -= kTickSeconds;
     }
     beams_.erase(
         std::remove_if(beams_.begin(), beams_.end(),
-                       [](const Beam& b) { return b.time_left <= 0.0F; }),
+                       [](const Beam &b) { return b.time_left <= 0.0F; }),
         beams_.end());
   }
 
   void UpdateAreas() {
-    for (auto& a : area_highlights_) {
+    for (auto &a : area_highlights_) {
       a.time_left -= kTickSeconds;
     }
-    area_highlights_.erase(
-        std::remove_if(area_highlights_.begin(), area_highlights_.end(),
-                       [](const AreaHighlight& a) { return a.time_left <= 0.0F; }),
-        area_highlights_.end());
+    area_highlights_.erase(std::remove_if(area_highlights_.begin(),
+                                          area_highlights_.end(),
+                                          [](const AreaHighlight &a) {
+                                            return a.time_left <= 0.0F;
+                                          }),
+                           area_highlights_.end());
   }
 
   void BuildMaps() {
@@ -1027,21 +1076,27 @@ class Game {
                             {30, 4},
                             {30, kBoardHeight - 5},
                             {kBoardWidth - 1, kBoardHeight - 5}},
-                           1, ftxui::Color::DarkGreen, ftxui::Color::DarkGoldenrod});
+                           1,
+                           ftxui::Color::DarkGreen,
+                           ftxui::Color::DarkGoldenrod});
     maps_.push_back(MapDef{{{0, 3},
                             {10, 3},
                             {10, 12},
                             {25, 12},
                             {25, kBoardHeight - 6},
                             {kBoardWidth - 1, kBoardHeight - 6}},
-                           2, ftxui::Color::DarkSlateGray3, ftxui::Color::DarkTurquoise});
+                           2,
+                           ftxui::Color::DarkSlateGray3,
+                           ftxui::Color::DarkTurquoise});
     maps_.push_back(MapDef{{{0, kBoardHeight - 4},
                             {15, kBoardHeight - 4},
                             {15, 6},
                             {32, 6},
                             {32, kBoardHeight / 2},
                             {kBoardWidth - 1, kBoardHeight / 2}},
-                           1, ftxui::Color::DarkOliveGreen3, ftxui::Color::Gold3});
+                           1,
+                           ftxui::Color::DarkOliveGreen3,
+                           ftxui::Color::Gold3});
     maps_.push_back(MapDef{{{0, kBoardHeight / 2},
                             {8, kBoardHeight / 2},
                             {8, 6},
@@ -1050,14 +1105,18 @@ class Game {
                             {35, kBoardHeight - 8},
                             {35, 5},
                             {kBoardWidth - 1, 5}},
-                           3, ftxui::Color::DarkBlue, ftxui::Color::CornflowerBlue});
+                           3,
+                           ftxui::Color::DarkBlue,
+                           ftxui::Color::CornflowerBlue});
     maps_.push_back(MapDef{{{0, 8},
                             {14, 8},
                             {14, kBoardHeight - 6},
                             {28, kBoardHeight - 6},
                             {28, 6},
                             {kBoardWidth - 1, 6}},
-                           2, ftxui::Color::DarkKhaki, ftxui::Color::DarkOrange});
+                           2,
+                           ftxui::Color::DarkKhaki,
+                           ftxui::Color::DarkOrange});
     maps_.push_back(MapDef{{{0, kBoardHeight / 2},
                             {10, kBoardHeight / 2},
                             {10, 3},
@@ -1066,20 +1125,26 @@ class Game {
                             {40, kBoardHeight - 4},
                             {40, 8},
                             {kBoardWidth - 1, 8}},
-                           2, ftxui::Color::DarkSlateGray1, ftxui::Color::LightSkyBlue1});
+                           2,
+                           ftxui::Color::DarkSlateGray1,
+                           ftxui::Color::LightSkyBlue1});
     maps_.push_back(MapDef{{{0, kBoardHeight - 5},
                             {18, kBoardHeight - 5},
                             {18, 5},
                             {kBoardWidth - 2, 5},
                             {kBoardWidth - 2, kBoardHeight / 2}},
-                           1, ftxui::Color::DarkOliveGreen3, ftxui::Color::GreenYellow});
+                           1,
+                           ftxui::Color::DarkOliveGreen3,
+                           ftxui::Color::GreenYellow});
     maps_.push_back(MapDef{{{0, 4},
                             {8, 4},
                             {8, kBoardHeight - 4},
                             {24, kBoardHeight - 4},
                             {24, 4},
                             {kBoardWidth - 1, 4}},
-                           2, ftxui::Color::DarkMagenta, ftxui::Color::DeepPink3});
+                           2,
+                           ftxui::Color::DarkMagenta,
+                           ftxui::Color::DeepPink3});
     maps_.push_back(MapDef{{{0, kBoardHeight / 2},
                             {12, kBoardHeight / 2},
                             {12, 6},
@@ -1088,25 +1153,29 @@ class Game {
                             {34, kBoardHeight - 7},
                             {34, 5},
                             {kBoardWidth - 1, 5}},
-                           2, ftxui::Color::DarkSeaGreen3, ftxui::Color::Chartreuse1});
+                           2,
+                           ftxui::Color::DarkSeaGreen3,
+                           ftxui::Color::Chartreuse1});
     maps_.push_back(MapDef{{{0, 2},
                             {16, 2},
                             {16, kBoardHeight - 3},
                             {30, kBoardHeight - 3},
                             {30, 7},
                             {kBoardWidth - 1, 7}},
-                           3, ftxui::Color::DarkRed, ftxui::Color::OrangeRed1});
+                           3,
+                           ftxui::Color::DarkRed,
+                           ftxui::Color::OrangeRed1});
   }
 
   ftxui::Element RenderBoard() const {
-    std::vector<std::vector<char>> glyphs(
-        kBoardHeight, std::vector<char>(kBoardWidth, ' '));
-    const auto& map = CurrentMap();
+    std::vector<std::vector<char>> glyphs(kBoardHeight,
+                                          std::vector<char>(kBoardWidth, ' '));
+    const auto &map = CurrentMap();
     std::vector<std::vector<ftxui::Color>> backgrounds(
-        kBoardHeight,
-        std::vector<ftxui::Color>(kBoardWidth, map.background));
+        kBoardHeight, std::vector<ftxui::Color>(kBoardWidth, map.background));
     std::vector<std::vector<ftxui::Color>> foregrounds(
-        kBoardHeight, std::vector<ftxui::Color>(kBoardWidth, ftxui::Color::White));
+        kBoardHeight,
+        std::vector<ftxui::Color>(kBoardWidth, ftxui::Color::White));
     std::vector<std::vector<bool>> highlight(
         kBoardHeight, std::vector<bool>(kBoardWidth, false));
     std::vector<std::vector<bool>> enemy_mask(
@@ -1118,7 +1187,7 @@ class Game {
     std::vector<std::vector<bool>> range_hint_preview(
         kBoardHeight, std::vector<bool>(kBoardWidth, false));
     if (show_overlay) {
-      for (const auto& t : towers_) {
+      for (const auto &t : towers_) {
         const auto def = GetDef(t.type);
         if (!def.show_range) {
           continue;
@@ -1128,7 +1197,8 @@ class Game {
           for (int x = 0; x < kBoardWidth; ++x) {
             Position cell{x, y};
             if (InRange(center, cell, t.range)) {
-              range_hint_base[static_cast<size_t>(y)][static_cast<size_t>(x)] = true;
+              range_hint_base[static_cast<size_t>(y)][static_cast<size_t>(x)] =
+                  true;
             }
           }
         }
@@ -1145,7 +1215,7 @@ class Game {
             Position cell{x, y};
             if (InRange(center, cell, preview_def.range)) {
               range_hint_preview[static_cast<size_t>(y)]
-                                 [static_cast<size_t>(x)] = true;
+                                [static_cast<size_t>(x)] = true;
             }
           }
         }
@@ -1164,12 +1234,11 @@ class Game {
       }
     }
 
-    for (const auto& t : towers_) {
-      const char glyph =
-          t.type == Tower::Type::Thunder ? 'T'
-          : t.type == Tower::Type::Fat   ? 'F'
-          : t.type == Tower::Type::Kitty ? 'K'
-                                         : 'C';
+    for (const auto &t : towers_) {
+      const char glyph = t.type == Tower::Type::Thunder ? 'T'
+                         : t.type == Tower::Type::Fat   ? 'F'
+                         : t.type == Tower::Type::Kitty ? 'K'
+                                                        : 'C';
       const ftxui::Color bg =
           t.type == Tower::Type::Thunder ? ftxui::Color::Blue1
           : t.type == Tower::Type::Fat   ? ftxui::Color::DarkOliveGreen3
@@ -1192,7 +1261,7 @@ class Game {
       }
     }
 
-    for (const auto& e : enemies_) {
+    for (const auto &e : enemies_) {
       const auto pos = EnemyCell(e);
       const auto yi = static_cast<size_t>(pos.y);
       const auto xi = static_cast<size_t>(pos.x);
@@ -1202,7 +1271,7 @@ class Game {
       enemy_mask[yi][xi] = true;
     }
 
-    for (const auto& p : projectiles_) {
+    for (const auto &p : projectiles_) {
       const int px = static_cast<int>(std::round(p.x));
       const int py = static_cast<int>(std::round(p.y));
       if (py < 0 || py >= kBoardHeight || px < 0 || px >= kBoardWidth) {
@@ -1214,8 +1283,8 @@ class Game {
       foregrounds[yi][xi] = ftxui::Color::SkyBlue1;
     }
 
-    for (const auto& b : beams_) {
-      for (const auto& cell : b.cells) {
+    for (const auto &b : beams_) {
+      for (const auto &cell : b.cells) {
         if (cell.y < 0 || cell.y >= kBoardHeight || cell.x < 0 ||
             cell.x >= kBoardWidth) {
           continue;
@@ -1227,8 +1296,8 @@ class Game {
       }
     }
 
-    for (const auto& ah : area_highlights_) {
-      for (const auto& cell : ah.cells) {
+    for (const auto &ah : area_highlights_) {
+      for (const auto &cell : ah.cells) {
         if (cell.y < 0 || cell.y >= kBoardHeight || cell.x < 0 ||
             cell.x >= kBoardWidth) {
           continue;
@@ -1240,7 +1309,7 @@ class Game {
       }
     }
 
-    for (const auto& sw : shockwaves_) {
+    for (const auto &sw : shockwaves_) {
       for (int y = 0; y < kBoardHeight; ++y) {
         for (int x = 0; x < kBoardWidth; ++x) {
           Position cell{x, y};
@@ -1255,7 +1324,7 @@ class Game {
       }
     }
 
-    for (const auto& hs : hit_splats_) {
+    for (const auto &hs : hit_splats_) {
       if (hs.pos.y < 0 || hs.pos.y >= kBoardHeight || hs.pos.x < 0 ||
           hs.pos.x >= kBoardWidth) {
         continue;
@@ -1267,7 +1336,7 @@ class Game {
       foregrounds[yi][xi] = ftxui::Color::Red3;
     }
 
-    const auto apply_tint = [&](size_t yi, size_t xi, const ftxui::Color& tint,
+    const auto apply_tint = [&](size_t yi, size_t xi, const ftxui::Color &tint,
                                 float alpha) {
       backgrounds[yi][xi] = BlendColor(backgrounds[yi][xi], tint, alpha);
     };
@@ -1288,9 +1357,8 @@ class Game {
     }
 
     if (show_overlay) {
-      const TowerDef preview_def_place = GetDef(held_tower_.has_value()
-                                                    ? held_tower_->tower.type
-                                                    : selected_type_);
+      const TowerDef preview_def_place = GetDef(
+          held_tower_.has_value() ? held_tower_->tower.type : selected_type_);
       const bool can_place_preview =
           cursor_.x >= 0 && cursor_.y >= 0 &&
           cursor_.x + preview_def_place.size - 1 < kBoardWidth &&
@@ -1307,9 +1375,9 @@ class Game {
           const auto yi = static_cast<size_t>(gy);
           const auto xi = static_cast<size_t>(gx);
           glyphs[yi][xi] = can_place_preview ? '+' : 'X';
-          foregrounds[yi][xi] =
-              can_place_preview ? ftxui::Color(ftxui::Color::LightSkyBlue1)
-                                : ftxui::Color(ftxui::Color::RedLight);
+          foregrounds[yi][xi] = can_place_preview
+                                    ? ftxui::Color(ftxui::Color::LightSkyBlue1)
+                                    : ftxui::Color(ftxui::Color::RedLight);
         }
       }
     }
@@ -1334,12 +1402,17 @@ class Game {
       rows.push_back(hbox(std::move(cells)));
     }
 
-    return vbox(std::move(rows));
+    auto board_elem = vbox(std::move(rows));
+    if (game_over_) {
+      board_elem = board_elem | bgcolor(ftxui::Color::Black) |
+                   color(ftxui::Color::RedLight) | bold;
+    }
+    return board_elem;
   }
 
   ftxui::Element RenderStats() const {
-    std::string wave_text = wave_active_ ? "Wave " + std::to_string(wave_)
-                                         : "Waiting";
+    std::string wave_text =
+        wave_active_ ? "Wave " + std::to_string(wave_) : "Waiting";
     if (auto_waves_) {
       wave_text += " (auto)";
     }
@@ -1347,6 +1420,8 @@ class Game {
     lines.push_back(text("Cat Burrow Defense"));
     lines.push_back(text("Status: " + wave_text));
     lines.push_back(text("Map: " + std::to_string(map_index_ + 1) + "/10"));
+    lines.push_back(text(
+        "Speed: " + std::string(fast_forward_ ? "FAST x5 (f)" : "Normal (f)")));
     lines.push_back(text("Lives: " + std::to_string(lives_)));
     lines.push_back(text("Kibbles: " + std::to_string(kibbles_)));
     lines.push_back(text("Cats: " + std::to_string(towers_.size())));
@@ -1356,14 +1431,13 @@ class Game {
     lines.push_back(text("Selected: " + selected_def.name));
     lines.push_back(separator());
 
-    const std::array<TowerDef, 4> defs = {GetDef(Tower::Type::Default),
-                                          GetDef(Tower::Type::Thunder),
-                                          GetDef(Tower::Type::Fat),
-                                          GetDef(Tower::Type::Kitty)};
+    const std::array<TowerDef, 4> defs = {
+        GetDef(Tower::Type::Default), GetDef(Tower::Type::Thunder),
+        GetDef(Tower::Type::Fat), GetDef(Tower::Type::Kitty)};
 
     if (view_shop_) {
       lines.push_back(text("shop (press 1/2/3/4, p to return)"));
-      for (const auto& d : defs) {
+      for (const auto &d : defs) {
         const bool unlocked = IsUnlocked(d.type);
         const int unlock_cost = d.cost * 10;
         std::string line = d.name + (unlocked ? " (unlocked)" : " (locked)");
@@ -1384,11 +1458,12 @@ class Game {
     } else {
       lines.push_back(text("press p to view shop"));
       lines.push_back(text("unlocked cats:"));
-      for (const auto& d : defs) {
+      for (const auto &d : defs) {
         if (!IsUnlocked(d.type)) {
           continue;
         }
-        std::string line = "- " + d.name + " (" + std::to_string(d.cost) + " kib)";
+        std::string line =
+            "- " + d.name + " (" + std::to_string(d.cost) + " kib)";
         lines.push_back(text(line));
       }
     }
@@ -1408,6 +1483,7 @@ class Game {
       lines.push_back(text("1/2/3/4     - select cat type"));
       lines.push_back(text("p           - toggle shop view"));
       lines.push_back(text("n/N         - next wave / auto waves"));
+      lines.push_back(text("f           - toggle fast forward x5"));
       lines.push_back(text("t           - toggle sfx"));
       lines.push_back(text("y           - toggle music"));
       lines.push_back(text("q           - quit"));
@@ -1446,6 +1522,7 @@ class Game {
   bool overlay_enabled_ = true;
   bool show_controls_ = false;
   bool auto_waves_ = false;
+  bool fast_forward_ = false;
   int map_index_ = 0;
   int kibbles_ = 0;
   int lives_ = 0;
@@ -1457,8 +1534,8 @@ class Game {
 };
 
 class GameComponent : public ftxui::ComponentBase {
- public:
-  explicit GameComponent(ftxui::ScreenInteractive& screen) : screen_(screen) {
+public:
+  explicit GameComponent(ftxui::ScreenInteractive &screen) : screen_(screen) {
     ticker_ = std::thread([this] {
       while (running_) {
         std::this_thread::sleep_for(std::chrono::milliseconds(kTickMs));
@@ -1494,14 +1571,14 @@ class GameComponent : public ftxui::ComponentBase {
     return game_.HandleEvent(event);
   }
 
- private:
+private:
   Game game_;
-  ftxui::ScreenInteractive& screen_;
+  ftxui::ScreenInteractive &screen_;
   std::atomic<bool> running_{true};
   std::thread ticker_;
 };
 
-}  // namespace
+} // namespace
 
 int main() {
   auto screen = ftxui::ScreenInteractive::Fullscreen();

@@ -74,7 +74,11 @@ class AudioSystem::Impl {
     if (!engine_init_) return;
     StopMusic();
     if (!music_enabled_) return;
-    const auto it = music_.find(map_index);
+    int key = map_index;
+    if (map_index < 0) {
+      key = map_index;  // allow negative for special cues (e.g., game over)
+    }
+    const auto it = music_.find(key);
     if (it == music_.end() || it->second.files.empty()) return;
     const auto& tracks = it->second.files;
     const size_t idx = tracks.size() == 1 ? 0 : static_cast<size_t>(dist_(rng_) % tracks.size());
@@ -160,21 +164,28 @@ class AudioSystem::Impl {
     if (j.contains("music")) {
       for (auto it = j["music"].begin(); it != j["music"].end(); ++it) {
         int map_idx = 0;
-        try {
-          map_idx = std::stoi(it.key().substr(it.key().find_last_not_of("0123456789") + 1));
-        } catch (...) {
+        const std::string key = it.key();
+        if (key == "game_over") {
+          map_idx = -1;
+        } else if (key.rfind("map_", 0) == 0) {
+          try {
+            map_idx = std::stoi(key.substr(4));
+          } catch (...) {
+            continue;
+          }
+        } else {
           continue;
         }
         MusicEntry entry;
         const auto& v = it.value();
         if (v.is_array()) {
           for (const auto& f : v) {
-            entry.files.push_back(f.get<std::string>());
+            entry.files.push_back(ResolvePath(base_dir, f.get<std::string>()));
           }
         } else if (v.is_object()) {
           if (v.contains("files")) {
             for (const auto& f : v["files"]) {
-              entry.files.push_back(f.get<std::string>());
+              entry.files.push_back(ResolvePath(base_dir, f.get<std::string>()));
             }
           }
           if (v.contains("volume") && v["volume"].is_number()) {

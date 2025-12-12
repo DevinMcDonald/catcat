@@ -24,6 +24,7 @@
     "map_6": { "files": ["audio/music/plane2.mp3"], "volume": 0.7 },
     "map_7": { "files": ["audio/music/ploppin_around.mp3"], "volume": 0.7 },
     "map_8": { "files": ["audio/music/soft.mp3"], "volume": 0.7 },
-    "map_9": { "files": ["audio/music/marios.mp3"], "volume": 0.7 }
+    "map_9": { "files": ["audio/music/marios.mp3"], "volume": 0.7 },
+    "game_over": { "files": ["audio/music/soft.mp3"], "volume": 0.7 }
   }
 }
