@@ -188,6 +188,10 @@ public:
   }
 
   void Tick() {
+#ifdef ENABLE_AUDIO
+    if (audio_)
+      audio_->Update();
+#endif
     if (game_over_) {
       return;
     }
@@ -1179,9 +1183,6 @@ private:
       t.range += 1.0F;
     } else if (t.type == Tower::Type::Thunder) {
       t.fire_rate = 0.2F;
-      t.cooldown = 0.0F;
-    } else if (t.type == Tower::Type::Galactic) {
-      t.fire_rate = 10.0F;
       t.cooldown = 0.0F;
     }
     Sfx("unlock");

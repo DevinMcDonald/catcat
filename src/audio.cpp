@@ -59,6 +59,19 @@ class AudioSystem::Impl {
     }
   }
 
+  void Update() {
+    if (intro_loaded_) {
+      if (ma_sound_is_playing(&intro_sound_) == MA_FALSE) {
+        OnIntroEnded();
+      }
+    }
+    if (music_loaded_) {
+      if (ma_sound_is_playing(&music_sound_) == MA_FALSE && music_enabled_) {
+        ma_sound_start(&music_sound_);
+      }
+    }
+  }
+
   void ReloadConfig() { LoadConfig(); }
 
   void PlayEvent(const std::string& name) {
@@ -314,8 +327,21 @@ class AudioSystem::Impl {
     }
     if (current_loop_end_sec_ > 0.0F) {
       end_frame = static_cast<ma_uint64>(current_loop_end_sec_ * static_cast<float>(rate));
-      end_frame = std::min(end_frame, length_frames);
     }
+
+    // Clamp and fallback sensibly if values are out of bounds.
+    if (length_frames > 0) {
+      start_frame = std::min(start_frame, length_frames - 1);
+      end_frame = std::min(end_frame, length_frames);
+    } else {
+      start_frame = 0;
+      end_frame = 0;
+    }
+    if (end_frame <= start_frame) {
+      start_frame = 0;
+      end_frame = length_frames;
+    }
+
     if (start_frame < end_frame) {
       ma_data_source_set_loop_point_in_pcm_frames(ma_sound_get_data_source(&music_sound_),
                                                   start_frame, end_frame);
@@ -375,6 +401,7 @@ bool AudioSystem::Init(const std::string& config_path) { return impl_->Init(conf
 void AudioSystem::ReloadConfig() { impl_->ReloadConfig(); }
 void AudioSystem::PlayEvent(const std::string& name) { impl_->PlayEvent(name); }
 void AudioSystem::SetMusicForMap(int map_index) { impl_->SetMusicForMap(map_index); }
+void AudioSystem::Update() { impl_->Update(); }
 void AudioSystem::ToggleSfx() { impl_->ToggleSfx(); }
 void AudioSystem::ToggleMusic() { impl_->ToggleMusic(); }
 bool AudioSystem::SfxEnabled() const { return impl_->SfxEnabled(); }

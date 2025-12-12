@@ -12,6 +12,7 @@ class AudioSystem {
   void ReloadConfig();
   void PlayEvent(const std::string& name);
   void SetMusicForMap(int map_index);
+  void Update();
   void ToggleSfx();
   void ToggleMusic();
   bool SfxEnabled() const;
@@ -21,4 +22,3 @@ class AudioSystem {
   class Impl;
   Impl* impl_;
 };
-
