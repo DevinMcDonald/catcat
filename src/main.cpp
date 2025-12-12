@@ -72,10 +72,11 @@ struct Enemy {
   int max_hp = 1;
   int lane_offset = 0; // lateral offset from center path
   EnemyType type = EnemyType::Rat;
+  float sleep_timer = 0.0F;
 };
 
 struct Tower {
-  enum class Type { Default, Thunder, Fat, Kitty };
+  enum class Type { Default, Fat, Kitty, Thunder, Catatonic, Galactic };
 
   Position pos{};
   int damage = 2;
@@ -106,6 +107,7 @@ struct Shockwave {
   float max_radius = 0.0F;
   float speed = 10.0F;
   float time_left = 0.4F;
+  float max_time = 0.4F;
 };
 
 struct Beam {
@@ -121,6 +123,8 @@ struct HeldTower {
 struct AreaHighlight {
   std::vector<Position> cells;
   float time_left = 0.2F;
+  ftxui::Color color = ftxui::Color::Pink1;
+  char glyph = '#';
 };
 
 struct TowerDef {
@@ -145,24 +149,32 @@ TowerDef GetDef(Tower::Type type) {
   switch (type) {
     case Tower::Type::Default:
       return {type, "Default Cat", 35, 3, 4.5F, 0.85F, true, 1};
-  case Tower::Type::Thunder:
-    return {type, "Thundercat", 350, 6, 999.0F, 2.6F, false, 1};
   case Tower::Type::Fat:
     return {type, "Fat Cat", 55, 4, 2.4F, 1.4F, true, 2};
   case Tower::Type::Kitty:
     return {type, "Kitty Cat", 100, 3, 3.0F, 1.0F, true, 1};
+  case Tower::Type::Thunder:
+    return {type, "Thundercat", 350, 6, 999.0F, 2.6F, false, 1};
+  case Tower::Type::Catatonic:
+    return {type, "Catatonic", 500, 2, 3.2F, 2.2F, true, 1};
+  case Tower::Type::Galactic:
+    return {type, "Galacticat", 1000, 5, 7.0F, 2.5F, false, 1};
   }
   return {Tower::Type::Default, "Default Cat", 35, 3, 3.5F, 0.85F, true, 1};
 }
 
 class Game {
 public:
-  Game() {
+  explicit Game(bool dev_mode = false) : dev_mode_(dev_mode) {
     BuildMaps();
     BuildPath();
-    kibbles_ = kStartingKibbles;
+    kibbles_ = dev_mode_ ? 1000000 : kStartingKibbles;
     lives_ = kStartingLives;
     cursor_ = {3, kBoardHeight / 2};
+    if (dev_mode_) {
+      unlocked_thunder_ = unlocked_fat_ = unlocked_kitty_ = true;
+      unlocked_catatonic_ = unlocked_galactic_ = true;
+    }
 #ifdef ENABLE_AUDIO
     audio_ = std::make_unique<AudioSystem>();
     audio_->Init("audio.json");
@@ -276,6 +288,16 @@ public:
       overlay_enabled_ = true;
       handled = true;
     }
+    if (event == ftxui::Event::Character('5')) {
+      TryUnlockOrSelect(Tower::Type::Catatonic);
+      overlay_enabled_ = true;
+      handled = true;
+    }
+    if (event == ftxui::Event::Character('6')) {
+      TryUnlockOrSelect(Tower::Type::Galactic);
+      overlay_enabled_ = true;
+      handled = true;
+    }
     if (event == ftxui::Event::Character('p')) {
       view_shop_ = !view_shop_;
       handled = true;
@@ -320,6 +342,11 @@ public:
     }
     if (event == ftxui::Event::Character('x')) {
       SellTowerAtCursor();
+      handled = true;
+    }
+
+    if (dev_mode_ && event == ftxui::Event::Character('>')) {
+      AdvanceMap(true);
       handled = true;
     }
 
@@ -447,6 +474,10 @@ private:
   void MoveEnemies() {
     int lives_before = lives_;
     for (auto &e : enemies_) {
+      if (e.sleep_timer > 0.0F) {
+        e.sleep_timer = std::max(0.0F, e.sleep_timer - Dt());
+        continue;
+      }
       e.path_progress += e.speed * Dt();
     }
 
@@ -564,6 +595,14 @@ private:
 #ifdef ENABLE_AUDIO
         audio_->PlayEvent("tower_kitty_shoot");
 #endif
+        break;
+      }
+      case Tower::Type::Catatonic: {
+        FireCatatonic(t);
+        break;
+      }
+      case Tower::Type::Galactic: {
+        FireGalactic(t, enemies_[*target_index]);
         break;
       }
       }
@@ -705,7 +744,7 @@ private:
     }
   }
 
-  void AdvanceMap() {
+  void AdvanceMap(bool dev_skip = false) {
     map_index_ = (map_index_ + 1) % static_cast<int>(maps_.size());
     wave_active_ = false;
     spawn_remaining_ = 0;
@@ -716,6 +755,9 @@ private:
     lives_ = kStartingLives;
     auto_waves_ = false;
     BuildPath();
+    if (dev_skip) {
+      wave_ = map_index_ * 10;
+    }
 #ifdef ENABLE_AUDIO
     audio_->SetMusicForMap(map_index_);
     audio_->PlayEvent("map_change");
@@ -872,15 +914,21 @@ private:
       return 3;
     case Tower::Type::Thunder:
       return 4;
+    case Tower::Type::Catatonic:
+      return 5;
+    case Tower::Type::Galactic:
+      return 6;
     }
     return 0;
   }
 
   std::vector<TowerDef> SortedDefs() const {
     std::vector<TowerDef> defs = {GetDef(Tower::Type::Default),
-                                  GetDef(Tower::Type::Thunder),
                                   GetDef(Tower::Type::Fat),
-                                  GetDef(Tower::Type::Kitty)};
+                                  GetDef(Tower::Type::Kitty),
+                                  GetDef(Tower::Type::Thunder),
+                                  GetDef(Tower::Type::Catatonic),
+                                  GetDef(Tower::Type::Galactic)};
     std::sort(defs.begin(), defs.end(),
               [](const TowerDef &a, const TowerDef &b) {
                 if (a.cost == b.cost)
@@ -894,23 +942,31 @@ private:
     switch (type) {
     case Tower::Type::Default:
       return true;
-    case Tower::Type::Thunder:
-      return unlocked_thunder_;
     case Tower::Type::Fat:
       return unlocked_fat_;
     case Tower::Type::Kitty:
       return unlocked_kitty_;
+    case Tower::Type::Thunder:
+      return unlocked_thunder_;
+    case Tower::Type::Catatonic:
+      return unlocked_catatonic_;
+    case Tower::Type::Galactic:
+      return unlocked_galactic_;
     }
     return true;
   }
 
   void Unlock(Tower::Type type) {
-    if (type == Tower::Type::Thunder)
-      unlocked_thunder_ = true;
     if (type == Tower::Type::Fat)
       unlocked_fat_ = true;
     if (type == Tower::Type::Kitty)
       unlocked_kitty_ = true;
+    if (type == Tower::Type::Thunder)
+      unlocked_thunder_ = true;
+    if (type == Tower::Type::Catatonic)
+      unlocked_catatonic_ = true;
+    if (type == Tower::Type::Galactic)
+      unlocked_galactic_ = true;
   }
 
   void TryUnlockOrSelect(Tower::Type type) {
@@ -1068,6 +1124,9 @@ private:
     } else if (t.type == Tower::Type::Thunder) {
       t.fire_rate = 0.2F;
       t.cooldown = 0.0F;
+    } else if (t.type == Tower::Type::Galactic) {
+      t.fire_rate = 10.0F;
+      t.cooldown = 0.0F;
     }
     Sfx("unlock");
   }
@@ -1188,6 +1247,97 @@ private:
     }
 
     area_highlights_.push_back({area_cells, 0.22F});
+  }
+
+  void FireCatatonic(const Tower &t) {
+    const float radius = t.upgraded ? t.range + 0.8F : t.range;
+    const float sleep_dur = t.upgraded ? 4.0F : 2.5F;
+    std::vector<Position> cells;
+    for (auto &e : enemies_) {
+      const auto pos = EnemyCell(e);
+      if (InRange(TowerCenter(t), pos, radius)) {
+        e.sleep_timer = std::max(e.sleep_timer, sleep_dur);
+        cells.push_back(pos);
+      }
+    }
+    if (!cells.empty()) {
+      area_highlights_.push_back(
+          {cells, 0.6F, ftxui::Color::Purple, '~'});
+    }
+  }
+
+  void FireGalactic(const Tower &t, Enemy &target) {
+    if (t.upgraded) {
+      // Full map pulse.
+      std::vector<Position> cells;
+      cells.reserve(kBoardWidth * kBoardHeight);
+      for (int y = 0; y < kBoardHeight; ++y) {
+        for (int x = 0; x < kBoardWidth; ++x) {
+          cells.push_back({x, y});
+        }
+      }
+      for (auto &e : enemies_) {
+        e.hp -= t.damage;
+        if (e.hp <= 0) {
+          kibbles_ += Bounty(e.type);
+          Sfx("rat_die");
+        } else {
+          hit_splats_.push_back({EnemyCell(e), 0.18F});
+        }
+      }
+      area_highlights_.push_back(
+          {cells, 0.5F, ftxui::Color::CyanLight, '*'});
+      return;
+    }
+
+    const auto center = TowerCenter(t);
+    const auto target_cell = EnemyCell(target);
+    const float dx = static_cast<float>(target_cell.x) - center.x;
+    const float dy = static_cast<float>(target_cell.y) - center.y;
+    const float len = std::max(0.001F, std::sqrt(dx * dx + dy * dy));
+    const float ndx = dx / len;
+    const float ndy = dy / len;
+    const float range = t.range;
+    const float cone_cos = std::cos(0.6F); // ~60 deg cone
+
+    std::vector<Position> cells;
+    for (int y = 0; y < kBoardHeight; ++y) {
+      for (int x = 0; x < kBoardWidth; ++x) {
+        const float vx = static_cast<float>(x) - center.x;
+        const float vy = static_cast<float>(y) - center.y;
+        const float dist2 = vx * vx + vy * vy;
+        if (dist2 > range * range)
+          continue;
+        const float dist = std::sqrt(dist2);
+        if (dist < 0.1F)
+          continue;
+        const float dot = (vx / dist) * ndx + (vy / dist) * ndy;
+        if (dot >= cone_cos) {
+          cells.push_back({x, y});
+        }
+      }
+    }
+
+    for (auto &e : enemies_) {
+      const auto pos = EnemyCell(e);
+      const bool hit = std::any_of(
+          cells.begin(), cells.end(),
+          [&](const Position &c) { return c.x == pos.x && c.y == pos.y; });
+      if (!hit)
+        continue;
+      e.hp -= t.damage;
+      if (e.hp <= 0) {
+        kibbles_ += Bounty(e.type);
+        Sfx("rat_die");
+      } else {
+        hit_splats_.push_back({pos, 0.2F});
+      }
+    }
+
+    if (!cells.empty()) {
+      area_highlights_.push_back(
+          {cells, 0.3F, ftxui::Color::LightSteelBlue, '*'});
+    }
   }
 
   void UpdateShockwaves() {
@@ -1392,15 +1542,20 @@ private:
     }
 
     for (const auto &t : towers_) {
-      const char glyph = t.type == Tower::Type::Thunder ? (t.upgraded ? 'T' : 't')
-                         : t.type == Tower::Type::Fat   ? (t.upgraded ? 'F' : 'f')
-                         : t.type == Tower::Type::Kitty ? (t.upgraded ? 'K' : 'k')
-                                                        : (t.upgraded ? 'C' : 'c');
+      const char glyph =
+          t.type == Tower::Type::Thunder    ? (t.upgraded ? 'T' : 't')
+          : t.type == Tower::Type::Fat      ? (t.upgraded ? 'F' : 'f')
+          : t.type == Tower::Type::Kitty    ? (t.upgraded ? 'K' : 'k')
+          : t.type == Tower::Type::Catatonic ? (t.upgraded ? 'C' : 'c')
+          : t.type == Tower::Type::Galactic ? (t.upgraded ? 'G' : 'g')
+                                            : (t.upgraded ? 'D' : 'd');
       const ftxui::Color bg =
-          t.type == Tower::Type::Thunder ? ftxui::Color::Blue1
-          : t.type == Tower::Type::Fat   ? ftxui::Color::DarkOliveGreen3
-          : t.type == Tower::Type::Kitty ? ftxui::Color::Pink1
-                                         : ftxui::Color::Gold1;
+          t.type == Tower::Type::Thunder     ? ftxui::Color::Blue1
+          : t.type == Tower::Type::Fat       ? ftxui::Color::DarkOliveGreen3
+          : t.type == Tower::Type::Kitty     ? ftxui::Color::Pink1
+          : t.type == Tower::Type::Catatonic ? ftxui::Color::Purple
+          : t.type == Tower::Type::Galactic  ? ftxui::Color::LightSteelBlue
+                                             : ftxui::Color::Gold1;
       for (int dy = 0; dy < t.size; ++dy) {
         for (int dx = 0; dx < t.size; ++dx) {
           const int gx = t.pos.x + dx;
@@ -1487,8 +1642,8 @@ private:
         }
         const auto yi = static_cast<size_t>(cell.y);
         const auto xi = static_cast<size_t>(cell.x);
-        glyphs[yi][xi] = '#';
-        foregrounds[yi][xi] = ftxui::Color::Pink1;
+        glyphs[yi][xi] = ah.glyph;
+        foregrounds[yi][xi] = ah.color;
       }
     }
 
@@ -1601,6 +1756,9 @@ private:
     }
     std::vector<ftxui::Element> lines;
     lines.push_back(text("Cat Burrow Defense"));
+    if (dev_mode_) {
+      lines.push_back(text("DEV MODE"));
+    }
     lines.push_back(text("Status: " + wave_text));
     lines.push_back(text("Map: " + std::to_string(map_index_ + 1) + "/10"));
     lines.push_back(text(
@@ -1617,7 +1775,7 @@ private:
     const auto defs = SortedDefs();
 
     if (view_shop_) {
-      lines.push_back(text("shop (press 1/2/3/4, p to return)"));
+      lines.push_back(text("shop (press 1-6 to buy/select, p to return)"));
       std::vector<TowerDef> locked;
       for (const auto &d : defs) {
         if (!IsUnlocked(d.type)) {
@@ -1646,6 +1804,10 @@ private:
             desc = "2x2 AOE, dmg " + std::to_string(d.damage);
           } else if (d.type == Tower::Type::Kitty) {
             desc = "Swipe 4x6, dmg " + std::to_string(d.damage);
+          } else if (d.type == Tower::Type::Catatonic) {
+            desc = "Sleep pulse, slows";
+          } else if (d.type == Tower::Type::Galactic) {
+            desc = "Cosmic cone blast";
           } else {
             desc = "dmg " + std::to_string(d.damage);
           }
@@ -1681,12 +1843,15 @@ private:
       lines.push_back(text("u           - upgrade tower (cost 5x)"));
       lines.push_back(text("x           - sell tower (60% refund)"));
       lines.push_back(text("esc         - toggle overlay / cancel move"));
-      lines.push_back(text("1/2/3/4     - select cat type"));
+      lines.push_back(text("1-6         - select cat type (by cost)"));
       lines.push_back(text("p           - toggle shop view"));
       lines.push_back(text("n/N         - next wave / auto waves"));
       lines.push_back(text("f           - toggle fast forward x5"));
       lines.push_back(text("t           - toggle sfx"));
       lines.push_back(text("y           - toggle music"));
+      if (dev_mode_) {
+        lines.push_back(text(">           - skip to next map (dev)"));
+      }
       lines.push_back(text("q           - quit"));
     } else {
       lines.push_back(separator());
@@ -1719,11 +1884,14 @@ private:
   bool unlocked_thunder_ = false;
   bool unlocked_fat_ = false;
   bool unlocked_kitty_ = false;
+  bool unlocked_catatonic_ = false;
+  bool unlocked_galactic_ = false;
   bool view_shop_ = false;
   bool overlay_enabled_ = true;
   bool show_controls_ = false;
   bool auto_waves_ = false;
   bool fast_forward_ = false;
+  bool dev_mode_ = false;
   int map_index_ = 0;
   int kibbles_ = 0;
   int lives_ = 0;
@@ -1736,7 +1904,8 @@ private:
 
 class GameComponent : public ftxui::ComponentBase {
 public:
-  explicit GameComponent(ftxui::ScreenInteractive &screen) : screen_(screen) {
+  GameComponent(ftxui::ScreenInteractive &screen, bool dev_mode)
+      : game_(dev_mode), screen_(screen) {
     ticker_ = std::thread([this] {
       while (running_) {
         std::this_thread::sleep_for(std::chrono::milliseconds(kTickMs));
@@ -1781,9 +1950,15 @@ private:
 
 } // namespace
 
-int main() {
+int main(int argc, const char* argv[]) {
+  bool dev_mode = false;
+  for (int i = 1; i < argc; ++i) {
+    if (std::string(argv[i]) == "--dev") {
+      dev_mode = true;
+    }
+  }
   auto screen = ftxui::ScreenInteractive::Fullscreen();
-  auto component = ftxui::Make<GameComponent>(screen);
+  auto component = ftxui::Make<GameComponent>(screen, dev_mode);
   screen.Loop(component);
   return 0;
 }
