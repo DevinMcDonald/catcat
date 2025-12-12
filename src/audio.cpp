@@ -56,7 +56,8 @@ class AudioSystem::Impl {
     if (it == events_.end() || it->second.files.empty()) return;
     const auto& entry = it->second;
     const auto& list = entry.files;
-    const size_t idx = list.size() == 1 ? 0 : static_cast<size_t>(dist_(rng_) % list.size());
+    const size_t idx =
+        list.size() == 1 ? 0U : static_cast<size_t>(dist_(rng_) % static_cast<int>(list.size()));
     const float vol = std::clamp(entry.volume, 0.0F, 2.0F);
     CleanupSounds(false);
 
@@ -81,10 +82,13 @@ class AudioSystem::Impl {
     const auto it = music_.find(key);
     if (it == music_.end() || it->second.files.empty()) return;
     const auto& tracks = it->second.files;
-    const size_t idx = tracks.size() == 1 ? 0 : static_cast<size_t>(dist_(rng_) % tracks.size());
+    const size_t idx = tracks.size() == 1
+                           ? 0U
+                           : static_cast<size_t>(dist_(rng_) % static_cast<int>(tracks.size()));
     const std::string& path = tracks[idx];
-    if (ma_sound_init_from_file(&engine_, path.c_str(),
-                                MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_ASYNC, nullptr, nullptr,
+    constexpr ma_uint32 kMusicFlags =
+        MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_ASYNC;  // fully decode for seamless looping
+    if (ma_sound_init_from_file(&engine_, path.c_str(), kMusicFlags, nullptr, nullptr,
                                 &music_sound_) != MA_SUCCESS) {
       music_loaded_ = false;
       return;

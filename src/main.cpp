@@ -84,6 +84,7 @@ struct Tower {
   float fire_rate = 1.2F; // seconds between shots
   Type type = Type::Default;
   int size = 1; // 1x1 or 2x2 for Fat
+  bool upgraded = false;
 };
 
 struct HitSplat {
@@ -261,17 +262,17 @@ public:
       handled = true;
     }
     if (event == ftxui::Event::Character('2')) {
-      TryUnlockOrSelect(Tower::Type::Thunder);
-      overlay_enabled_ = true;
-      handled = true;
-    }
-    if (event == ftxui::Event::Character('3')) {
       TryUnlockOrSelect(Tower::Type::Fat);
       overlay_enabled_ = true;
       handled = true;
     }
-    if (event == ftxui::Event::Character('4')) {
+    if (event == ftxui::Event::Character('3')) {
       TryUnlockOrSelect(Tower::Type::Kitty);
+      overlay_enabled_ = true;
+      handled = true;
+    }
+    if (event == ftxui::Event::Character('4')) {
+      TryUnlockOrSelect(Tower::Type::Thunder);
       overlay_enabled_ = true;
       handled = true;
     }
@@ -311,6 +312,10 @@ public:
       } else {
         PickUpTower();
       }
+      handled = true;
+    }
+    if (event == ftxui::Event::Character('u')) {
+      UpgradeTowerAtCursor();
       handled = true;
     }
     if (event == ftxui::Event::Character('x')) {
@@ -498,15 +503,43 @@ private:
 
       switch (t.type) {
       case Tower::Type::Default: {
-        auto &target = enemies_[*target_index];
-        Projectile p;
         const auto c = TowerCenter(t);
-        p.x = static_cast<float>(c.x);
-        p.y = static_cast<float>(c.y);
-        p.target = EnemyCell(target);
-        p.speed = 17.0F;
-        p.damage = t.damage;
-        projectiles_.push_back(p);
+        auto add_projectile = [&](const Enemy &target) {
+          Projectile p;
+          p.x = static_cast<float>(c.x);
+          p.y = static_cast<float>(c.y);
+          p.target = EnemyCell(target);
+          p.speed = 17.0F;
+          p.damage = t.damage;
+          projectiles_.push_back(p);
+        };
+        if (t.upgraded) {
+          std::vector<std::pair<float, size_t>> sorted;
+          const float range2 = t.range * t.range;
+          for (size_t i = 0; i < enemies_.size(); ++i) {
+            if (enemies_[i].hp <= 0)
+              continue;
+            const auto pos = EnemyCell(enemies_[i]);
+            if (DistanceSquared(c, pos) > range2)
+              continue;
+            sorted.push_back({enemies_[i].path_progress, i});
+          }
+          if (!sorted.empty()) {
+            std::sort(sorted.begin(), sorted.end(),
+                      [](auto &a, auto &b) { return a.first > b.first; });
+            size_t front_idx = sorted.front().second;
+            size_t back_idx = sorted.back().second;
+            size_t mid_idx = sorted[sorted.size() / 2].second;
+            add_projectile(enemies_[front_idx]);
+            if (mid_idx != front_idx)
+              add_projectile(enemies_[mid_idx]);
+            if (back_idx != front_idx && back_idx != mid_idx)
+              add_projectile(enemies_[back_idx]);
+          }
+        } else {
+          auto &target = enemies_[*target_index];
+          add_projectile(target);
+        }
 #ifdef ENABLE_AUDIO
         audio_->PlayEvent("tower_default_shoot");
 #endif
@@ -829,6 +862,34 @@ private:
     return s + std::string(w - s.size(), ' ');
   }
 
+  int TypeKey(Tower::Type t) const {
+    switch (t) {
+    case Tower::Type::Default:
+      return 1;
+    case Tower::Type::Fat:
+      return 2;
+    case Tower::Type::Kitty:
+      return 3;
+    case Tower::Type::Thunder:
+      return 4;
+    }
+    return 0;
+  }
+
+  std::vector<TowerDef> SortedDefs() const {
+    std::vector<TowerDef> defs = {GetDef(Tower::Type::Default),
+                                  GetDef(Tower::Type::Thunder),
+                                  GetDef(Tower::Type::Fat),
+                                  GetDef(Tower::Type::Kitty)};
+    std::sort(defs.begin(), defs.end(),
+              [](const TowerDef &a, const TowerDef &b) {
+                if (a.cost == b.cost)
+                  return a.name < b.name;
+                return a.cost < b.cost;
+              });
+    return defs;
+  }
+
   bool IsUnlocked(Tower::Type type) const {
     switch (type) {
     case Tower::Type::Default:
@@ -983,6 +1044,34 @@ private:
     Sfx("sell");
   }
 
+  void UpgradeTowerAtCursor() {
+    if (held_tower_.has_value()) {
+      return;
+    }
+    const auto idx = TowerIndexAt(cursor_);
+    if (!idx.has_value()) {
+      return;
+    }
+    Tower &t = towers_[*idx];
+    if (t.upgraded) {
+      return;
+    }
+    const auto def = GetDef(t.type);
+    const int cost = def.cost * 5;
+    if (kibbles_ < cost) {
+      return;
+    }
+    kibbles_ -= cost;
+    t.upgraded = true;
+    if (t.type == Tower::Type::Fat) {
+      t.range += 1.0F;
+    } else if (t.type == Tower::Type::Thunder) {
+      t.fire_rate = 0.2F;
+      t.cooldown = 0.0F;
+    }
+    Sfx("unlock");
+  }
+
   void FireLaser(const Tower &t, Enemy &target) {
     const auto center = TowerCenter(t);
     const auto target_cell = EnemyCell(target);
@@ -1092,6 +1181,9 @@ private:
         Sfx("rat_die");
       } else {
         hit_splats_.push_back({pos, 0.18F});
+        if (t.upgraded && Rand(0.0F, 1.0F) < 0.10F) {
+          e.path_progress = std::max(0.0F, e.path_progress - 1.0F);
+        }
       }
     }
 
@@ -1300,10 +1392,10 @@ private:
     }
 
     for (const auto &t : towers_) {
-      const char glyph = t.type == Tower::Type::Thunder ? 'T'
-                         : t.type == Tower::Type::Fat   ? 'F'
-                         : t.type == Tower::Type::Kitty ? 'K'
-                                                        : 'C';
+      const char glyph = t.type == Tower::Type::Thunder ? (t.upgraded ? 'T' : 't')
+                         : t.type == Tower::Type::Fat   ? (t.upgraded ? 'F' : 'f')
+                         : t.type == Tower::Type::Kitty ? (t.upgraded ? 'K' : 'k')
+                                                        : (t.upgraded ? 'C' : 'c');
       const ftxui::Color bg =
           t.type == Tower::Type::Thunder ? ftxui::Color::Blue1
           : t.type == Tower::Type::Fat   ? ftxui::Color::DarkOliveGreen3
@@ -1522,42 +1614,46 @@ private:
     lines.push_back(text("Selected: " + selected_def.name));
     lines.push_back(separator());
 
-    const std::array<TowerDef, 4> defs = {
-        GetDef(Tower::Type::Default), GetDef(Tower::Type::Thunder),
-        GetDef(Tower::Type::Fat), GetDef(Tower::Type::Kitty)};
+    const auto defs = SortedDefs();
 
     if (view_shop_) {
       lines.push_back(text("shop (press 1/2/3/4, p to return)"));
-      size_t name_w = 0;
-      size_t cost_w = 0;
-      std::array<std::string, 4> cost_cols{};
-      for (size_t i = 0; i < defs.size(); ++i) {
-        const auto &d = defs[i];
-        const bool unlocked = IsUnlocked(d.type);
-        const int unlock_cost = d.cost * 10;
-        name_w = std::max(name_w, d.name.size());
-        cost_cols[i] = unlocked ? (std::to_string(d.cost) + " kib")
-                                : ("unlock " + std::to_string(unlock_cost));
-        cost_w = std::max(cost_w, cost_cols[i].size());
-      }
-      for (size_t i = 0; i < defs.size(); ++i) {
-        const auto &d = defs[i];
-        const bool unlocked = IsUnlocked(d.type);
-        std::string desc;
-        if (d.type == Tower::Type::Thunder) {
-          desc = "Laser, dmg " + std::to_string(d.damage) + ", slow fire";
-        } else if (d.type == Tower::Type::Fat) {
-          desc = "2x2 AOE, dmg " + std::to_string(d.damage);
-        } else if (d.type == Tower::Type::Kitty) {
-          desc = "Swipe 4x6, dmg " + std::to_string(d.damage);
-        } else {
-          desc = "dmg " + std::to_string(d.damage);
+      std::vector<TowerDef> locked;
+      for (const auto &d : defs) {
+        if (!IsUnlocked(d.type)) {
+          locked.push_back(d);
         }
-        const std::string line = PadRight(d.name, name_w + 2) +
-                                 PadRight(cost_cols[i], cost_w + 2) +
-                                 (unlocked ? "[unlocked] " : "[locked]   ") +
-                                 desc;
-        lines.push_back(text(line));
+      }
+      if (locked.empty()) {
+        lines.push_back(text("All cats unlocked!"));
+      } else {
+        size_t name_w = 0;
+        size_t cost_w = 0;
+        std::vector<std::string> cost_cols(locked.size());
+        for (size_t i = 0; i < locked.size(); ++i) {
+          const auto &d = locked[i];
+          const int unlock_cost = d.cost * 10;
+          name_w = std::max(name_w, d.name.size() + 3); // account for key
+          cost_cols[i] = "unlock " + std::to_string(unlock_cost);
+          cost_w = std::max(cost_w, cost_cols[i].size());
+        }
+        for (size_t i = 0; i < locked.size(); ++i) {
+          const auto &d = locked[i];
+          std::string desc;
+          if (d.type == Tower::Type::Thunder) {
+            desc = "Laser, dmg " + std::to_string(d.damage) + ", slow fire";
+          } else if (d.type == Tower::Type::Fat) {
+            desc = "2x2 AOE, dmg " + std::to_string(d.damage);
+          } else if (d.type == Tower::Type::Kitty) {
+            desc = "Swipe 4x6, dmg " + std::to_string(d.damage);
+          } else {
+            desc = "dmg " + std::to_string(d.damage);
+          }
+          const std::string key = std::to_string(TypeKey(d.type)) + ") ";
+          const std::string line = PadRight(key + d.name, name_w + 2) +
+                                   PadRight(cost_cols[i], cost_w + 2) + desc;
+          lines.push_back(text(line));
+        }
       }
     } else {
       lines.push_back(text("press p to view shop"));
@@ -1566,8 +1662,8 @@ private:
         if (!IsUnlocked(d.type)) {
           continue;
         }
-        std::string line =
-            "- " + d.name + " (" + std::to_string(d.cost) + " kib)";
+        std::string line = std::to_string(TypeKey(d.type)) + ") " + d.name +
+                           " (" + std::to_string(d.cost) + " kib)";
         lines.push_back(text(line));
       }
     }
@@ -1582,6 +1678,7 @@ private:
       lines.push_back(text("arrows/WASD - move cursor"));
       lines.push_back(text("space/c     - place selected cat"));
       lines.push_back(text("m           - pick up tower under cursor"));
+      lines.push_back(text("u           - upgrade tower (cost 5x)"));
       lines.push_back(text("x           - sell tower (60% refund)"));
       lines.push_back(text("esc         - toggle overlay / cancel move"));
       lines.push_back(text("1/2/3/4     - select cat type"));

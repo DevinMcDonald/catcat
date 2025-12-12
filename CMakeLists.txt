@@ -51,7 +51,11 @@ if(ENABLE_AUDIO)
 endif()
 
 if(MSVC)
-  target_compile_options(tuirDefense PRIVATE /W4 /permissive- /Zc:__cplusplus)
+  target_compile_options(tuirDefense PRIVATE /W4 /permissive- /Zc:__cplusplus /WX)
 else()
-  target_compile_options(tuirDefense PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion)
+  target_compile_options(tuirDefense PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror)
+  # Silence warnings from third-party headers we don't control.
+  target_include_directories(tuirDefense SYSTEM PRIVATE
+    ${CMAKE_BINARY_DIR}/miniaudio_header
+    ${ftxui_SOURCE_DIR}/include)
 endif()
