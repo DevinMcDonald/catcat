@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -85,6 +86,7 @@ struct Tower {
   enum class Type { Default, Fat, Kitty, Thunder, Catatonic, Galactic };
 
   Position pos{};
+  Position home{};
   int damage = 2;
   float range = 3.2F;
   float cooldown = 0.0F;  // time until next shot
@@ -435,6 +437,33 @@ public:
     }
   }
 
+  void ReturnKittiesHome() {
+    std::vector<size_t> kitty_indices;
+    for (size_t i = 0; i < towers_.size(); ++i) {
+      if (towers_[i].type == Tower::Type::Kitty) {
+        kitty_indices.push_back(i);
+      }
+    }
+    if (kitty_indices.empty()) {
+      return;
+    }
+
+    auto static_blocked = TowerOccupancyMaskSkipping(kitty_indices);
+    std::vector<std::vector<bool>> reserved(
+        kBoardHeight, std::vector<bool>(kBoardWidth, false));
+
+    for (size_t idx : kitty_indices) {
+      Tower &t = towers_[idx];
+      if (t.pos.x == t.home.x && t.pos.y == t.home.y) {
+        reserved[static_cast<size_t>(t.pos.y)][static_cast<size_t>(t.pos.x)] = true;
+        continue;
+      }
+      Position dest =
+          NearestOpenCell(t.home, static_blocked, reserved, t.pos);
+      t.pos = dest;
+    }
+  }
+
   void Tick() {
 #ifdef ENABLE_AUDIO
     if (audio_)
@@ -630,7 +659,7 @@ public:
                        ftxui::text("██┼┼┼┼┼██┼┼┼██┼┼█▀┼┼██┼┼┼┼██┼┼┼┼┼██┼"),
                        ftxui::text("███▄▄▄███┼┼┼─▀█▀┼┼─┼██▄▄▄┼██┼┼┼┼┼██▄"),
                        ftxui::text("┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼")}) |
-          color(ftxui::Color::RedLight) | bgcolor(ftxui::Color::Black) | bold |
+          color(ftxui::Color::DarkRed) | bgcolor(ftxui::Color::Black) | bold |
           ftxui::center;
       auto overlay = ftxui::center(ftxui::vbox({
                                         ftxui::filler(),
@@ -779,6 +808,53 @@ private:
 
   std::optional<size_t> FindTarget(const Tower &t) const {
     return FindTargetAt(t, TowerCenter(t));
+  }
+
+  Position NearestOpenCell(const Position &desired,
+                           const std::vector<std::vector<bool>> &blocked,
+                           std::vector<std::vector<bool>> &reserved,
+                           const Position &fallback) {
+    std::vector<Position> best;
+    float best_d2 = std::numeric_limits<float>::max();
+    const Vec2 desired_center = TowerCenterAt(desired, 1);
+    for (int y = 0; y < kBoardHeight; ++y) {
+      for (int x = 0; x < kBoardWidth; ++x) {
+        Position p{x, y};
+        if (p.x < 0 || p.y < 0 || p.x >= kBoardWidth || p.y >= kBoardHeight) {
+          continue;
+        }
+        if (path_mask_[static_cast<size_t>(p.y)][static_cast<size_t>(p.x)]) {
+          continue;
+        }
+        if (blocked[static_cast<size_t>(p.y)][static_cast<size_t>(p.x)]) {
+          continue;
+        }
+        if (reserved[static_cast<size_t>(p.y)][static_cast<size_t>(p.x)]) {
+          continue;
+        }
+        const float d2 = DistanceSquared(desired_center, p);
+        if (d2 + 1e-4F < best_d2) {
+          best_d2 = d2;
+          best.clear();
+          best.push_back(p);
+        } else if (std::abs(d2 - best_d2) < 1e-4F) {
+          best.push_back(p);
+        }
+      }
+    }
+
+    if (best.empty()) {
+      if (fallback.x >= 0 && fallback.y >= 0 && fallback.x < kBoardWidth &&
+          fallback.y < kBoardHeight) {
+        reserved[static_cast<size_t>(fallback.y)]
+                [static_cast<size_t>(fallback.x)] = true;
+      }
+      return fallback;
+    }
+    std::shuffle(best.begin(), best.end(), rng_);
+    const auto chosen = best.front();
+    reserved[static_cast<size_t>(chosen.y)][static_cast<size_t>(chosen.x)] = true;
+    return chosen;
   }
 
   void TowersAct() {
@@ -1001,6 +1077,7 @@ private:
     }
 
     wave_active_ = false;
+    ReturnKittiesHome();
     kibbles_ += 20 + wave_ * 3;
 
     if (wave_ % 10 == 0) {
@@ -1060,6 +1137,7 @@ private:
     t.cooldown = Rand(0.05F, t.fire_rate); // offset starts for async cadence
     t.type = def.type;
     t.size = def.size;
+    t.home = t.pos;
     towers_.push_back(t);
     kibbles_ -= def.cost;
     Sfx("place");
@@ -1382,6 +1460,7 @@ private:
       return;
     }
     t.pos = cursor_;
+    t.home = t.pos;
     t.cooldown = Rand(0.05F, t.fire_rate);
     towers_.push_back(t);
     held_tower_.reset();
@@ -1997,6 +2076,17 @@ private:
       }
     }
 
+    if (game_over_) {
+      for (int y = 0; y < kBoardHeight; ++y) {
+        const auto yi = static_cast<size_t>(y);
+        for (int x = 0; x < kBoardWidth; ++x) {
+          const auto xi = static_cast<size_t>(x);
+          backgrounds[yi][xi] = ftxui::Color::Grey23;
+          foregrounds[yi][xi] = ftxui::Color::Grey70;
+        }
+      }
+    }
+
     std::vector<ftxui::Element> rows;
     for (int y = 0; y < kBoardHeight; ++y) {
       const auto yi = static_cast<size_t>(y);
@@ -2020,7 +2110,7 @@ private:
     auto board_elem = vbox(std::move(rows));
     if (game_over_) {
       board_elem = board_elem | bgcolor(ftxui::Color::Black) |
-                   color(ftxui::Color::RedLight) | bold;
+                   color(ftxui::Color::Grey70) | bold;
     }
     return board_elem;
   }
