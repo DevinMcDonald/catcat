@@ -658,7 +658,7 @@ private:
         target.hp -= p.damage;
         if (target.hp <= 0) {
           kibbles_ += Bounty(target.type);
-          Sfx("rat_die");
+          PlayDeathSfx(target.type);
         } else {
           hit_splats_.push_back({EnemyCell(target), 0.28F});
         }
@@ -881,6 +881,23 @@ private:
     if (audio_)
       audio_->PlayEvent(name);
 #endif
+  }
+
+  void PlayDeathSfx(EnemyType type) {
+    switch (type) {
+    case EnemyType::Mouse:
+      Sfx("mouse_die");
+      break;
+    case EnemyType::Rat:
+      Sfx("rat_die");
+      break;
+    case EnemyType::BigRat:
+      Sfx("bigrat_die");
+      break;
+    case EnemyType::Dog:
+      Sfx("dog_die");
+      break;
+    }
   }
 
   void SetMusic(int map_idx) {
@@ -1154,7 +1171,7 @@ private:
         e.hp -= t.damage;
         if (e.hp <= 0) {
           kibbles_ += Bounty(e.type);
-          Sfx("rat_die");
+          PlayDeathSfx(e.type);
         } else {
           hit_splats_.push_back({EnemyCell(e), 0.18F});
         }
@@ -1193,7 +1210,7 @@ private:
         e.hp -= t.damage;
         if (e.hp <= 0) {
           kibbles_ += Bounty(e.type);
-          Sfx("rat_die");
+          PlayDeathSfx(e.type);
         } else {
           hit_splats_.push_back({pos, 0.22F});
         }
@@ -1237,7 +1254,7 @@ private:
       e.hp -= t.damage;
       if (e.hp <= 0) {
         kibbles_ += Bounty(e.type);
-        Sfx("rat_die");
+        PlayDeathSfx(e.type);
       } else {
         hit_splats_.push_back({pos, 0.18F});
         if (t.upgraded && Rand(0.0F, 1.0F) < 0.10F) {
@@ -1280,7 +1297,7 @@ private:
         e.hp -= t.damage;
         if (e.hp <= 0) {
           kibbles_ += Bounty(e.type);
-          Sfx("rat_die");
+          PlayDeathSfx(e.type);
         } else {
           hit_splats_.push_back({EnemyCell(e), 0.18F});
         }
@@ -1328,7 +1345,7 @@ private:
       e.hp -= t.damage;
       if (e.hp <= 0) {
         kibbles_ += Bounty(e.type);
-        Sfx("rat_die");
+        PlayDeathSfx(e.type);
       } else {
         hit_splats_.push_back({pos, 0.2F});
       }

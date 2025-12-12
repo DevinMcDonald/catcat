@@ -6,12 +6,17 @@
     "tower_thunder_shoot": { "files": ["audio/sfx/tower_thunder_shoot.wav"], "volume": 1.0 },
     "tower_fat_shoot": { "files": ["audio/sfx/tower_fat_shoot.wav"], "volume": 0.9 },
     "tower_kitty_shoot": { "files": ["audio/sfx/tower_kitty_shoot.wav"], "volume": 0.9 },
+    "tower_catatonic_shoot": { "files": ["audio/sfx/tower_catatonic_shoot.wav"], "volume": 0.9 },
+    "tower_galactic_shoot": { "files": ["audio/sfx/tower_galactic_shoot.wav"], "volume": 0.9 },
+    "mouse_die": { "files": ["audio/sfx/mouse_die.wav"], "volume": 0.9 },
     "wave_start": { "files": ["audio/sfx/wave_start.wav"], "volume": 0.8 },
     "map_change": { "files": ["audio/sfx/map_change.wav"], "volume": 0.75 },
     "life_lost": { "files": ["audio/sfx/life_lost.wav"], "volume": 0.8 },
     "unlock": { "files": ["audio/sfx/unlock.wav"], "volume": 0.85 },
     "place": { "files": ["audio/sfx/place.wav"], "volume": 0.8 },
-    "sell": { "files": ["audio/sfx/sell.wav"], "volume": 0.8 }
+    "sell": { "files": ["audio/sfx/sell.wav"], "volume": 0.8 },
+    "bigrat_die": { "files": ["audio/sfx/bigrat_die.wav"], "volume": 0.9 },
+    "dog_die": { "files": ["audio/sfx/dog_die.wav"], "volume": 0.9 }
   },
 
   "music": {
