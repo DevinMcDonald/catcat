@@ -12,10 +12,9 @@
     },
     "mouse_die": {
       "files": [
-        "audio/sfx/mouse_die.wav",
-        "audio/sfx/mouse_die1.wav",
-        "audio/sfx/mouse_die2.wav",
-        "audio/sfx/mouse_die3.wav"
+        "audio/sfx/mouse_click.wav",
+        "audio/sfx/mouse_click1.wav",
+        "audio/sfx/mouse_click2.wav"
       ],
       "volume": 0.9
     },

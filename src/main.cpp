@@ -187,6 +187,7 @@ public:
   void ResetState() {
     wave_active_ = false;
     game_over_ = false;
+    victory_ = false;
     wave_ = 0;
     map_index_ = 0;
     kibbles_ = dev_mode_ ? 1000000 : kStartingKibbles;
@@ -511,7 +512,7 @@ public:
         warning_text_.clear();
       }
     }
-    if (game_over_) {
+    if (game_over_ || victory_) {
       return;
     }
 
@@ -536,15 +537,16 @@ public:
   }
 
   bool HandleEvent(const ftxui::Event &event) {
-    if (game_over_ && event != ftxui::Event::Custom) {
+    if ((game_over_ || victory_) && event != ftxui::Event::Custom) {
       ResetState();
       return true;
     }
 
-    if (!game_over_ && intro_stage_ != IntroStage::Playing &&
+    if (!game_over_ && !victory_ && intro_stage_ != IntroStage::Playing &&
         event != ftxui::Event::Custom) {
-      intro_stage_ = intro_stage_ == IntroStage::Title ? IntroStage::Instructions
-                                                       : IntroStage::Playing;
+      intro_stage_ = intro_stage_ == IntroStage::Title
+                         ? IntroStage::Instructions
+                         : IntroStage::Playing;
       return true;
     }
 
@@ -724,6 +726,31 @@ public:
                         }) |
                         ftxui::center);
       board = ftxui::dbox({board, overlay});
+    } else if (victory_) {
+      auto banner = ftxui::vbox({
+
+                        // clang-format off
+                  ftxui::text("                      .o8                              .o8   "),
+                  ftxui::text(" .ooooo.   .oooo.   .o888oo       .ooooo.   .oooo.   .o888oo "),
+                  ftxui::text("d88' `\"Y8 `P  )88b    888        d88' `\"Y8 `P  )88b    888   "),
+                  ftxui::text("888        .oP\"888    888        888        .oP\"888    888   "),
+                  ftxui::text("888   .o8 d8(  888    888 .      888   .o8 d8(  888    888 . "),
+                  ftxui::text("`Y8bod8P' `Y888\"\"8o   \"888\"      `Y8bod8P' `Y888\"\"8o   \"888\" "),
+                  ftxui::text(""),
+                  ftxui::text("                V I C T O R Y "),
+                  ftxui::text(""),
+
+                        // clang-format on
+                    }) |
+                    color(ftxui::Color::GreenLight) |
+                    bgcolor(ftxui::Color::DarkBlue) | bold | ftxui::center;
+      auto msg = text("You cleared every map! Press any key to play again.") |
+                 color(ftxui::Color::GreenLight) | ftxui::center;
+      auto overlay =
+          ftxui::center(ftxui::vbox({ftxui::filler(), banner | border, msg,
+                                     ftxui::filler()}) |
+                        ftxui::center | bgcolor(ftxui::Color::Black));
+      board = ftxui::dbox({board, overlay});
     } else if (intro_stage_ == IntroStage::Title) {
       auto title =
           // clang-format off
@@ -751,28 +778,29 @@ public:
       auto subtitle = ftxui::text("don't let the vermin into your den!") |
                       color(ftxui::Color::YellowLight) | ftxui::center;
       auto overlay = ftxui::center(
-          ftxui::vbox(
-              {ftxui::filler(), title | border | bgcolor(ftxui::Color::Blue3),
-               subtitle, ftxui::filler()}) |
+          ftxui::vbox({ftxui::filler(),
+                       title | border | bgcolor(ftxui::Color::Blue3), subtitle,
+                       ftxui::filler()}) |
           ftxui::center | bgcolor(ftxui::Color::DarkBlue));
       board = ftxui::dbox({board, overlay});
     } else if (intro_stage_ == IntroStage::Instructions) {
-      auto card = ftxui::vbox({
-                      text("how to play") | bold | color(ftxui::Color::YellowLight),
-                      separator(),
-                      text("Place cats with space/c. Start waves with n."),
-                      text("Earn kibbles, buy more cats, upgrade/sell."),
-                      text("Keep vermin from reaching your burrow."),
-                      text("Press h any time for the controls menu."),
-                      separator(),
-                      text("press any key to begin") |
-                          color(ftxui::Color::YellowLight) | bold,
-                  }) |
-                  bgcolor(ftxui::Color::DarkBlue) | border |
-                  color(ftxui::Color::White) | ftxui::center;
-      auto overlay = ftxui::center(ftxui::vbox(
-                                       {ftxui::filler(), card, ftxui::filler()}) |
-                                   ftxui::center);
+      auto card =
+          ftxui::vbox({
+              text("how to play") | bold | color(ftxui::Color::YellowLight),
+              separator(),
+              text("Place cats with space/c. Start waves with n."),
+              text("Earn kibbles, buy more cats, upgrade/sell."),
+              text("Keep vermin from reaching your burrow."),
+              text("Press h any time for the controls menu."),
+              separator(),
+              text("press any key to begin") |
+                  color(ftxui::Color::YellowLight) | bold,
+          }) |
+          bgcolor(ftxui::Color::DarkBlue) | border |
+          color(ftxui::Color::White) | ftxui::center;
+      auto overlay =
+          ftxui::center(ftxui::vbox({ftxui::filler(), card, ftxui::filler()}) |
+                        ftxui::center);
       board = ftxui::dbox({board, overlay});
     }
     auto stats = RenderStats();
@@ -1194,6 +1222,14 @@ private:
     kibbles_ += 20 + wave_ * 3;
 
     if (wave_ % 10 == 0) {
+      const bool last_map = map_index_ == static_cast<int>(maps_.size()) - 1;
+      if (last_map) {
+        victory_ = true;
+        auto_waves_ = false;
+        wave_active_ = false;
+        SetMusic(-1);
+        return;
+      }
       AdvanceMap();
     }
 
@@ -1240,9 +1276,9 @@ private:
     }
     if (def.type == Tower::Type::Catatonic &&
         CatatonicConflict(cursor_, def.size, def.type, def.range, false)) {
-      ShowWarning(
-          "Can't place two sleeping cats within range of each other.\nThey might wake each other up!",
-          4.0F);
+      ShowWarning("Can't place two sleeping cats within range of each "
+                  "other.\nThey might wake each other up!",
+                  4.0F);
       return;
     }
     if (!CanPlace(cursor_, def.size, def.type, def.range, false)) {
@@ -1587,9 +1623,9 @@ private:
     auto t = held_tower_->tower;
     if (t.type == Tower::Type::Catatonic &&
         CatatonicConflict(cursor_, t.size, t.type, t.range, t.upgraded)) {
-      ShowWarning(
-          "Can't place two sleeping cats within range of each other.\nThey might wake each other up!",
-          4.0F);
+      ShowWarning("Can't place two sleeping cats within range of each "
+                  "other.\nThey might wake each other up!",
+                  4.0F);
       return;
     }
     if (!CanPlace(cursor_, t.size, t.type, t.range, t.upgraded)) {
@@ -2483,6 +2519,7 @@ private:
   bool dev_mode_ = false;
   enum class IntroStage { Title, Instructions, Playing };
   IntroStage intro_stage_ = IntroStage::Title;
+  bool victory_ = false;
   std::string warning_text_;
   float warning_timer_ = 0.0F;
   int map_index_ = 0;
