@@ -42,6 +42,9 @@ cmake -S . -B build
 cmake --build build
 ./build/catcat           # normal
 ./build/catcat --dev     # dev mode (unlocks, lots of kibbles)
+# Packaging: the build now also drops `build/catcat_bundle.zip` with the binary,
+# `audio.json`, and the `audio/` folder. Re-run `cmake --build build --target package_catcat`
+# if you want to refresh the bundle without a full rebuild.
 ```
 
 ### Dependencies

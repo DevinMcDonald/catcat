@@ -59,3 +59,23 @@ else()
     ${CMAKE_BINARY_DIR}/miniaudio_header
     ${ftxui_SOURCE_DIR}/include)
 endif()
+
+set(CATCAT_PACKAGE_DIR ${CMAKE_BINARY_DIR}/catcat_package)
+file(GLOB_RECURSE CATCAT_AUDIO_FILES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/audio/*)
+
+add_custom_command(
+  OUTPUT ${CMAKE_BINARY_DIR}/catcat_bundle.zip
+  COMMAND ${CMAKE_COMMAND} -E rm -rf ${CATCAT_PACKAGE_DIR}
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${CATCAT_PACKAGE_DIR}
+  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:catcat> ${CATCAT_PACKAGE_DIR}/
+  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/audio.json ${CATCAT_PACKAGE_DIR}/
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/audio ${CATCAT_PACKAGE_DIR}/audio
+  COMMAND ${CMAKE_COMMAND} -E chdir ${CATCAT_PACKAGE_DIR}
+    ${CMAKE_COMMAND} -E tar cf ${CMAKE_BINARY_DIR}/catcat_bundle.zip --format=zip -- .
+  DEPENDS catcat ${CMAKE_SOURCE_DIR}/audio.json ${CATCAT_AUDIO_FILES}
+  BYPRODUCTS ${CMAKE_BINARY_DIR}/catcat_bundle.zip
+  COMMENT "Creating catcat_bundle.zip with executable and audio assets"
+  VERBATIM
+)
+
+add_custom_target(package_catcat ALL DEPENDS ${CMAKE_BINARY_DIR}/catcat_bundle.zip)
