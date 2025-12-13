@@ -60,6 +60,7 @@ constexpr float kGalacticVoidChance = 0.20F;
 constexpr float kGalacticVoidBackstep = 6.0F;
 constexpr float kKittyJumpBonusRange = 1.5F; // extra reach for upgraded jumps
 
+
 struct UpdatePrefs {
   std::string skip_version;
 };
@@ -182,6 +183,30 @@ float DistanceSquared(const Vec2 &a, const Position &b) {
   const float dx = a.x - static_cast<float>(b.x);
   const float dy = a.y - static_cast<float>(b.y);
   return dx * dx + dy * dy;
+}
+
+std::vector<Position> KittyOverlayCells(const Vec2 &center) {
+  std::vector<Position> cells;
+  const std::array<std::pair<int, int>, 4> dirs = {
+      std::pair<int, int>{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+  for (const auto &[px, py] : dirs) {
+    const int perp_x = -py;
+    const int perp_y = px;
+    const std::array<int, 3> offs = { -1, 0, 1 }; // overlapping 2-wide bands
+    for (int step = 1; step <= 3; ++step) {
+      for (int off : offs) {
+        const int gx = static_cast<int>(std::round(center.x)) +
+                       px * step + perp_x * off;
+        const int gy = static_cast<int>(std::round(center.y)) +
+                       py * step + perp_y * off;
+        if (gx < 0 || gy < 0 || gx >= kBoardWidth || gy >= kBoardHeight) {
+          continue;
+        }
+        cells.push_back({gx, gy});
+      }
+    }
+  }
+  return cells;
 }
 
 ftxui::Color BlendColor(const ftxui::Color &base, const ftxui::Color &overlay,
@@ -384,7 +409,7 @@ public:
 
     std::vector<Position> area_cells;
     for (int step = 1; step <= 3; ++step) { // depth 3
-      for (int off = -1; off <= 0; ++off) { // width 2
+      for (int off : {-1, 0, 1}) { // overlapping 2-wide bands
         const int gx = static_cast<int>(std::round(center.x)) +
                        primary_x * step + perp_x * off;
         const int gy = static_cast<int>(std::round(center.y)) +
@@ -2167,6 +2192,12 @@ private:
         kBoardHeight, std::vector<bool>(kBoardWidth, false));
     std::vector<std::vector<bool>> range_hint_preview(
         kBoardHeight, std::vector<bool>(kBoardWidth, false));
+    auto display_range = [&](const Tower &t) {
+      if (t.type == Tower::Type::Kitty && t.upgraded) {
+        return t.range + kKittyJumpBonusRange;
+      }
+      return t.range;
+    };
     if (show_overlay) {
       for (const auto &t : towers_) {
         const auto def = GetDef(t.type);
@@ -2174,10 +2205,22 @@ private:
           continue;
         }
         const auto center = TowerCenter(t);
+        if (t.type == Tower::Type::Kitty && !t.upgraded) {
+          const auto cells = KittyOverlayCells(center);
+          for (const auto &cell : cells) {
+            if (cell.x < 0 || cell.y < 0 || cell.x >= kBoardWidth ||
+                cell.y >= kBoardHeight) {
+              continue;
+            }
+            range_hint_base[static_cast<size_t>(cell.y)]
+                           [static_cast<size_t>(cell.x)] = true;
+          }
+          continue;
+        }
         for (int y = 0; y < kBoardHeight; ++y) {
           for (int x = 0; x < kBoardWidth; ++x) {
             Position cell{x, y};
-            if (InRange(center, cell, t.range)) {
+            if (InRange(center, cell, display_range(t))) {
               range_hint_base[static_cast<size_t>(y)][static_cast<size_t>(x)] =
                   true;
             }
@@ -2191,12 +2234,24 @@ private:
                 (static_cast<float>(preview_def.size) - 1.0F) / 2.0F,
             static_cast<float>(cursor_.y) +
                 (static_cast<float>(preview_def.size) - 1.0F) / 2.0F};
-        for (int y = 0; y < kBoardHeight; ++y) {
-          for (int x = 0; x < kBoardWidth; ++x) {
-            Position cell{x, y};
-            if (InRange(center, cell, preview_def.range)) {
-              range_hint_preview[static_cast<size_t>(y)]
-                                [static_cast<size_t>(x)] = true;
+        if (preview_def.type == Tower::Type::Kitty) {
+          const auto cells = KittyOverlayCells(center);
+          for (const auto &cell : cells) {
+            if (cell.x < 0 || cell.y < 0 || cell.x >= kBoardWidth ||
+                cell.y >= kBoardHeight) {
+              continue;
+            }
+            range_hint_preview[static_cast<size_t>(cell.y)]
+                              [static_cast<size_t>(cell.x)] = true;
+          }
+        } else {
+          for (int y = 0; y < kBoardHeight; ++y) {
+            for (int x = 0; x < kBoardWidth; ++x) {
+              Position cell{x, y};
+              if (InRange(center, cell, preview_def.range)) {
+                range_hint_preview[static_cast<size_t>(y)]
+                                  [static_cast<size_t>(x)] = true;
+              }
             }
           }
         }
@@ -2372,12 +2427,29 @@ private:
     if (show_overlay) {
       const TowerDef preview_def_place = GetDef(
           held_tower_.has_value() ? held_tower_->tower.type : selected_type_);
+      const bool preview_is_kitty = preview_def_place.type == Tower::Type::Kitty;
       const bool can_place_preview =
           cursor_.x >= 0 && cursor_.y >= 0 &&
           cursor_.x + preview_def_place.size - 1 < kBoardWidth &&
           cursor_.y + preview_def_place.size - 1 < kBoardHeight &&
           !OccupiesPath(cursor_, preview_def_place.size) &&
           !OverlapsTower(cursor_, preview_def_place.size);
+      if (preview_is_kitty) {
+        const Vec2 center{
+            static_cast<float>(cursor_.x) +
+                (static_cast<float>(preview_def_place.size) - 1.0F) / 2.0F,
+            static_cast<float>(cursor_.y) +
+                (static_cast<float>(preview_def_place.size) - 1.0F) / 2.0F};
+        const auto cells = KittyOverlayCells(center);
+        for (const auto &cell : cells) {
+          if (cell.x < 0 || cell.y < 0 || cell.x >= kBoardWidth ||
+              cell.y >= kBoardHeight) {
+            continue;
+          }
+          range_hint_preview[static_cast<size_t>(cell.y)]
+                            [static_cast<size_t>(cell.x)] = true;
+        }
+      }
       for (int dy = 0; dy < preview_def_place.size; ++dy) {
         for (int dx = 0; dx < preview_def_place.size; ++dx) {
           const int gx = cursor_.x + dx;
