@@ -285,7 +285,7 @@ TowerDef GetDef(Tower::Type type) {
   case Tower::Type::Catatonic:
     return {type, "Catatonic", 500, 2, 3.2F, 2.2F, true, 1};
   case Tower::Type::Galactic:
-    return {type, "Galacticat", 1000, 9, 7.5F, 2.5F, false, 1};
+    return {type, "Galacticat", 1000, 9, 7.5F, 2.5F, true, 1};
   }
   return {Tower::Type::Default, "Default Cat", 35, 3, 3.5F, 0.85F, true, 1};
 }
@@ -1805,6 +1805,8 @@ private:
     t.upgraded = true;
     if (t.type == Tower::Type::Fat) {
       t.range += 1.0F;
+    } else if (t.type == Tower::Type::Default) {
+      t.range += 2.0F;
     }
     Sfx("unlock");
   }
