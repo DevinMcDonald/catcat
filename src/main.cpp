@@ -12,6 +12,7 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <future>
 #include <optional>
 #include <random>
 #include <sstream>
@@ -112,42 +113,67 @@ bool HasNetworkConnectivity() {
   return ret == 0;
 }
 
+std::optional<std::string> StableVersionFromJson(const std::string &data) {
+  const std::string key = "\"stable\"";
+  const auto key_pos = data.find(key);
+  if (key_pos == std::string::npos)
+    return std::nullopt;
+  const auto colon_pos = data.find(':', key_pos);
+  if (colon_pos == std::string::npos)
+    return std::nullopt;
+  const auto quote_start = data.find('"', colon_pos);
+  if (quote_start == std::string::npos)
+    return std::nullopt;
+  const auto quote_end = data.find('"', quote_start + 1);
+  if (quote_end == std::string::npos || quote_end <= quote_start + 1)
+    return std::nullopt;
+  return data.substr(quote_start + 1, quote_end - quote_start - 1);
+}
+
+std::optional<std::string> FetchLatestForCmd(const std::string &cmd) {
+  FILE *pipe = popen(cmd.c_str(), "r");
+  if (!pipe) {
+    return std::nullopt;
+  }
+  std::string data;
+  char buffer[512];
+  while (true) {
+    size_t n = fread(buffer, 1, sizeof(buffer), pipe);
+    if (n == 0)
+      break;
+    data.append(buffer, buffer + n);
+  }
+  pclose(pipe);
+  return StableVersionFromJson(data);
+}
+
 std::optional<std::string> DetectLatestViaBrew() {
+  const auto start_time = std::chrono::steady_clock::now();
+  const auto overall_timeout = std::chrono::seconds(3);
+
   if (!HasNetworkConnectivity()) {
     return std::nullopt;
   }
+
   const std::array<std::string, 2> cmds = {
       "brew info --json=v2 devinmcdonald/catcat/catcat 2>/dev/null",
       "brew info --json=v2 catcat 2>/dev/null",
   };
   for (const auto &cmd : cmds) {
-    FILE *pipe = popen(cmd.c_str(), "r");
-    if (!pipe) {
-      continue;
+    const auto elapsed = std::chrono::steady_clock::now() - start_time;
+    if (elapsed >= overall_timeout) {
+      return std::nullopt;
     }
-    std::string data;
-    char buffer[512];
-    while (true) {
-      size_t n = fread(buffer, 1, sizeof(buffer), pipe);
-      if (n == 0)
-        break;
-      data.append(buffer, buffer + n);
+    const auto remaining = overall_timeout - elapsed;
+    auto fut =
+        std::async(std::launch::async, FetchLatestForCmd, std::cref(cmd));
+    if (fut.wait_for(remaining) != std::future_status::ready) {
+      return std::nullopt;
     }
-    pclose(pipe);
-    const std::string key = "\"stable\"";
-    const auto key_pos = data.find(key);
-    if (key_pos == std::string::npos)
-      continue;
-    const auto colon_pos = data.find(':', key_pos);
-    if (colon_pos == std::string::npos)
-      continue;
-    const auto quote_start = data.find('"', colon_pos);
-    if (quote_start == std::string::npos)
-      continue;
-    const auto quote_end = data.find('"', quote_start + 1);
-    if (quote_end == std::string::npos || quote_end <= quote_start + 1)
-      continue;
-    return data.substr(quote_start + 1, quote_end - quote_start - 1);
+    auto result = fut.get();
+    if (result.has_value() && !result->empty()) {
+      return result;
+    }
   }
   return std::nullopt;
 }
@@ -161,7 +187,8 @@ UpdateAction CheckForUpdates(bool interactive_prompt = true,
   if (!latest.has_value() || latest->empty()) {
     if (show_up_to_date) {
       std::cout << "catcat " << current
-                << " (could not determine latest; ensure Homebrew tap installed)\n";
+                << " (could not determine latest; check internet and run "
+                   "brew update)\n";
     }
     return UpdateAction::Continue;
   }
@@ -185,7 +212,7 @@ UpdateAction CheckForUpdates(bool interactive_prompt = true,
   std::cout << "\nA new catcat version is available.\n"
             << "Current: " << current << "\n"
             << "Latest : " << *latest << "\n"
-            << "[u]pdate now (brew upgrade catcat), [s]kip once, [k] skip this version: "
+            << "[u]pdate now (brew update && brew upgrade catcat), [s]kip once, [k] skip this version: "
             << std::flush;
   std::string choice;
   std::getline(std::cin, choice);
