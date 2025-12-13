@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -106,43 +107,67 @@ void SavePrefs(const UpdatePrefs &prefs) {
 }
 
 std::optional<std::string> DetectLatestViaBrew() {
-  FILE *pipe = popen("brew info --json=v2 devinmcdonald/catcat/catcat 2>/dev/null", "r");
-  if (!pipe) {
-    return std::nullopt;
+  const std::array<std::string, 2> cmds = {
+      "brew info --json=v2 devinmcdonald/catcat/catcat 2>/dev/null",
+      "brew info --json=v2 catcat 2>/dev/null",
+  };
+  for (const auto &cmd : cmds) {
+    FILE *pipe = popen(cmd.c_str(), "r");
+    if (!pipe) {
+      continue;
+    }
+    std::string data;
+    char buffer[512];
+    while (true) {
+      size_t n = fread(buffer, 1, sizeof(buffer), pipe);
+      if (n == 0)
+        break;
+      data.append(buffer, buffer + n);
+    }
+    pclose(pipe);
+    const std::string key = "\"stable\"";
+    const auto key_pos = data.find(key);
+    if (key_pos == std::string::npos)
+      continue;
+    const auto colon_pos = data.find(':', key_pos);
+    if (colon_pos == std::string::npos)
+      continue;
+    const auto quote_start = data.find('"', colon_pos);
+    if (quote_start == std::string::npos)
+      continue;
+    const auto quote_end = data.find('"', quote_start + 1);
+    if (quote_end == std::string::npos || quote_end <= quote_start + 1)
+      continue;
+    return data.substr(quote_start + 1, quote_end - quote_start - 1);
   }
-  std::string data;
-  char buffer[512];
-  while (true) {
-    size_t n = fread(buffer, 1, sizeof(buffer), pipe);
-    if (n == 0)
-      break;
-    data.append(buffer, buffer + n);
-  }
-  pclose(pipe);
-  const std::string key = "\"stable\":\"";
-  const auto pos = data.find(key);
-  if (pos == std::string::npos) {
-    return std::nullopt;
-  }
-  const auto start = pos + key.size();
-  const auto end = data.find('"', start);
-  if (end == std::string::npos || end <= start) {
-    return std::nullopt;
-  }
-  return data.substr(start, end - start);
+  return std::nullopt;
 }
 
 enum class UpdateAction { Continue, Exit };
 
-UpdateAction CheckForUpdates() {
+UpdateAction CheckForUpdates(bool interactive_prompt = true,
+                             bool show_up_to_date = false) {
   const std::string current = kCurrentVersion;
   const auto latest = DetectLatestViaBrew();
-  if (!latest.has_value()) {
+  if (!latest.has_value() || latest->empty()) {
+    if (show_up_to_date) {
+      std::cout << "catcat " << current
+                << " (could not determine latest; ensure Homebrew tap installed)\n";
+    }
     return UpdateAction::Continue;
   }
-  if (latest->empty() || *latest == current) {
+  if (*latest == current) {
+    if (show_up_to_date) {
+      std::cout << "catcat " << current << " (up to date)\n";
+    }
     return UpdateAction::Continue;
   }
+  if (!interactive_prompt) {
+    std::cout << "catcat " << current << " (latest " << *latest
+              << "). Run: brew update && brew upgrade devinmcdonald/catcat/catcat\n";
+    return UpdateAction::Continue;
+  }
+
   UpdatePrefs prefs = LoadPrefs();
   if (!prefs.skip_version.empty() && prefs.skip_version == *latest) {
     return UpdateAction::Continue;
@@ -158,7 +183,7 @@ UpdateAction CheckForUpdates() {
   if (!choice.empty()) {
     const char c = static_cast<char>(std::tolower(choice[0]));
     if (c == 'u') {
-      std::cout << "Run: brew upgrade devinmcdonald/catcat/catcat\n";
+      std::cout << "Run: brew update && brew upgrade devinmcdonald/catcat/catcat\n";
       return UpdateAction::Exit;
     }
     if (c == 'k') {
@@ -2776,14 +2801,21 @@ private:
 } // namespace
 
 int main(int argc, const char *argv[]) {
-  if (CheckForUpdates() == UpdateAction::Exit) {
-    return 0;
-  }
   bool dev_mode = false;
+  bool show_version = false;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dev") {
       dev_mode = true;
+    } else if (std::string(argv[i]) == "--version") {
+      show_version = true;
     }
+  }
+  if (show_version) {
+    CheckForUpdates(false, true);
+    return 0;
+  }
+  if (CheckForUpdates() == UpdateAction::Exit) {
+    return 0;
   }
   auto screen = ftxui::ScreenInteractive::Fullscreen();
   auto component = ftxui::Make<GameComponent>(screen, dev_mode);

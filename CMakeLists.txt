@@ -5,7 +5,19 @@ project(catcat LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CATCAT_VERSION "0.1.0")
+
+# Derive version from git if available; fallback to 0.1.0.
+execute_process(
+  COMMAND git describe --tags --dirty --always
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE GIT_DESC
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  RESULT_VARIABLE GIT_DESC_RES
+)
+if (NOT GIT_DESC_RES EQUAL 0 OR GIT_DESC STREQUAL "")
+  set(GIT_DESC "0.1.0")
+endif()
+set(CATCAT_VERSION "${GIT_DESC}")
 
 include(FetchContent)
 
@@ -34,6 +46,7 @@ add_executable(catcat src/main.cpp src/audio.cpp)
 target_compile_definitions(catcat PRIVATE CATCAT_VERSION="${CATCAT_VERSION}")
 
 target_link_libraries(catcat PRIVATE ftxui::component ftxui::dom ftxui::screen)
+target_compile_definitions(catcat PRIVATE CATCAT_VERSION="${CATCAT_VERSION}")
 
 if(ENABLE_AUDIO)
   set(MINIAUDIO_DIR ${CMAKE_BINARY_DIR}/miniaudio_header)
