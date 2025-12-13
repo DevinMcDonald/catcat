@@ -19,21 +19,11 @@
       "volume": 0.9
     },
     "bigrat_die": {
-      "files": [
-        "audio/sfx/bigrat_die.wav",
-        "audio/sfx/bigrat_die1.wav",
-        "audio/sfx/bigrat_die2.wav",
-        "audio/sfx/bigrat_die3.wav"
-      ],
+      "files": ["audio/sfx/bigrat_die.wav", "audio/sfx/bigrat_die1.wav"],
       "volume": 0.9
     },
     "dog_die": {
-      "files": [
-        "audio/sfx/dog_die.wav",
-        "audio/sfx/dog_die1.wav",
-        "audio/sfx/dog_die2.wav",
-        "audio/sfx/dog_die3.wav"
-      ],
+      "files": ["audio/sfx/dog_die.wav", "audio/sfx/dog_die1.wav"],
       "volume": 0.9
     },
     "tower_default_shoot": {
