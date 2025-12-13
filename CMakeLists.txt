@@ -5,6 +5,7 @@ project(catcat LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CATCAT_VERSION "0.1.0")
 
 include(FetchContent)
 
@@ -30,6 +31,7 @@ if(ENABLE_AUDIO)
 endif()
 
 add_executable(catcat src/main.cpp src/audio.cpp)
+target_compile_definitions(catcat PRIVATE CATCAT_VERSION="${CATCAT_VERSION}")
 
 target_link_libraries(catcat PRIVATE ftxui::component ftxui::dom ftxui::screen)
 
@@ -72,8 +74,9 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/audio ${CATCAT_PACKAGE_DIR}/audio
   COMMAND ${CMAKE_COMMAND} -E chdir ${CATCAT_PACKAGE_DIR}
     ${CMAKE_COMMAND} -E tar cf ${CMAKE_BINARY_DIR}/catcat_bundle.zip --format=zip -- .
+  COMMAND ${CMAKE_COMMAND} -E echo "catcat_bundle.zip SHA256:"
+  COMMAND ${CMAKE_COMMAND} -E sha256sum ${CMAKE_BINARY_DIR}/catcat_bundle.zip
   DEPENDS catcat ${CMAKE_SOURCE_DIR}/audio.json ${CATCAT_AUDIO_FILES}
-  BYPRODUCTS ${CMAKE_BINARY_DIR}/catcat_bundle.zip
   COMMENT "Creating catcat_bundle.zip with executable and audio assets"
   VERBATIM
 )

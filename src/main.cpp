@@ -3,7 +3,12 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
 #include <functional>
+#include <fstream>
+#include <iostream>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -35,6 +40,11 @@ using ftxui::vbox;
 
 namespace {
 
+#ifndef CATCAT_VERSION
+#define CATCAT_VERSION "0.0.0-dev"
+#endif
+
+constexpr const char *kCurrentVersion = CATCAT_VERSION;
 constexpr int kBoardWidth = 48;
 constexpr int kBoardHeight = 28;
 constexpr int kTickMs = 16; // ~60 FPS
@@ -49,6 +59,114 @@ constexpr float kCatSleepCap = 5.0F;
 constexpr float kGalacticVoidChance = 0.20F;
 constexpr float kGalacticVoidBackstep = 6.0F;
 constexpr float kKittyJumpBonusRange = 1.5F; // extra reach for upgraded jumps
+
+struct UpdatePrefs {
+  std::string skip_version;
+};
+
+std::filesystem::path PrefsPath() {
+  std::filesystem::path home = std::getenv("HOME") ? std::getenv("HOME") : "";
+  if (home.empty()) {
+    home = ".";
+  }
+  return home / ".config" / "catcat" / "update_prefs.cfg";
+}
+
+UpdatePrefs LoadPrefs() {
+  UpdatePrefs prefs;
+  const auto path = PrefsPath();
+  std::ifstream in(path);
+  if (!in) {
+    return prefs;
+  }
+  std::string line;
+  while (std::getline(in, line)) {
+    const auto pos = line.find('=');
+    if (pos == std::string::npos)
+      continue;
+    const auto key = line.substr(0, pos);
+    const auto value = line.substr(pos + 1);
+    if (key == "skip_version") {
+      prefs.skip_version = value;
+    }
+  }
+  return prefs;
+}
+
+void SavePrefs(const UpdatePrefs &prefs) {
+  const auto path = PrefsPath();
+  std::error_code ec;
+  std::filesystem::create_directories(path.parent_path(), ec);
+  std::ofstream out(path, std::ios::trunc);
+  if (!out) {
+    return;
+  }
+  out << "skip_version=" << prefs.skip_version << "\n";
+}
+
+std::optional<std::string> DetectLatestViaBrew() {
+  FILE *pipe = popen("brew info --json=v2 devinmcdonald/catcat/catcat 2>/dev/null", "r");
+  if (!pipe) {
+    return std::nullopt;
+  }
+  std::string data;
+  char buffer[512];
+  while (true) {
+    size_t n = fread(buffer, 1, sizeof(buffer), pipe);
+    if (n == 0)
+      break;
+    data.append(buffer, buffer + n);
+  }
+  pclose(pipe);
+  const std::string key = "\"stable\":\"";
+  const auto pos = data.find(key);
+  if (pos == std::string::npos) {
+    return std::nullopt;
+  }
+  const auto start = pos + key.size();
+  const auto end = data.find('"', start);
+  if (end == std::string::npos || end <= start) {
+    return std::nullopt;
+  }
+  return data.substr(start, end - start);
+}
+
+enum class UpdateAction { Continue, Exit };
+
+UpdateAction CheckForUpdates() {
+  const std::string current = kCurrentVersion;
+  const auto latest = DetectLatestViaBrew();
+  if (!latest.has_value()) {
+    return UpdateAction::Continue;
+  }
+  if (latest->empty() || *latest == current) {
+    return UpdateAction::Continue;
+  }
+  UpdatePrefs prefs = LoadPrefs();
+  if (!prefs.skip_version.empty() && prefs.skip_version == *latest) {
+    return UpdateAction::Continue;
+  }
+
+  std::cout << "\nA new catcat version is available.\n"
+            << "Current: " << current << "\n"
+            << "Latest : " << *latest << "\n"
+            << "[u]pdate now (brew upgrade catcat), [s]kip once, [k] skip this version: "
+            << std::flush;
+  std::string choice;
+  std::getline(std::cin, choice);
+  if (!choice.empty()) {
+    const char c = static_cast<char>(std::tolower(choice[0]));
+    if (c == 'u') {
+      std::cout << "Run: brew upgrade devinmcdonald/catcat/catcat\n";
+      return UpdateAction::Exit;
+    }
+    if (c == 'k') {
+      prefs.skip_version = *latest;
+      SavePrefs(prefs);
+    }
+  }
+  return UpdateAction::Continue;
+}
 
 struct Position {
   int x = 0;
@@ -2584,6 +2702,9 @@ private:
 } // namespace
 
 int main(int argc, const char *argv[]) {
+  if (CheckForUpdates() == UpdateAction::Exit) {
+    return 0;
+  }
   bool dev_mode = false;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dev") {
