@@ -3,7 +3,7 @@
 A colorful, fast-paced terminal tower defense inspired by Bloons, built with [FTXUI](https://github.com/ArthurSonzogni/ftxui) and modern C++20. Deploy an ever-growing roster of cats to stop waves of mice, rats, big rats, and the occasional terrifying dog from reaching your burrow.
 
 ## Installation
-- Install [homebrew]([https://github.com/ArthurSonzogni/ftxui](https://brew.sh/)
+- Install [homebrew](https://brew.sh/)
 - Open terminal
 - Run `brew update`
 - Run `brew install DevinMcDonald/catcat/catcat`  
