@@ -1,11 +1,11 @@
-#include "version.h"
+#include "version/version.h"
 
 #include <cctype>
 #include <iostream>
 #include <optional>
 #include <string>
 
-#include "update_checker.h"
+#include "version/update_checker.h"
 
 std::string CurrentVersion() { return CATCAT_VERSION; }
 

@@ -24,9 +24,10 @@ include(FetchContent)
 
 option(ENABLE_AUDIO "Enable audio (miniaudio)" ON)
 
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/generated/version)
 configure_file(
-  ${CMAKE_SOURCE_DIR}/src/version.h.in
-  ${CMAKE_BINARY_DIR}/generated/version.h
+  ${CMAKE_SOURCE_DIR}/src/version/version.h.in
+  ${CMAKE_BINARY_DIR}/generated/version/version.h
   @ONLY
 )
 
@@ -49,10 +50,19 @@ if(ENABLE_AUDIO)
   FetchContent_MakeAvailable(nlohmann_json)
 endif()
 
-add_executable(catcat src/main.cpp src/audio.cpp src/version.cpp src/update_checker.cpp)
+add_executable(catcat
+  src/main.cpp
+  src/game/game.cpp
+  src/audio/audio.cpp
+  src/version/version.cpp
+  src/version/update_checker.cpp
+)
 
 target_link_libraries(catcat PRIVATE ftxui::component ftxui::dom ftxui::screen)
-target_include_directories(catcat PRIVATE ${CMAKE_BINARY_DIR}/generated)
+target_include_directories(catcat PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_BINARY_DIR}/generated
+)
 
 if(ENABLE_AUDIO)
   set(MINIAUDIO_DIR ${CMAKE_BINARY_DIR}/miniaudio_header)
