@@ -1,0 +1,14 @@
+#pragma once
+
+#define CATCAT_VERSION "@CATCAT_VERSION@"
+
+#include <string>
+
+enum class UpdateAction { Continue, Exit };
+
+// Returns the build/version string injected by CMake.
+std::string CurrentVersion();
+
+// Perform Homebrew version check and optional prompt.
+UpdateAction CheckForUpdates(bool interactive_prompt = true,
+                             bool show_up_to_date = false);

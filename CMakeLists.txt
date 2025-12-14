@@ -5,6 +5,7 @@ project(catcat LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Derive version from git if available; fallback to 0.1.0.
 execute_process(
@@ -22,6 +23,12 @@ set(CATCAT_VERSION "${GIT_DESC}")
 include(FetchContent)
 
 option(ENABLE_AUDIO "Enable audio (miniaudio)" ON)
+
+configure_file(
+  ${CMAKE_SOURCE_DIR}/src/version.h.in
+  ${CMAKE_BINARY_DIR}/generated/version.h
+  @ONLY
+)
 
 FetchContent_Declare(
   ftxui
@@ -42,11 +49,10 @@ if(ENABLE_AUDIO)
   FetchContent_MakeAvailable(nlohmann_json)
 endif()
 
-add_executable(catcat src/main.cpp src/audio.cpp)
-target_compile_definitions(catcat PRIVATE CATCAT_VERSION="${CATCAT_VERSION}")
+add_executable(catcat src/main.cpp src/audio.cpp src/version.cpp src/update_checker.cpp)
 
 target_link_libraries(catcat PRIVATE ftxui::component ftxui::dom ftxui::screen)
-target_compile_definitions(catcat PRIVATE CATCAT_VERSION="${CATCAT_VERSION}")
+target_include_directories(catcat PRIVATE ${CMAKE_BINARY_DIR}/generated)
 
 if(ENABLE_AUDIO)
   set(MINIAUDIO_DIR ${CMAKE_BINARY_DIR}/miniaudio_header)
