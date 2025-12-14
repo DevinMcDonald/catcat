@@ -64,8 +64,10 @@ constexpr float kKittyJumpBonusRange = 1.5F; // extra reach for upgraded jumps
 
 
 struct UpdatePrefs {
-  std::string skip_version;
+  std::string skip_version; // normalized (leading v/V stripped)
 };
+
+std::string NormalizeVersion(const std::string &v);
 
 std::filesystem::path PrefsPath() {
   std::filesystem::path home = std::getenv("HOME") ? std::getenv("HOME") : "";
@@ -90,7 +92,7 @@ UpdatePrefs LoadPrefs() {
     const auto key = line.substr(0, pos);
     const auto value = line.substr(pos + 1);
     if (key == "skip_version") {
-      prefs.skip_version = value;
+      prefs.skip_version = NormalizeVersion(value);
     }
   }
   return prefs;
@@ -105,6 +107,13 @@ void SavePrefs(const UpdatePrefs &prefs) {
     return;
   }
   out << "skip_version=" << prefs.skip_version << "\n";
+}
+
+std::string NormalizeVersion(const std::string &v) {
+  if (!v.empty() && (v[0] == 'v' || v[0] == 'V')) {
+    return v.substr(1);
+  }
+  return v;
 }
 
 bool HasNetworkConnectivity() {
@@ -182,35 +191,37 @@ enum class UpdateAction { Continue, Exit };
 
 UpdateAction CheckForUpdates(bool interactive_prompt = true,
                              bool show_up_to_date = false) {
-  const std::string current = kCurrentVersion;
+  const std::string current_raw = kCurrentVersion;
+  const std::string current = NormalizeVersion(current_raw);
   const auto latest = DetectLatestViaBrew();
   if (!latest.has_value() || latest->empty()) {
     if (show_up_to_date) {
-      std::cout << "catcat " << current
+      std::cout << "catcat " << current_raw
                 << " (could not determine latest; check internet and run "
                    "brew update)\n";
     }
     return UpdateAction::Continue;
   }
-  if (*latest == current) {
+  const std::string latest_norm = NormalizeVersion(*latest);
+  if (latest_norm == current) {
     if (show_up_to_date) {
-      std::cout << "catcat " << current << " (up to date)\n";
+      std::cout << "catcat " << current_raw << " (up to date)\n";
     }
     return UpdateAction::Continue;
   }
   if (!interactive_prompt) {
-    std::cout << "catcat " << current << " (latest " << *latest
+    std::cout << "catcat " << current_raw << " (latest " << *latest
               << "). Run: brew update && brew upgrade devinmcdonald/catcat/catcat\n";
     return UpdateAction::Continue;
   }
 
   UpdatePrefs prefs = LoadPrefs();
-  if (!prefs.skip_version.empty() && prefs.skip_version == *latest) {
+  if (!prefs.skip_version.empty() && prefs.skip_version == latest_norm) {
     return UpdateAction::Continue;
   }
 
   std::cout << "\nA new catcat version is available.\n"
-            << "Current: " << current << "\n"
+            << "Current: " << current_raw << "\n"
             << "Latest : " << *latest << "\n"
             << "[u]pdate now (brew update && brew upgrade catcat), [s]kip once, [k] skip this version: "
             << std::flush;
@@ -223,7 +234,7 @@ UpdateAction CheckForUpdates(bool interactive_prompt = true,
       return UpdateAction::Exit;
     }
     if (c == 'k') {
-      prefs.skip_version = *latest;
+      prefs.skip_version = latest_norm;
       SavePrefs(prefs);
     }
   }
