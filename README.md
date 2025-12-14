@@ -8,6 +8,7 @@ A colorful, fast-paced terminal tower defense inspired by Bloons, built with [FT
 - Run `brew update`
 - Run `brew install DevinMcDonald/catcat/catcat`
 - Then, play by running `catcat`
+- *note - you may need to enlarge the text in your terminal if you want to play fullscreen
 
 ## Features
 
