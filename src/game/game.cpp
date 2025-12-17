@@ -48,8 +48,8 @@ constexpr int kStartingLives = 9;
 constexpr float kCatSleepBase = 0.5F;
 constexpr float kCatSleepUpgrade = 1.0F;
 constexpr float kCatSleepCap = 5.0F;
-constexpr float kGalacticVoidChance = 0.20F;
-constexpr float kGalacticVoidBackstep = 6.0F;
+constexpr float kGalacticVoidChance = 0.50;
+constexpr float kGalacticVoidBackstep = 8.0F;
 constexpr float kKittyJumpBonusRange = 1.5F; // extra reach for upgraded jumps
 
 struct Position {
@@ -193,7 +193,7 @@ TowerDef GetDef(Tower::Type type) {
   case Tower::Type::Catatonic:
     return {type, "Catatonic", 500, 2, 3.2F, 2.2F, true, 1};
   case Tower::Type::Galactic:
-    return {type, "Galacticat", 1000, 9, 7.5F, 2.5F, true, 1};
+    return {type, "Galacticat", 800, 20, 7.5F, 2.5F, true, 1};
   }
   return {Tower::Type::Default, "Default Cat", 35, 3, 3.5F, 0.85F, true, 1};
 }
