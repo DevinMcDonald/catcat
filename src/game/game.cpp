@@ -1203,23 +1203,24 @@ private:
     return EnemyType::Rat;
   }
 
-  void ApplyEnemyStats(Enemy &e, int diff) {
+  void ApplyEnemyStats(Enemy &e, const int diff) {
+    const float fDiff = static_cast<float>(diff);
     switch (e.type) {
     case EnemyType::Mouse:
       e.max_hp = 2 + diff * 1;
-      e.speed = (0.95F + diff * 0.05F) * kSpeedFactor;
+      e.speed = (0.95F + fDiff * 0.05F) * kSpeedFactor;
       break;
     case EnemyType::Rat:
-      e.max_hp = 5 + static_cast<int>(diff * 2.5F);
-      e.speed = (0.65F + diff * 0.065F) * kSpeedFactor;
+      e.max_hp = 5 + static_cast<int>(fDiff * 2.5F);
+      e.speed = (0.65F + fDiff * 0.065F) * kSpeedFactor;
       break;
     case EnemyType::BigRat:
       e.max_hp = 15 + diff * 4;
-      e.speed = (0.55F + diff * 0.045F) * kSpeedFactor;
+      e.speed = (0.55F + fDiff * 0.045F) * kSpeedFactor;
       break;
     case EnemyType::Dog:
       e.max_hp = 28 + diff * 6;
-      e.speed = (0.9F + diff * 0.055F) * kSpeedFactor;
+      e.speed = (0.9F + fDiff * 0.055F) * kSpeedFactor;
       break;
     }
     e.hp = e.max_hp;
@@ -1686,7 +1687,8 @@ private:
     }
     const Tower &t = towers_[*idx];
     const auto def = GetDef(t.type);
-    const int refund = static_cast<int>(std::round(def.cost * 0.6F));
+    const int refund =
+        static_cast<int>(std::round(static_cast<float>(def.cost) * 0.6F));
     kibbles_ += refund;
     towers_.erase(towers_.begin() + static_cast<long>(*idx));
     Sfx("sell");
