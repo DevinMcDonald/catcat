@@ -1049,13 +1049,13 @@ private:
         if (t.upgraded) {
           std::vector<std::pair<float, size_t>> sorted;
           const float range2 = t.range * t.range;
-          for (size_t i = 0; i < enemies_.size(); ++i) {
-            if (enemies_[i].hp <= 0)
+          for (size_t j = 0; j < enemies_.size(); ++j) {
+            if (enemies_[j].hp <= 0)
               continue;
-            const auto pos = EnemyCell(enemies_[i]);
+            const auto pos = EnemyCell(enemies_[j]);
             if (DistanceSquared(c, pos) > range2)
               continue;
-            sorted.push_back({enemies_[i].path_progress, i});
+            sorted.push_back({enemies_[j].path_progress, j});
           }
           if (!sorted.empty()) {
             std::sort(sorted.begin(), sorted.end(),
