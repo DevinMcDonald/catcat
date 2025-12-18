@@ -133,12 +133,12 @@
     },
     "map_8": {
       "intro": [],
-      "files": ["audio/music/soft.mp3"],
+      "files": ["audio/music/planesntrains.mp3"],
       "volume": 0.8,
-      "loop_start": 0.0,
-      "loop_end": -1.0,
-      "intro_start": -1.0,
-      "intro_end": -1.0
+      "loop_start": 19.592,
+      "loop_end": 58.776,
+      "intro_start": 0.0,
+      "intro_end": 19.592
     },
     "map_9": {
       "intro": ["audio/music/marios.mp3"],
