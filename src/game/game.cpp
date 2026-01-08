@@ -185,15 +185,15 @@ TowerDef GetDef(Tower::Type type) {
   case Tower::Type::Default:
     return {type, "Default Cat", 35, 3, 4.5F, 0.85F, true, 1};
   case Tower::Type::Fat:
-    return {type, "Fat Cat", 55, 4, 2.4F, 1.4F, true, 2};
+    return {type, "Fat Cat", 35, 4, 2.4F, 1.4F, true, 2};
   case Tower::Type::Kitty:
-    return {type, "Kitty Cat", 100, 3, 3.0F, 1.0F, true, 1};
+    return {type, "Kitty Cat", 50, 3, 3.0F, 1.0F, true, 1};
   case Tower::Type::Thunder:
-    return {type, "Thundercat", 350, 6, 999.0F, 2.6F, false, 1};
+    return {type, "Thundercat", 100, 6, 999.0F, 2.6F, false, 1};
   case Tower::Type::Catatonic:
-    return {type, "Catatonic", 500, 2, 3.2F, 2.2F, true, 1};
+    return {type, "Catatonic", 150, 2, 3.2F, 2.2F, true, 1};
   case Tower::Type::Galactic:
-    return {type, "Galacticat", 800, 20, 7.5F, 2.5F, true, 1};
+    return {type, "Galacticat", 200, 20, 7.5F, 2.5F, true, 1};
   }
   return {Tower::Type::Default, "Default Cat", 35, 3, 3.5F, 0.85F, true, 1};
 }
@@ -1707,7 +1707,7 @@ private:
       return;
     }
     const auto def = GetDef(t.type);
-    const int cost = def.cost * 5;
+    const int cost = def.cost * 2;
     if (kibbles_ < cost) {
       return;
     }
