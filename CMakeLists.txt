@@ -53,6 +53,10 @@ endif()
 add_executable(catcat
   src/main.cpp
   src/game/game.cpp
+  src/game/game_state.cpp
+  src/game/map_path.cpp
+  src/game/tower_combat.cpp
+  src/game/renderer.cpp
   src/audio/audio.cpp
   src/version/version.cpp
   src/version/update_checker.cpp
