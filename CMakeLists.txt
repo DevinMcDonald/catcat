@@ -22,6 +22,13 @@ set(CATCAT_VERSION "${GIT_DESC}")
 
 include(FetchContent)
 
+# pthreads must be set globally before FetchContent so all dependencies
+# (FTXUI, nlohmann_json) also compile with -matomics -mbulk-memory.
+if(EMSCRIPTEN)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+  set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -pthread")
+endif()
+
 option(ENABLE_AUDIO "Enable audio (miniaudio)" ON)
 
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/generated/version)
