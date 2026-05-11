@@ -88,13 +88,47 @@ endif()
 if(MSVC)
   target_compile_options(catcat PRIVATE /W4 /permissive- /Zc:__cplusplus /WX)
 else()
-  target_compile_options(catcat PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror)
+  if(NOT EMSCRIPTEN)
+    target_compile_options(catcat PRIVATE -Wpedantic -Wconversion -Wsign-conversion -Werror)
+  endif()
+  target_compile_options(catcat PRIVATE -Wall -Wextra)
   # Silence warnings from third-party headers we don't control.
   target_include_directories(catcat SYSTEM PRIVATE
     ${CMAKE_BINARY_DIR}/miniaudio_header
     ${ftxui_SOURCE_DIR}/include)
 endif()
 
+if(EMSCRIPTEN)
+  set_target_properties(catcat PROPERTIES SUFFIX ".js")
+
+  # Preload audio assets into the virtual filesystem
+  set(EM_PRELOAD "")
+  if(EXISTS ${CMAKE_SOURCE_DIR}/audio.json)
+    list(APPEND EM_PRELOAD "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/audio.json@audio.json")
+  endif()
+  if(IS_DIRECTORY ${CMAKE_SOURCE_DIR}/audio)
+    list(APPEND EM_PRELOAD "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/audio@audio")
+  endif()
+
+  target_link_options(catcat PRIVATE
+    "SHELL:-sUSE_PTHREADS=1"
+    "SHELL:-sPTHREAD_POOL_SIZE=4"
+    "SHELL:-sALLOW_MEMORY_GROWTH=1"
+    "SHELL:-sAUDIO_WORKLET=1"
+    "SHELL:-sWASM_WORKERS=1"
+    "SHELL:-sENVIRONMENT=web,worker"
+    "SHELL:-sINITIAL_MEMORY=67108864"
+    "SHELL:-sEXIT_RUNTIME=1"
+    "SHELL:-sMODULARIZE=1"
+    "SHELL:-sEXPORT_ES6=1"
+    "SHELL:-sEXPORT_NAME=CatcatModule"
+    "SHELL:-sEXPORTED_FUNCTIONS=_main,_catcat_resize"
+    "SHELL:-sEXPORTED_RUNTIME_METHODS=ccall,FS,callMain"
+    ${EM_PRELOAD}
+  )
+endif()
+
+if(NOT EMSCRIPTEN)
 set(CATCAT_PACKAGE_DIR ${CMAKE_BINARY_DIR}/catcat_package)
 file(GLOB_RECURSE CATCAT_AUDIO_FILES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/audio/*)
 
@@ -115,3 +149,4 @@ add_custom_command(
 )
 
 add_custom_target(package_catcat ALL DEPENDS ${CMAKE_BINARY_DIR}/catcat_bundle.zip)
+endif()
