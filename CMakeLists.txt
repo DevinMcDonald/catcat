@@ -91,6 +91,9 @@ else()
     ${ftxui_SOURCE_DIR}/include)
 endif()
 
+enable_testing()
+add_test(NAME smoke_test COMMAND catcat --version)
+
 set(CATCAT_PACKAGE_DIR ${CMAKE_BINARY_DIR}/catcat_package)
 file(GLOB_RECURSE CATCAT_AUDIO_FILES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/audio/*)
 

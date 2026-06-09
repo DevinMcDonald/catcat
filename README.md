@@ -1,6 +1,18 @@
 # cat cat
 
+[![Build & Test](https://github.com/DevinMcDonald/catcat/actions/workflows/cmake-multi-platform.yml/badge.svg)](https://github.com/DevinMcDonald/catcat/actions/workflows/cmake-multi-platform.yml)
+
 A colorful, fast-paced terminal tower defense inspired by Bloons, built with [FTXUI](https://github.com/ArthurSonzogni/ftxui) and modern C++20. Deploy an ever-growing roster of cats to stop waves of mice, rats, big rats, and the occasional terrifying dog from reaching your burrow.
+
+## CI Pipeline
+
+Every push to `main` and every pull request automatically triggers a build-and-test run across three configurations: Linux/GCC, Linux/Clang, and macOS (Apple Silicon). The badge above shows the current status.
+
+What the pipeline does on each run:
+1. **Configure** — CMake resolves all dependencies (no manual setup needed).
+2. **Compile** — Warnings are errors, so new warnings break the build immediately.
+3. **Test** — A smoke test verifies the binary runs and reports its version correctly.
+4. **Artifact** — A ready-to-run `catcat_bundle.zip` (binary + audio assets) is uploaded and available for download from the [Actions tab](https://github.com/DevinMcDonald/catcat/actions).
 
 ## Installation
 - Install [homebrew](https://brew.sh/)

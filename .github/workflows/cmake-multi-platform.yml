@@ -1,7 +1,8 @@
-# This starter workflow is for a CMake project running on multiple platforms. There is a different starter workflow if you just want a single platform.
-# See: https://github.com/actions/starter-workflows/blob/main/ci/cmake-single-platform.yml
-name: CMake on multiple platforms
+name: Build & Test
 
+# Trigger: run automatically whenever code is pushed to main, or when a pull
+# request targets main. This is the core CI loop — every change gets verified
+# before it can land.
 on:
   push:
     branches: [ "main" ]
@@ -10,41 +11,52 @@ on:
 
 jobs:
   build:
+    # Build matrix: compile on multiple OS/compiler combinations so we catch
+    # platform-specific bugs early instead of after a release.
     runs-on: ${{ matrix.os }}
 
     strategy:
-      # Set fail-fast to false to ensure that feedback is delivered for all matrix combinations. Consider changing this to true when your workflow is stable.
-      fail-fast: false
+      fail-fast: false  # If one platform fails, keep running the others.
 
       matrix:
         include:
+          # Linux — two compilers to catch different classes of warnings/errors.
           - os: ubuntu-latest
             build_type: Release
             c_compiler: gcc
             cpp_compiler: g++
+            artifact_name: catcat-linux-gcc
+
           - os: ubuntu-latest
             build_type: Release
             c_compiler: clang
             cpp_compiler: clang++
+            artifact_name: catcat-linux-clang
+
+          # macOS Apple Silicon
           - os: macos-14
             build_type: Release
             c_compiler: clang
             cpp_compiler: clang++
             architecture: arm64
+            artifact_name: catcat-macos-arm64
 
     steps:
-    - uses: actions/checkout@v4
+    # Step 1 — Download the source code onto the runner machine.
+    - name: Check out source code
+      uses: actions/checkout@v4
 
-    - name: Set reusable strings
-      # Turn repeated input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
+    # Step 2 — Store the build directory path so later steps can reference it.
+    - name: Set build directory path
       id: strings
       shell: bash
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
-    - name: Configure CMake
-      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
+    # Step 3 — Run CMake to configure the build system.
+    # This resolves dependencies (FTXUI, nlohmann_json, miniaudio) and generates
+    # the Makefile/Ninja files used by the next step.
+    - name: Configure (CMake)
       run: |
         ARCH_ARGS=""
         if [ -n "${{ matrix.architecture }}" ]; then
@@ -58,12 +70,23 @@ jobs:
           $ARCH_ARGS \
           -S ${{ github.workspace }}
 
-    - name: Build
-      # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
+    # Step 4 — Compile the project. Warnings are treated as errors (-Werror),
+    # so this fails fast on any new compiler warning introduced by a change.
+    - name: Compile
       run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
 
+    # Step 5 — Run the test suite. --output-on-failure prints test output only
+    # when something breaks, making failures easy to read in the log.
     - name: Test
       working-directory: ${{ steps.strings.outputs.build-output-dir }}
-      # Execute tests defined by the CMake configuration. Note that --build-config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
-      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      run: ctest --build-config ${{ matrix.build_type }}
+      run: ctest --build-config ${{ matrix.build_type }} --output-on-failure
+
+    # Step 6 — Upload the compiled bundle as a downloadable artifact.
+    # Anyone on the team can grab a binary from the Actions tab without
+    # needing to build the project themselves.
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: ${{ steps.strings.outputs.build-output-dir }}/catcat_bundle.zip
+        if-no-files-found: error
