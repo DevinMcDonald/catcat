@@ -2,7 +2,7 @@ CMAKE ?= cmake
 BUILD_DIR ?= build
 BUILD_TYPE ?= Release
 
-.PHONY: all build package clean
+.PHONY: all build package clean test
 
 all: build
 
@@ -14,6 +14,9 @@ build: $(BUILD_DIR)/CMakeCache.txt
 
 package: $(BUILD_DIR)/CMakeCache.txt
 	$(CMAKE) --build $(BUILD_DIR) --target package_catcat
+
+test:
+	build/catcat_tests
 
 clean:
 	@echo "Cleaning up $(BUILD_DIR)"
