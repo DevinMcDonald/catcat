@@ -91,7 +91,9 @@ endif()
 if(MSVC)
   target_compile_options(catcat_lib PRIVATE /W4 /permissive- /Zc:__cplusplus /WX)
 else()
-  target_compile_options(catcat_lib PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror)
+    target_compile_options(catcat_lib PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror
+        -Wno-unused-variable -Wno-unused-parameter)
   target_include_directories(catcat_lib SYSTEM PRIVATE
     ${CMAKE_BINARY_DIR}/miniaudio_header
     ${ftxui_SOURCE_DIR}/include)
