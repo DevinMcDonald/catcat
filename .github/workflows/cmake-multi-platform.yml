@@ -56,7 +56,7 @@ jobs:
     # Step 3 — Run CMake to configure the build system.
     # This resolves dependencies (FTXUI, nlohmann_json, miniaudio) and generates
     # the Makefile/Ninja files used by the next step.
-- name: Configure (CMake)
+    - name: Configure (CMake)
       run: |
         ARCH_ARGS=""
         if [ -n "${{ matrix.architecture }}" ]; then
