@@ -56,17 +56,18 @@ jobs:
     # Step 3 — Run CMake to configure the build system.
     # This resolves dependencies (FTXUI, nlohmann_json, miniaudio) and generates
     # the Makefile/Ninja files used by the next step.
-    - name: Configure (CMake)
+- name: Configure (CMake)
       run: |
         ARCH_ARGS=""
         if [ -n "${{ matrix.architecture }}" ]; then
           ARCH_ARGS="-DCMAKE_OSX_ARCHITECTURES=${{ matrix.architecture }}"
         fi
-
         cmake -B ${{ steps.strings.outputs.build-output-dir }} \
           -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
           -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DENABLE_AUDIO=OFF \
+          -DBUILD_TESTS=ON \
           $ARCH_ARGS \
           -S ${{ github.workspace }}
 

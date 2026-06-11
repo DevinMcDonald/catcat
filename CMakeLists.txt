@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-
 project(catcat LANGUAGES CXX)
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -21,8 +19,8 @@ endif()
 set(CATCAT_VERSION "${GIT_DESC}")
 
 include(FetchContent)
-
 option(ENABLE_AUDIO "Enable audio (miniaudio)" ON)
+option(BUILD_TESTS "Build GoogleTest unit tests" ON)
 
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/generated/version)
 configure_file(
@@ -37,7 +35,6 @@ FetchContent_Declare(
   GIT_TAG v5.0.0
   GIT_SHALLOW TRUE
 )
-
 FetchContent_MakeAvailable(ftxui)
 
 if(ENABLE_AUDIO)
@@ -50,16 +47,26 @@ if(ENABLE_AUDIO)
   FetchContent_MakeAvailable(nlohmann_json)
 endif()
 
-add_executable(catcat
-  src/main.cpp
+if(BUILD_TESTS)
+  FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG        v1.14.0
+    GIT_SHALLOW    TRUE
+  )
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(googletest)
+endif()
+
+# ── Shared game logic library (used by both catcat and tests) ────────────────
+add_library(catcat_lib STATIC
   src/game/game.cpp
   src/audio/audio.cpp
   src/version/version.cpp
   src/version/update_checker.cpp
 )
-
-target_link_libraries(catcat PRIVATE ftxui::component ftxui::dom ftxui::screen)
-target_include_directories(catcat PRIVATE
+target_link_libraries(catcat_lib PUBLIC ftxui::component ftxui::dom ftxui::screen)
+target_include_directories(catcat_lib PUBLIC
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_BINARY_DIR}/generated
 )
@@ -76,27 +83,50 @@ if(ENABLE_AUDIO)
       SHOW_PROGRESS
     )
   endif()
-  target_include_directories(catcat PRIVATE ${MINIAUDIO_DIR})
-  target_link_libraries(catcat PRIVATE nlohmann_json::nlohmann_json)
-  target_compile_definitions(catcat PRIVATE ENABLE_AUDIO=1)
+  target_include_directories(catcat_lib PUBLIC ${MINIAUDIO_DIR})
+  target_link_libraries(catcat_lib PUBLIC nlohmann_json::nlohmann_json)
+  target_compile_definitions(catcat_lib PUBLIC ENABLE_AUDIO=1)
 endif()
 
 if(MSVC)
-  target_compile_options(catcat PRIVATE /W4 /permissive- /Zc:__cplusplus /WX)
+  target_compile_options(catcat_lib PRIVATE /W4 /permissive- /Zc:__cplusplus /WX)
 else()
-  target_compile_options(catcat PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror)
-  # Silence warnings from third-party headers we don't control.
-  target_include_directories(catcat SYSTEM PRIVATE
+  target_compile_options(catcat_lib PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror)
+  target_include_directories(catcat_lib SYSTEM PRIVATE
     ${CMAKE_BINARY_DIR}/miniaudio_header
     ${ftxui_SOURCE_DIR}/include)
 endif()
 
+# ── Main executable ──────────────────────────────────────────────────────────
+add_executable(catcat src/main.cpp)
+target_link_libraries(catcat PRIVATE catcat_lib)
+
+# ── Tests ────────────────────────────────────────────────────────────────────
 enable_testing()
 add_test(NAME smoke_test COMMAND catcat --version)
 
+if(BUILD_TESTS)
+  include(GoogleTest)
+
+  add_executable(catcat_tests
+    test/test_example.cpp
+  )
+  target_link_libraries(catcat_tests PRIVATE catcat_lib GTest::gtest_main)
+  target_include_directories(catcat_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_BINARY_DIR}/generated
+  )
+  if(NOT MSVC)
+    target_include_directories(catcat_tests SYSTEM PRIVATE
+      ${ftxui_SOURCE_DIR}/include)
+  endif()
+
+  gtest_discover_tests(catcat_tests)
+endif()
+
+# ── Packaging ────────────────────────────────────────────────────────────────
 set(CATCAT_PACKAGE_DIR ${CMAKE_BINARY_DIR}/catcat_package)
 file(GLOB_RECURSE CATCAT_AUDIO_FILES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/audio/*)
-
 add_custom_command(
   OUTPUT ${CMAKE_BINARY_DIR}/catcat_bundle.zip
   COMMAND ${CMAKE_COMMAND} -E rm -rf ${CATCAT_PACKAGE_DIR}
@@ -112,5 +142,4 @@ add_custom_command(
   COMMENT "Creating catcat_bundle.zip with executable and audio assets"
   VERBATIM
 )
-
 add_custom_target(package_catcat ALL DEPENDS ${CMAKE_BINARY_DIR}/catcat_bundle.zip)
