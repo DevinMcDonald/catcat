@@ -15,7 +15,7 @@ build: $(BUILD_DIR)/CMakeCache.txt
 package: $(BUILD_DIR)/CMakeCache.txt
 	$(CMAKE) --build $(BUILD_DIR) --target package_catcat
 
-test:
+test: all
 	build/catcat_tests
 
 clean:
