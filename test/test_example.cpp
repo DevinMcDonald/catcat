@@ -6,7 +6,7 @@ TEST(SmokeTest, BasicArithmetic) { EXPECT_EQ(2 + 2, 4); }
 
 // Sample Change 3
 TEST(DemoTest, IntentionallyBreakMe) {
-  int kibbles = 101;
+  int kibbles = 100;
   kibbles -= 10; // spend on a tower
   EXPECT_EQ(kibbles, 90);
 }
