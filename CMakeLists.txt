@@ -112,6 +112,7 @@ if(BUILD_TESTS)
 
   add_executable(catcat_tests
     test/test_example.cpp
+    test/test_game_logic.cpp
   )
   target_link_libraries(catcat_tests PRIVATE catcat_lib GTest::gtest_main)
   target_include_directories(catcat_tests PRIVATE
