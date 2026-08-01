@@ -52,6 +52,36 @@ constexpr float kGalacticVoidChance = 0.50;
 constexpr float kGalacticVoidBackstep = 8.0F;
 constexpr float kKittyJumpBonusRange = 1.5F; // extra reach for upgraded jumps
 
+// Per-map enemy weight ranges: [start, end] for each type across 10 waves.
+// Remaining weight after mouse+bigrat+dog is assigned to Rat.
+struct MapEnemyWeights {
+  float mouse_start, mouse_end;
+  float bigrat_start, bigrat_end;
+  float dog_start, dog_end;
+};
+constexpr MapEnemyWeights kMapWeights[10] = {
+  // map 0: almost all mice, trace rats, no heavies
+  {0.95F, 0.78F,  0.00F, 0.00F,  0.00F, 0.00F},
+  // map 1: still mostly mice, rats filling the gap
+  {0.65F, 0.45F,  0.00F, 0.00F,  0.00F, 0.00F},
+  // map 2: mice taper, big rats debut at end
+  {0.40F, 0.28F,  0.00F, 0.10F,  0.00F, 0.00F},
+  // map 3: rats dominant, big rats growing
+  {0.28F, 0.22F,  0.08F, 0.22F,  0.00F, 0.00F},
+  // map 4: big rats increasing
+  {0.22F, 0.18F,  0.20F, 0.35F,  0.00F, 0.00F},
+  // map 5: big rats near majority
+  {0.18F, 0.15F,  0.32F, 0.48F,  0.00F, 0.00F},
+  // map 6: big rats dominant
+  {0.15F, 0.12F,  0.42F, 0.55F,  0.00F, 0.00F},
+  // map 7: first trace of dogs at end
+  {0.12F, 0.10F,  0.50F, 0.54F,  0.00F, 0.03F},
+  // map 8: dogs appear properly
+  {0.10F, 0.08F,  0.45F, 0.42F,  0.08F, 0.22F},
+  // map 9: dogs are a real threat
+  {0.08F, 0.07F,  0.38F, 0.33F,  0.22F, 0.38F},
+};
+
 struct Position {
   int x = 0;
   int y = 0;
@@ -882,7 +912,7 @@ private:
       return;
     }
     ++wave_;
-    spawn_remaining_ = 6 + DifficultyLevel() * 2;
+    spawn_remaining_ = 6 + DifficultyLevel();
     spawn_cooldown_ms_ = 0;
     wave_active_ = true;
     Sfx("wave_start");
@@ -1184,22 +1214,18 @@ private:
                    enemies_.end());
   }
 
-  EnemyType SelectEnemyType(int diff) {
-    // Keep mice present throughout; taper their share as difficulty rises.
-    const float mouse_share =
-        std::clamp(0.40F - 0.015F * static_cast<float>(diff), 0.18F, 0.40F);
+  EnemyType SelectEnemyType([[maybe_unused]] int diff) {
+    const int map_idx = std::clamp(map_index_, 0, 9);
+    const MapEnemyWeights &w = kMapWeights[map_idx];
+    // t = 0 at wave 1, t = 1 at wave 10 within each map
+    const float t = static_cast<float>((wave_ - 1) % 10) / 9.0F;
+    const float mouse_w  = w.mouse_start  + t * (w.mouse_end  - w.mouse_start);
+    const float bigrat_w = w.bigrat_start + t * (w.bigrat_end - w.bigrat_start);
+    const float dog_w    = w.dog_start    + t * (w.dog_end    - w.dog_start);
     const float roll = Rand(0.0F, 1.0F);
-    if (roll < mouse_share) {
-      return EnemyType::Mouse;
-    }
-    // Occasional big rats as mid bosses.
-    if (diff >= 9 && Rand(0.0F, 1.0F) < 0.18F) {
-      return EnemyType::BigRat;
-    }
-    // Chance for scary dogs once the player is a few maps in.
-    if (map_index_ >= 3 && diff >= 16 && Rand(0.0F, 1.0F) < 0.08F) {
-      return EnemyType::Dog;
-    }
+    if (roll < mouse_w)                      return EnemyType::Mouse;
+    if (roll < mouse_w + bigrat_w)           return EnemyType::BigRat;
+    if (roll < mouse_w + bigrat_w + dog_w)   return EnemyType::Dog;
     return EnemyType::Rat;
   }
 
@@ -1207,19 +1233,19 @@ private:
     const float fDiff = static_cast<float>(diff);
     switch (e.type) {
     case EnemyType::Mouse:
-      e.max_hp = 2 + diff * 1;
+      e.max_hp = static_cast<int>((2.0F + static_cast<float>(diff)) * 1.2F);
       e.speed = (0.95F + fDiff * 0.05F) * kSpeedFactor;
       break;
     case EnemyType::Rat:
-      e.max_hp = 5 + static_cast<int>(fDiff * 2.5F);
+      e.max_hp = static_cast<int>((5 + fDiff * 2.5F) * 1.2F);
       e.speed = (0.65F + fDiff * 0.065F) * kSpeedFactor;
       break;
     case EnemyType::BigRat:
-      e.max_hp = 15 + diff * 4;
+      e.max_hp = static_cast<int>((15 + fDiff * 4.0F) * 1.2F);
       e.speed = (0.55F + fDiff * 0.045F) * kSpeedFactor;
       break;
     case EnemyType::Dog:
-      e.max_hp = 28 + diff * 6;
+      e.max_hp = static_cast<int>((28 + fDiff * 6.0F) * 1.2F);
       e.speed = (0.9F + fDiff * 0.055F) * kSpeedFactor;
       break;
     }
@@ -1246,7 +1272,7 @@ private:
 
     wave_active_ = false;
     ReturnKittiesHome();
-    kibbles_ += 20 + wave_ * 2;
+    kibbles_ += 9 + ((wave_ - 1) % 10 + 1) * 1;
 
     if (wave_ % 10 == 0) {
       const bool last_map = map_index_ == static_cast<int>(maps_.size()) - 1;
@@ -1272,7 +1298,7 @@ private:
     enemies_.clear();
     for (const auto &t : towers_) {
       const auto def = GetDef(t.type);
-      kibbles_ += static_cast<int>(std::round(static_cast<float>(def.cost) * 0.6F));
+      kibbles_ += static_cast<int>(std::round(static_cast<float>(def.cost) * 0.2F));
     }
     towers_.clear();
     held_tower_.reset();
@@ -1380,13 +1406,13 @@ private:
   int Bounty(const EnemyType type) const {
     switch (type) {
     case EnemyType::Mouse:
-      return 6;
+      return 4;
     case EnemyType::Rat:
-      return 9;
+      return 5;
     case EnemyType::BigRat:
-      return 15;
+      return 9;
     case EnemyType::Dog:
-      return 22;
+      return 13;
     }
     return 9;
   }
@@ -1692,7 +1718,7 @@ private:
     const Tower &t = towers_[*idx];
     const auto def = GetDef(t.type);
     const int refund =
-        static_cast<int>(std::round(static_cast<float>(def.cost) * 0.6F));
+        static_cast<int>(std::round(static_cast<float>(def.cost) * 0.2F));
     kibbles_ += refund;
     towers_.erase(towers_.begin() + static_cast<long>(*idx));
     Sfx("sell");
@@ -2545,7 +2571,7 @@ private:
       lines.push_back(text("space/c     - place selected cat"));
       lines.push_back(text("m           - pick up / place tower"));
       lines.push_back(text("u           - upgrade (2x cost)"));
-      lines.push_back(text("x           - sell (60% refund)"));
+      lines.push_back(text("x           - sell (20% refund)"));
       lines.push_back(text("esc         - cancel / overlay toggle"));
       lines.push_back(text("1-6         - select cat type"));
       lines.push_back(text("n / N       - next wave / toggle auto"));
