@@ -42,7 +42,7 @@ UpdateAction CheckForUpdates(bool interactive_prompt, bool show_up_to_date) {
   std::cout << "\nA new catcat version is available.\n"
             << "Current: " << current_raw << "\n"
             << "Latest : " << *latest << "\n"
-            << "[u]pdate now (brew update && brew upgrade catcat), [s]kip once, [k] skip this version: "
+            << "[u]pdate, [s]kip once, [k]eep skipping this version: "
             << std::flush;
   std::string choice;
   std::getline(std::cin, choice);
