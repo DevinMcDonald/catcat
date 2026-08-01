@@ -254,7 +254,6 @@ public:
     fast_forward_ = false;
     cursor_ = {3, kBoardHeight / 2};
     selected_type_ = Tower::Type::Default;
-    overlay_enabled_ = true;
     show_controls_ = false;
     towers_.clear();
     enemies_.clear();
@@ -720,10 +719,8 @@ public:
       show_controls_ = false;
       if (held_tower_) {
         CancelHold();
-        overlay_enabled_ = false;
-      } else {
-        overlay_enabled_ = false;
       }
+      overlay_enabled_ = false;
       handled = true;
     }
     if (event == ftxui::Event::Character('m')) {
@@ -1670,7 +1667,7 @@ private:
     hold.original = towers_[*idx].pos;
     held_tower_ = hold;
     towers_.erase(towers_.begin() + static_cast<long>(*idx));
-    overlay_enabled_ = true; // ensure placement cues visible while holding
+    overlay_enabled_ = true;
   }
 
   void TryPlaceHeld() {
@@ -2614,7 +2611,7 @@ private:
   bool unlocked_kitty_ = false;
   bool unlocked_catatonic_ = false;
   bool unlocked_galactic_ = false;
-  bool overlay_enabled_ = true;
+  bool overlay_enabled_ = false;
   bool show_controls_ = false;
   bool auto_waves_ = false;
   bool fast_forward_ = false;
@@ -2641,7 +2638,10 @@ public:
     ticker_ = std::thread([this] {
       while (running_) {
         std::this_thread::sleep_for(std::chrono::milliseconds(kTickMs));
-        screen_.Post(ftxui::Event::Custom);
+        bool expected = false;
+        if (tick_pending_.compare_exchange_strong(expected, true)) {
+          screen_.Post(ftxui::Event::Custom);
+        }
       }
     });
   }
@@ -2667,6 +2667,7 @@ public:
     }
 
     if (event == ftxui::Event::Custom) {
+      tick_pending_.store(false);
       game_.Tick();
       return true;
     }
@@ -2679,6 +2680,7 @@ private:
   Game game_;
   ftxui::ScreenInteractive &screen_;
   std::atomic<bool> running_{true};
+  std::atomic<bool> tick_pending_{false};
   std::thread ticker_;
   int quit_presses_ = 0;
 };
