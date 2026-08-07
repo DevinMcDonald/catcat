@@ -10,6 +10,7 @@
 #include <memory>
 #include <optional>
 #include <random>
+#include <set>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -52,6 +53,16 @@ constexpr float kCatSleepCap = 5.0F;
 constexpr float kGalacticVoidChance = 0.50;
 constexpr float kGalacticVoidBackstep = 8.0F;
 constexpr float kKittyJumpBonusRange = 1.5F; // extra reach for upgraded jumps
+
+// Catastrophe
+constexpr float kCatastropheTravelTime = 1.8F; // seconds of flight time
+constexpr float kCatastropheArcHeight = 3.5F;  // visual height peak in cells
+constexpr float kCatastropheSplashRadius = 1.5F;
+constexpr float kCatastropheZoneDuration = 3.0F;
+constexpr float kCatastropheZoneTickInterval = 0.40F;
+constexpr int kCatastropheZoneDamagePerTick = 2;
+constexpr float kCatastropheExplosionRadius = 3.0F;
+constexpr int kCatastropheExplosionDamage = 5;
 
 struct Position {
   int x = 0;
@@ -109,17 +120,19 @@ struct Enemy {
 };
 
 struct Tower {
-  enum class Type { Default, Fat, Kitty, Thunder, Catatonic, Galactic };
+  enum class Type {
+    Default, Fat, Kitty, Thunder, Catatonic, Catastrophe, Galactic
+  };
 
-  Position pos{};
-  Position home{};
-  int damage = 2;
-  float range = 3.2F;
-  float cooldown = 0.0F;  // time until next shot
-  float fire_rate = 1.2F; // seconds between shots
-  Type type = Type::Default;
-  int size = 1; // 1x1 or 2x2 for Fat
-  bool upgraded = false;
+  Position   pos{};
+  Position   home{};
+  int        damage    = 2;
+  float      range     = 3.2F;
+  float      cooldown  = 0.0F;   // time until next shot
+  float      fire_rate = 1.2F;   // seconds between shots
+  Type       type      = Type::Default;
+  int        size      = 1;      // 1x1 or 2x2 for Fat
+  bool       upgraded  = false;
 };
 
 struct HitSplat {
@@ -161,6 +174,31 @@ struct AreaHighlight {
   char glyph = '#';
 };
 
+// Slow arc projectile fired by Catastrophe. Ground position moves linearly;
+// visual offset follows a parabola so it appears to lob through the air.
+struct ArcProjectile {
+  Vec2 start{};
+  Vec2 ground{};         // current interpolated ground position
+  Position target{};     // landing cell
+  float progress = 0.0F; // 0 → 1
+  float total_time = kCatastropheTravelTime;
+  float arc_height = kCatastropheArcHeight;
+  int damage = 0;
+  float splash_radius = kCatastropheSplashRadius;
+  bool upgraded = false;
+};
+
+// Lingering damage zone left by a landed Catastrophe projectile.
+struct ToxicZone {
+  std::vector<Position> cells;
+  Vec2 center{};
+  float time_left = kCatastropheZoneDuration;
+  float tick_timer = kCatastropheZoneTickInterval;
+  float tick_interval = kCatastropheZoneTickInterval;
+  int damage_per_tick = kCatastropheZoneDamagePerTick;
+  bool explode_on_expire = false;
+};
+
 struct TowerDef {
   Tower::Type type;
   std::string name;
@@ -179,6 +217,14 @@ struct MapDef {
   ftxui::Color path_color = ftxui::Color::DarkGoldenrod;
 };
 
+// Single source of truth for all tower types. SortedDefs, TypeKey, and
+// HandleEvent key bindings all derive their ordering from this array.
+constexpr std::array<Tower::Type, 7> kAllTowerTypes = {
+    Tower::Type::Default,  Tower::Type::Fat,          Tower::Type::Kitty,
+    Tower::Type::Thunder,  Tower::Type::Catatonic,    Tower::Type::Catastrophe,
+    Tower::Type::Galactic,
+};
+
 TowerDef GetDef(Tower::Type type) {
   switch (type) {
   case Tower::Type::Default:
@@ -191,6 +237,8 @@ TowerDef GetDef(Tower::Type type) {
     return {type, "Thundercat", 100, 6, 999.0F, 2.6F, false, 1};
   case Tower::Type::Catatonic:
     return {type, "Catatonic", 150, 2, 3.2F, 2.2F, true, 1};
+  case Tower::Type::Catastrophe:
+    return {type, "Catastrophe", 175, 8, 5.0F, 4.5F, true, 1};
   case Tower::Type::Galactic:
     return {type, "Galacticat", 200, 20, 7.5F, 2.5F, true, 1};
   }
@@ -228,16 +276,16 @@ public:
     enemies_.clear();
     hit_splats_.clear();
     projectiles_.clear();
+    arc_projectiles_.clear();
+    toxic_zones_.clear();
     shockwaves_.clear();
     beams_.clear();
     area_highlights_.clear();
     held_tower_.reset();
     rng_ = std::mt19937(std::random_device{}());
-    unlocked_thunder_ = unlocked_fat_ = unlocked_kitty_ = false;
-    unlocked_catatonic_ = unlocked_galactic_ = false;
+    unlocked_types_ = {Tower::Type::Default};
     if (dev_mode_) {
-      unlocked_thunder_ = unlocked_fat_ = unlocked_kitty_ = true;
-      unlocked_catatonic_ = unlocked_galactic_ = true;
+      for (auto t : kAllTowerTypes) unlocked_types_.insert(t);
     }
     BuildPath();
 #ifdef ENABLE_AUDIO
@@ -544,6 +592,8 @@ public:
     TowersAct();
     MoveProjectiles();
     ResolveProjectiles();
+    UpdateArcProjectiles();
+    UpdateToxicZones();
     UpdateShockwaves();
     UpdateBeams();
     UpdateAreas();
@@ -638,35 +688,18 @@ public:
     }
 
     if (!held_tower_.has_value()) {
-      if (event == ftxui::Event::Character('1')) {
-        selected_type_ = Tower::Type::Default;
-        overlay_enabled_ = true;
-        handled = true;
-      }
-      if (event == ftxui::Event::Character('2')) {
-        TryUnlockOrSelect(Tower::Type::Fat);
-        overlay_enabled_ = true;
-        handled = true;
-      }
-      if (event == ftxui::Event::Character('3')) {
-        TryUnlockOrSelect(Tower::Type::Kitty);
-        overlay_enabled_ = true;
-        handled = true;
-      }
-      if (event == ftxui::Event::Character('4')) {
-        TryUnlockOrSelect(Tower::Type::Thunder);
-        overlay_enabled_ = true;
-        handled = true;
-      }
-      if (event == ftxui::Event::Character('5')) {
-        TryUnlockOrSelect(Tower::Type::Catatonic);
-        overlay_enabled_ = true;
-        handled = true;
-      }
-      if (event == ftxui::Event::Character('6')) {
-        TryUnlockOrSelect(Tower::Type::Galactic);
-        overlay_enabled_ = true;
-        handled = true;
+      const auto defs = SortedDefs();
+      for (size_t i = 0; i < defs.size() && i < 9; ++i) {
+        const char key = static_cast<char>('1' + static_cast<int>(i));
+        if (event == ftxui::Event::Character(key)) {
+          if (i == 0) {
+            selected_type_ = defs[i].type; // Default is always unlocked
+          } else {
+            TryUnlockOrSelect(defs[i].type);
+          }
+          overlay_enabled_ = true;
+          handled = true;
+        }
       }
     }
     if (event == ftxui::Event::Character('t')) { // toggle sfx
@@ -1108,6 +1141,11 @@ private:
 #endif
         break;
       }
+      case Tower::Type::Catastrophe: {
+        FireCatastrophe(t, enemies_[*target_index]);
+        Sfx("tower_catastrophe_shoot");
+        break;
+      }
       case Tower::Type::Kitty:
         break; // handled separately
       }
@@ -1427,67 +1465,34 @@ private:
     return s + std::string(w - s.size(), ' ');
   }
 
+  // Key number (1-based) for a tower type, derived from its cost-sorted position.
   int TypeKey(Tower::Type t) const {
-    switch (t) {
-    case Tower::Type::Default:
-      return 1;
-    case Tower::Type::Fat:
-      return 2;
-    case Tower::Type::Kitty:
-      return 3;
-    case Tower::Type::Thunder:
-      return 4;
-    case Tower::Type::Catatonic:
-      return 5;
-    case Tower::Type::Galactic:
-      return 6;
+    const auto defs = SortedDefs();
+    for (size_t i = 0; i < defs.size(); ++i) {
+      if (defs[i].type == t) return static_cast<int>(i + 1);
     }
     return 0;
   }
 
+  // All tower definitions sorted by cost (then name). This is the canonical
+  // display and key-binding order — do not hardcode it elsewhere.
   std::vector<TowerDef> SortedDefs() const {
-    std::vector<TowerDef> defs = {
-        GetDef(Tower::Type::Default),   GetDef(Tower::Type::Fat),
-        GetDef(Tower::Type::Kitty),     GetDef(Tower::Type::Thunder),
-        GetDef(Tower::Type::Catatonic), GetDef(Tower::Type::Galactic)};
-    std::sort(defs.begin(), defs.end(),
-              [](const TowerDef &a, const TowerDef &b) {
-                if (a.cost == b.cost)
-                  return a.name < b.name;
-                return a.cost < b.cost;
-              });
+    std::vector<TowerDef> defs;
+    defs.reserve(kAllTowerTypes.size());
+    for (auto t : kAllTowerTypes) defs.push_back(GetDef(t));
+    std::sort(defs.begin(), defs.end(), [](const TowerDef &a, const TowerDef &b) {
+      if (a.cost == b.cost) return a.name < b.name;
+      return a.cost < b.cost;
+    });
     return defs;
   }
 
   bool IsUnlocked(Tower::Type type) const {
-    switch (type) {
-    case Tower::Type::Default:
-      return true;
-    case Tower::Type::Fat:
-      return unlocked_fat_;
-    case Tower::Type::Kitty:
-      return unlocked_kitty_;
-    case Tower::Type::Thunder:
-      return unlocked_thunder_;
-    case Tower::Type::Catatonic:
-      return unlocked_catatonic_;
-    case Tower::Type::Galactic:
-      return unlocked_galactic_;
-    }
-    return true;
+    return unlocked_types_.count(type) > 0;
   }
 
   void Unlock(Tower::Type type) {
-    if (type == Tower::Type::Fat)
-      unlocked_fat_ = true;
-    if (type == Tower::Type::Kitty)
-      unlocked_kitty_ = true;
-    if (type == Tower::Type::Thunder)
-      unlocked_thunder_ = true;
-    if (type == Tower::Type::Catatonic)
-      unlocked_catatonic_ = true;
-    if (type == Tower::Type::Galactic)
-      unlocked_galactic_ = true;
+    unlocked_types_.insert(type);
   }
 
   void TryUnlockOrSelect(Tower::Type type) {
@@ -1653,8 +1658,7 @@ private:
     }
     const Tower &t = towers_[*idx];
     const auto def = GetDef(t.type);
-    const int refund =
-        SellRefund(def.cost);
+    const int refund = SellRefund(def.cost);
     kibbles_ += refund;
     towers_.erase(towers_.begin() + static_cast<long>(*idx));
     Sfx("sell");
@@ -1890,6 +1894,123 @@ private:
     }
   }
 
+  // --- Catastrophe ---
+
+  void FireCatastrophe(Tower &t, const Enemy &target) {
+    const auto center = TowerCenter(t);
+    const auto target_cell = EnemyCell(target);
+
+    ArcProjectile ap;
+    ap.start = center;
+    ap.ground = center;
+    ap.target = target_cell;
+    ap.total_time = kCatastropheTravelTime;
+    ap.arc_height = kCatastropheArcHeight;
+    ap.damage = t.damage;
+    ap.splash_radius = kCatastropheSplashRadius;
+    ap.upgraded = t.upgraded;
+    arc_projectiles_.push_back(ap);
+  }
+
+  void LandCatastrophe(const ArcProjectile &ap) {
+    const Vec2 center{static_cast<float>(ap.target.x),
+                      static_cast<float>(ap.target.y)};
+    const float r2 = ap.splash_radius * ap.splash_radius;
+
+    std::vector<Position> splash_cells;
+    for (int y = 0; y < kBoardHeight; ++y) {
+      for (int x = 0; x < kBoardWidth; ++x) {
+        if (DistanceSquared(center, Position{x, y}) <= r2)
+          splash_cells.push_back({x, y});
+      }
+    }
+
+    for (auto &e : enemies_) {
+      if (DistanceSquared(center, EnemyCell(e)) > r2) continue;
+      e.hp -= ap.damage;
+      if (e.hp <= 0) {
+        kibbles_ += Bounty(e.type);
+        PlayDeathSfx(e.type);
+      } else {
+        hit_splats_.push_back({EnemyCell(e), 0.25F});
+      }
+    }
+
+    area_highlights_.push_back({splash_cells, 0.4F, ftxui::Color::OrangeRed1, '*'});
+
+    ToxicZone zone;
+    zone.cells = splash_cells;
+    zone.center = center;
+    zone.explode_on_expire = ap.upgraded;
+    toxic_zones_.push_back(std::move(zone));
+  }
+
+  void UpdateArcProjectiles() {
+    std::vector<ArcProjectile> survivors;
+    for (auto &ap : arc_projectiles_) {
+      ap.progress += Dt() / ap.total_time;
+      const float t = std::min(ap.progress, 1.0F);
+      ap.ground.x = ap.start.x + t * (static_cast<float>(ap.target.x) - ap.start.x);
+      ap.ground.y = ap.start.y + t * (static_cast<float>(ap.target.y) - ap.start.y);
+      if (ap.progress >= 1.0F) {
+        LandCatastrophe(ap);
+      } else {
+        survivors.push_back(ap);
+      }
+    }
+    arc_projectiles_ = std::move(survivors);
+  }
+
+  void UpdateToxicZones() {
+    std::vector<ToxicZone> survivors;
+    for (auto &zone : toxic_zones_) {
+      zone.time_left -= Dt();
+      zone.tick_timer -= Dt();
+
+      if (zone.tick_timer <= 0.0F) {
+        zone.tick_timer += zone.tick_interval;
+        for (auto &e : enemies_) {
+          const auto pos = EnemyCell(e);
+          const bool in_zone = std::any_of(
+              zone.cells.begin(), zone.cells.end(),
+              [&](const Position &c) { return c.x == pos.x && c.y == pos.y; });
+          if (!in_zone) continue;
+          e.hp -= zone.damage_per_tick;
+          if (e.hp <= 0) {
+            kibbles_ += Bounty(e.type);
+            PlayDeathSfx(e.type);
+          } else {
+            hit_splats_.push_back({pos, 0.15F});
+          }
+        }
+      }
+
+      if (zone.time_left <= 0.0F) {
+        if (zone.explode_on_expire) {
+          Shockwave sw;
+          sw.center = zone.center;
+          sw.max_radius = kCatastropheExplosionRadius;
+          sw.speed = 10.0F;
+          sw.time_left = 0.4F;
+          sw.max_time = 0.4F;
+          shockwaves_.push_back(sw);
+          for (auto &e : enemies_) {
+            if (!InRange(zone.center, EnemyCell(e), kCatastropheExplosionRadius))
+              continue;
+            e.hp -= kCatastropheExplosionDamage;
+            if (e.hp <= 0) {
+              kibbles_ += Bounty(e.type);
+              PlayDeathSfx(e.type);
+            }
+          }
+        }
+      } else {
+        survivors.push_back(std::move(zone));
+      }
+    }
+    toxic_zones_ = std::move(survivors);
+  }
+
   void UpdateShockwaves() {
     for (auto &sw : shockwaves_) {
       sw.radius += sw.speed * Dt();
@@ -2026,29 +2147,33 @@ private:
 
   static ftxui::Color TowerBgColor(Tower::Type t) {
     switch (t) {
-    case Tower::Type::Thunder:   return ftxui::Color::Blue1;
-    case Tower::Type::Fat:       return ftxui::Color::DarkOliveGreen3;
-    case Tower::Type::Kitty:     return ftxui::Color::Pink1;
-    case Tower::Type::Catatonic: return ftxui::Color::Purple;
-    case Tower::Type::Galactic:  return ftxui::Color::LightSteelBlue;
-    default:                     return ftxui::Color::Gold1;
+    case Tower::Type::Thunder:      return ftxui::Color::Blue1;
+    case Tower::Type::Fat:          return ftxui::Color::DarkOliveGreen3;
+    case Tower::Type::Kitty:        return ftxui::Color::Pink1;
+    case Tower::Type::Catatonic:    return ftxui::Color::Purple;
+    case Tower::Type::Galactic:     return ftxui::Color::LightSteelBlue;
+    case Tower::Type::Catastrophe:  return ftxui::Color::DarkKhaki;
+    default:                        return ftxui::Color::Gold1;
     }
   }
 
   static char TowerBaseGlyph(Tower::Type t) {
     switch (t) {
-    case Tower::Type::Thunder:   return 't';
-    case Tower::Type::Fat:       return 'f';
-    case Tower::Type::Kitty:     return 'k';
-    case Tower::Type::Catatonic: return 'c';
-    case Tower::Type::Galactic:  return 'g';
-    default:                     return 'd';
+    case Tower::Type::Thunder:      return 't';
+    case Tower::Type::Fat:          return 'f';
+    case Tower::Type::Kitty:        return 'k';
+    case Tower::Type::Catatonic:    return 'c';
+    case Tower::Type::Galactic:     return 'g';
+    case Tower::Type::Catastrophe:  return 'z';
+    default:                        return 'd';
     }
   }
 
   static char TowerGlyph(Tower::Type t, bool upgraded) {
     const char base = TowerBaseGlyph(t);
-    return upgraded ? static_cast<char>(std::toupper(static_cast<unsigned char>(base))) : base;
+    return upgraded ? static_cast<char>(
+                          std::toupper(static_cast<unsigned char>(base)))
+                    : base;
   }
 
   ftxui::Element RenderBoard() const {
@@ -2229,6 +2354,21 @@ private:
       }
     }
 
+    // Toxic zones — render as a persistent tinted area under other effects.
+    for (const auto &zone : toxic_zones_) {
+      for (const auto &cell : zone.cells) {
+        if (cell.y < 0 || cell.y >= kBoardHeight || cell.x < 0 ||
+            cell.x >= kBoardWidth)
+          continue;
+        const auto yi = static_cast<size_t>(cell.y);
+        const auto xi = static_cast<size_t>(cell.x);
+        glyphs[yi][xi] = '~';
+        foregrounds[yi][xi] = ftxui::Color::DarkSeaGreen3;
+        backgrounds[yi][xi] =
+            BlendColor(backgrounds[yi][xi], ftxui::Color::DarkSeaGreen3, 0.15F);
+      }
+    }
+
     for (const auto &ah : area_highlights_) {
       for (const auto &cell : ah.cells) {
         if (cell.y < 0 || cell.y >= kBoardHeight || cell.x < 0 ||
@@ -2240,6 +2380,27 @@ private:
         glyphs[yi][xi] = ah.glyph;
         foregrounds[yi][xi] = ah.color;
         backgrounds[yi][xi] = BlendColor(backgrounds[yi][xi], ah.color, 0.08F);
+      }
+    }
+
+    // Arc projectiles: shadow at ground position + projectile offset upward.
+    for (const auto &ap : arc_projectiles_) {
+      const int sx = static_cast<int>(std::round(ap.ground.x));
+      const int sy = static_cast<int>(std::round(ap.ground.y));
+      if (sy >= 0 && sy < kBoardHeight && sx >= 0 && sx < kBoardWidth) {
+        const auto yi = static_cast<size_t>(sy);
+        const auto xi = static_cast<size_t>(sx);
+        glyphs[yi][xi] = ',';
+        foregrounds[yi][xi] = ftxui::Color::DarkKhaki;
+      }
+      const float visual_height =
+          ap.arc_height * 4.0F * ap.progress * (1.0F - ap.progress);
+      const int py = sy - static_cast<int>(std::round(visual_height));
+      if (py >= 0 && py < kBoardHeight && sx >= 0 && sx < kBoardWidth) {
+        const auto yi = static_cast<size_t>(py);
+        const auto xi = static_cast<size_t>(sx);
+        glyphs[yi][xi] = 'o';
+        foregrounds[yi][xi] = ftxui::Color::Orange1;
       }
     }
 
@@ -2385,9 +2546,9 @@ private:
   }
 
   ftxui::Element RenderStats() const {
-    std::string wave_text = wave_active_
-        ? "Wave " + std::to_string(wave_)
-        : "Wave " + std::to_string(wave_ + 1) + " ready";
+    std::string wave_text =
+        wave_active_ ? "Wave " + std::to_string(wave_)
+                     : "Wave " + std::to_string(wave_ + 1) + " ready";
     if (auto_waves_) {
       wave_text += " (auto)";
     }
@@ -2421,14 +2582,14 @@ private:
     } else if (lives_ > 2) {
       lives_color = ftxui::Color::Yellow1;
     }
-    lines.push_back(hbox({text("Lives:   "),
-                          text(std::to_string(lives_)) | color(lives_color) | bold}));
-    lines.push_back(hbox({text("Kibbles: "),
-                          text(std::to_string(kibbles_)) |
-                              color(ftxui::Color::Gold1) | bold}));
-    lines.push_back(hbox({text("Cats:    "),
-                          text(std::to_string(towers_.size())) |
-                              color(ftxui::Color::White)}));
+    lines.push_back(hbox({text("Lives:   "), text(std::to_string(lives_)) |
+                                                 color(lives_color) | bold}));
+    lines.push_back(
+        hbox({text("Kibbles: "), text(std::to_string(kibbles_)) |
+                                     color(ftxui::Color::Gold1) | bold}));
+    lines.push_back(
+        hbox({text("Cats:    "), text(std::to_string(towers_.size())) |
+                                     color(ftxui::Color::White)}));
 
     lines.push_back(separator());
 
@@ -2442,9 +2603,9 @@ private:
       const std::string label =
           " " + std::to_string(TypeKey(def.type)) + ") " + def.name;
       max_label_w = std::max(max_label_w, label.size());
-      const std::string cost_str = IsUnlocked(def.type)
-          ? std::to_string(def.cost)
-          : std::to_string(def.cost * 10) + " unlock";
+      const std::string cost_str =
+          IsUnlocked(def.type) ? std::to_string(def.cost)
+                               : std::to_string(def.cost * 10) + " unlock";
       max_cost_w = std::max(max_cost_w, cost_str.size());
     }
 
@@ -2462,8 +2623,9 @@ private:
                   color(ftxui::Color::Black) | bold;
 
       // Key + name padded to fixed width for cost column alignment
-      const std::string raw_label =
-          (sel ? ">" : " ") + std::to_string(TypeKey(def.type)) + ") " + def.name;
+      const std::string raw_label = (sel ? ">" : " ") +
+                                    std::to_string(TypeKey(def.type)) + ") " +
+                                    def.name;
       const std::string padded_label = PadRight(raw_label, max_label_w);
       auto name_part = text(padded_label) |
                        color(unlocked ? tower_bg : ftxui::Color::Grey35);
@@ -2472,9 +2634,9 @@ private:
       }
 
       // Cost right-aligned within a fixed-width field
-      const std::string cost_str = unlocked
-          ? std::to_string(def.cost)
-          : std::to_string(def.cost * 10) + " unlock";
+      const std::string cost_str =
+          unlocked ? std::to_string(def.cost)
+                   : std::to_string(def.cost * 10) + " unlock";
       const std::string padded_cost =
           " " + std::string(max_cost_w - cost_str.size(), ' ') + cost_str;
       ftxui::Color cost_color = ftxui::Color::GrayLight;
@@ -2502,14 +2664,15 @@ private:
 
     if (show_controls_) {
       lines.push_back(separator());
-      lines.push_back(text("controls (h to hide):") | color(ftxui::Color::GrayLight));
+      lines.push_back(text("controls (h to hide):") |
+                      color(ftxui::Color::GrayLight));
       lines.push_back(text("arrows/WASD - move cursor"));
       lines.push_back(text("space/c     - place selected cat"));
       lines.push_back(text("m           - pick up / place tower"));
       lines.push_back(text("u           - upgrade (2x cost)"));
       lines.push_back(text("x           - sell (25% refund)"));
       lines.push_back(text("esc         - cancel / overlay toggle"));
-      lines.push_back(text("1-6         - select cat type"));
+      lines.push_back(text("1-9         - select cat type"));
       lines.push_back(text("n / N       - next wave / toggle auto"));
       lines.push_back(text("f           - fast forward x5"));
       lines.push_back(text("t / y       - sfx / music toggle"));
@@ -2534,6 +2697,8 @@ private:
   std::vector<Tower> towers_;
   std::vector<HitSplat> hit_splats_;
   std::vector<Projectile> projectiles_;
+  std::vector<ArcProjectile> arc_projectiles_;
+  std::vector<ToxicZone> toxic_zones_;
   std::vector<Shockwave> shockwaves_;
   std::vector<Beam> beams_;
   std::vector<AreaHighlight> area_highlights_;
@@ -2545,11 +2710,7 @@ private:
   std::unique_ptr<AudioSystem> audio_;
 
   Tower::Type selected_type_ = Tower::Type::Default;
-  bool unlocked_thunder_ = false;
-  bool unlocked_fat_ = false;
-  bool unlocked_kitty_ = false;
-  bool unlocked_catatonic_ = false;
-  bool unlocked_galactic_ = false;
+  std::set<Tower::Type> unlocked_types_;
   bool overlay_enabled_ = false;
   bool show_controls_ = false;
   bool auto_waves_ = false;
