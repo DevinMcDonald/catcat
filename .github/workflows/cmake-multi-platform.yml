@@ -1,8 +1,5 @@
 name: Build & Test
 
-# Trigger: run automatically whenever code is pushed to main, or when a pull
-# request targets main. This is the core CI loop — every change gets verified
-# before it can land.
 on:
   push:
     branches: [ "main" ]
@@ -17,16 +14,13 @@ concurrency:
 
 jobs:
   build:
-    # Build matrix: compile on multiple OS/compiler combinations so we catch
-    # platform-specific bugs early instead of after a release.
     runs-on: ${{ matrix.os }}
 
     strategy:
-      fail-fast: false  # If one platform fails, keep running the others.
+      fail-fast: false
 
       matrix:
         include:
-          # Linux — two compilers to catch different classes of warnings/errors.
           - os: ubuntu-latest
             build_type: Release
             c_compiler: gcc
@@ -39,29 +33,26 @@ jobs:
             cpp_compiler: clang++
             artifact_name: catcat-linux-clang
 
-          # macOS Apple Silicon
           - os: macos-14
             build_type: Release
             c_compiler: clang
             cpp_compiler: clang++
-            architecture: arm64
             artifact_name: catcat-macos-arm64
 
-    steps:
-    # Step 1 — Download the source code onto the runner machine.
-    - name: Check out source code
-      uses: actions/checkout@v4.2.2
+          - os: macos-13
+            build_type: Release
+            c_compiler: clang
+            cpp_compiler: clang++
+            artifact_name: catcat-macos-x86_64
 
-    # Step 2 — Store the build directory path so later steps can reference it.
+    steps:
+    - uses: actions/checkout@v4.2.2
+
     - name: Set build directory path
       id: strings
       shell: bash
-      run: |
-        echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+      run: echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
-    # Step 3 — Run CMake to configure the build system.
-    # This resolves dependencies (FTXUI, nlohmann_json, miniaudio) and generates
-    # the Makefile/Ninja files used by the next step.
     - name: Configure (CMake)
       run: |
         cmake -B build \
@@ -70,37 +61,58 @@ jobs:
           -DBUILD_TESTS=ON \
           -S ${{ github.workspace }}
 
-    # Step 4 — Compile the project. Warnings are treated as errors (-Werror),
-    # so this fails fast on any new compiler warning introduced by a change.
     - name: Compile
       run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
 
-    # Step 5 — Run the test suite. --output-on-failure prints test output only
-    # when something breaks, making failures easy to read in the log.
     - name: Test
       working-directory: ${{ steps.strings.outputs.build-output-dir }}
       run: ctest --build-config ${{ matrix.build_type }} --output-on-failure
 
-    # Step 6 — Upload the compiled bundle as a downloadable artifact.
-    # Anyone on the team can grab a binary from the Actions tab without
-    # needing to build the project themselves.
     - name: Upload build artifact
       uses: actions/upload-artifact@v4.6.2
       with:
         name: ${{ matrix.artifact_name }}
         path: ${{ steps.strings.outputs.build-output-dir }}/catcat_bundle.zip
         if-no-files-found: error
-  release:
-    name: Publish Release
-    needs: build                        # only runs if all build matrix jobs pass
+
+  create-release:
+    name: Create Release
+    needs: build
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: macos-14   # arm64 — binary must match the Homebrew tap target
+    runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-    - name: Check out source code
-      uses: actions/checkout@v4.2.2
+    - uses: actions/checkout@v4.2.2
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2.3.2
+      with:
+        generate_release_notes: true
+
+  build-release:
+    name: Build Release (${{ matrix.asset }})
+    needs: create-release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            asset: catcat-macos-arm64.zip
+          - os: macos-13
+            asset: catcat-macos-x86_64.zip
+          - os: ubuntu-latest
+            asset: catcat-linux-x86_64.zip
+          - os: ubuntu-24.04-arm
+            asset: catcat-linux-arm64.zip
+
+    steps:
+    - uses: actions/checkout@v4.2.2
 
     - name: Configure (CMake)
       run: |
@@ -108,20 +120,21 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release \
           -DENABLE_AUDIO=ON \
           -DBUILD_TESTS=OFF \
-          -S ${{ github.workspace }}
+          -S .
 
-    - name: Compile & Package
+    - name: Build & Package
       run: cmake --build build --target package_catcat
 
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v2.3.2
-      with:
-        files: build/catcat_bundle.zip
-        generate_release_notes: true    # auto-generates notes from commits since last tag
+    - name: Upload to release
+      run: |
+        mv build/catcat_bundle.zip ${{ matrix.asset }}
+        gh release upload ${{ github.ref_name }} ${{ matrix.asset }} --clobber
+      env:
+        GH_TOKEN: ${{ github.token }}
 
   update-homebrew:
     name: Update Homebrew Tap
-    needs: release
+    needs: build-release
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     # Requires a secret named HOMEBREW_TAP_TOKEN: a GitHub fine-grained PAT with
@@ -129,40 +142,44 @@ jobs:
     # Add it at: github.com/DevinMcDonald/catcat/settings/secrets/actions
 
     steps:
-    - name: Download release asset and compute SHA256
-      id: asset
+    - uses: actions/checkout@v4.2.2   # catcat repo — for scripts/render_formula.py
+
+    - name: Download all release assets and compute SHA256
+      id: assets
       run: |
         VERSION="${{ github.ref_name }}"
-        URL="https://github.com/DevinMcDonald/catcat/releases/download/${VERSION}/catcat_bundle.zip"
-        curl -fsSL "${URL}" -o catcat_bundle.zip
-        SHA=$(sha256sum catcat_bundle.zip | awk '{print $1}')
-        echo "sha256=${SHA}" >> "$GITHUB_OUTPUT"
-        echo "url=${URL}"    >> "$GITHUB_OUTPUT"
+        BASE="https://github.com/DevinMcDonald/catcat/releases/download/${VERSION}"
+        for name in macos-arm64 macos-x86_64 linux-arm64 linux-x86_64; do
+          URL="${BASE}/catcat-${name}.zip"
+          curl -fsSL "${URL}" -o "catcat-${name}.zip"
+          SHA=$(sha256sum "catcat-${name}.zip" | awk '{print $1}')
+          VAR="${name//-/_}"
+          echo "sha_${VAR}=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "url_${VAR}=${URL}" >> "$GITHUB_OUTPUT"
+        done
 
     - name: Check out homebrew tap
       uses: actions/checkout@v4.2.2
       with:
         repository: DevinMcDonald/homebrew-catcat
         token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        path: tap
 
-    - name: Update formula URL and SHA256
+    - name: Write formula
       env:
-        NEW_URL: ${{ steps.asset.outputs.url }}
-        NEW_SHA: ${{ steps.asset.outputs.sha256 }}
-      run: |
-        python3 - <<'EOF'
-        import re, os
-        path = "Formula/catcat.rb"
-        with open(path) as f:
-            text = f.read()
-        text = re.sub(r'url "https://[^"]+"',  f'url "{os.environ["NEW_URL"]}"',  text)
-        text = re.sub(r'sha256 "[0-9a-f]+"',   f'sha256 "{os.environ["NEW_SHA"]}"', text)
-        with open(path, "w") as f:
-            f.write(text)
-        print(open(path).read())   # echo result to the log
-        EOF
+        CATCAT_VERSION:    ${{ github.ref_name }}
+        URL_MACOS_ARM64:   ${{ steps.assets.outputs.url_macos_arm64 }}
+        SHA_MACOS_ARM64:   ${{ steps.assets.outputs.sha_macos_arm64 }}
+        URL_MACOS_X86_64:  ${{ steps.assets.outputs.url_macos_x86_64 }}
+        SHA_MACOS_X86_64:  ${{ steps.assets.outputs.sha_macos_x86_64 }}
+        URL_LINUX_ARM64:   ${{ steps.assets.outputs.url_linux_arm64 }}
+        SHA_LINUX_ARM64:   ${{ steps.assets.outputs.sha_linux_arm64 }}
+        URL_LINUX_X86_64:  ${{ steps.assets.outputs.url_linux_x86_64 }}
+        SHA_LINUX_X86_64:  ${{ steps.assets.outputs.sha_linux_x86_64 }}
+      run: python3 scripts/render_formula.py > tap/Formula/catcat.rb
 
     - name: Commit and push
+      working-directory: tap
       run: |
         git config user.name  "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
