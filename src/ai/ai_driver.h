@@ -5,6 +5,7 @@
 
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <random>
@@ -23,6 +24,9 @@ struct AIStats {
   // tower-type usage counts from the last displayed game
   std::array<std::atomic<int>, kAINumTowerTypes> tower_counts{};
   std::array<std::atomic<int>, kAINumTowerTypes> upgrade_counts{};
+
+  // Start time for episodes/min calculation
+  std::chrono::steady_clock::time_point start_time{std::chrono::steady_clock::now()};
 
   // Fitness history ring buffer (written from training thread, read on render)
   static constexpr int kHistLen = 40;
@@ -88,26 +92,29 @@ private:
 // ── Trainer: (1+λ)-ES evolutionary strategy ──────────────────────────────────
 class Trainer {
 public:
-  explicit Trainer(const std::string& weights_path, bool fresh = false);
+  explicit Trainer(const std::string& weights_path, bool fresh = false,
+                   int candidates = 8, int eval_games = 10);
 
-  // Run one training batch (kCandidates perturbations × kEvalGames games each).
-  // Updates internal best weights and stats.
+  // Run one training batch: candidates evaluated in parallel, each playing
+  // eval_games games. Updates internal best weights and stats.
   // Returns the best fitness seen this batch.
   float RunBatch(AIStats& stats);
 
   const AIPlayer& BestPlayer() const { return best_player_; }
+  int Candidates() const { return candidates_; }
+  int EvalGames()  const { return eval_games_; }
 
-  static constexpr int kCandidates = 8;   // perturbations per batch
-  static constexpr int kEvalGames  = 10;  // games per candidate (variance reduction)
+  // Per-candidate evaluation result (used for parallel collection).
+  struct EvalResult {
+    float fitness = 0.f;
+    int wins = 0, losses = 0, waves = 0, ticks = 0;
+    std::array<int, kAINumTowerTypes> tower_counts{};
+    std::array<int, kAINumTowerTypes> upgrade_counts{};
+    std::array<int, kAINumTowerTypes> damage{};
+  };
 
 private:
-  // All out_ arrays/scalars are incremented (not reset) per game played.
-  float EvaluatePlayer(const AIPlayer& player,
-                       std::array<int, kAINumTowerTypes>* out_tower_counts,
-                       std::array<int, kAINumTowerTypes>* out_upgrade_counts,
-                       std::array<int, kAINumTowerTypes>* out_damage,
-                       int* out_wins, int* out_losses, int* out_waves,
-                       int* out_ticks) const;
+  EvalResult EvaluatePlayer(const AIPlayer& player) const;
 
   AIPlayer    best_player_;
   float       best_fitness_;
@@ -115,12 +122,14 @@ private:
   int         success_count_;
   int         eval_count_;
   std::string weights_path_;
+  int         candidates_;
+  int         eval_games_;
 };
 
 // ── FTXUI component for --ai mode ────────────────────────────────────────────
-// Alternates between displaying the AI playing at normal speed and running
-// headless training games inside the tick callback.
 ftxui::Component MakeAIComponent(ftxui::ScreenInteractive& screen,
                                  const std::string& weights_path,
                                  bool fast_forward = false,
-                                 bool fresh = false);
+                                 bool fresh = false,
+                                 int candidates = 8,
+                                 int eval_games = 10);

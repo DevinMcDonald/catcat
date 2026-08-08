@@ -14,6 +14,8 @@ int main(int argc, const char *argv[]) {
   bool ai_fast      = false;
   bool ai_fresh     = false;
   bool show_version = false;
+  int  ai_candidates = 8;
+  int  ai_games      = 10;
   for (int i = 1; i < argc; ++i) {
     const std::string arg(argv[i]);
     if      (arg == "--dev")     dev_mode     = true;
@@ -21,6 +23,8 @@ int main(int argc, const char *argv[]) {
     else if (arg == "--fast")    ai_fast      = true;
     else if (arg == "--fresh")   ai_fresh     = true;
     else if (arg == "--version") show_version = true;
+    else if (arg == "--candidates" && i + 1 < argc) ai_candidates = std::stoi(argv[++i]);
+    else if (arg == "--games"      && i + 1 < argc) ai_games      = std::stoi(argv[++i]);
   }
 
   if (show_version) {
@@ -37,7 +41,8 @@ int main(int argc, const char *argv[]) {
     const auto weights_path =
         (std::filesystem::path(std::getenv("HOME") ? std::getenv("HOME") : ".")
          / ".config" / "catcat" / "ai_weights.bin").string();
-    auto component = MakeAIComponent(screen, weights_path, ai_fast, ai_fresh);
+    auto component = MakeAIComponent(screen, weights_path, ai_fast, ai_fresh,
+                                      ai_candidates, ai_games);
     screen.Loop(component);
   } else {
     auto component = MakeGameComponent(screen, dev_mode);

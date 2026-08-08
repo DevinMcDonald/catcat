@@ -1,7 +1,9 @@
 #include "ai/ai_driver.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <future>
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/color.hpp>
 #include <iomanip>
@@ -65,24 +67,21 @@ AICommand AIPlayer::SelectAction(const AIObservation& obs) const {
 }
 
 // ── Trainer ───────────────────────────────────────────────────────────────────
-Trainer::Trainer(const std::string& weights_path, bool fresh)
+Trainer::Trainer(const std::string& weights_path, bool fresh, int candidates, int eval_games)
     : best_player_(42),
       best_fitness_(-1e9f),
       sigma_(0.1f),
       success_count_(0),
       eval_count_(0),
-      weights_path_(weights_path) {
+      weights_path_(weights_path),
+      candidates_(candidates),
+      eval_games_(eval_games) {
   if (!fresh) best_player_.Load(weights_path);
 }
 
-float Trainer::EvaluatePlayer(const AIPlayer& player,
-    std::array<int, kAINumTowerTypes>* out_tower_counts,
-    std::array<int, kAINumTowerTypes>* out_upgrade_counts,
-    std::array<int, kAINumTowerTypes>* out_damage,
-    int* out_wins, int* out_losses, int* out_waves,
-    int* out_ticks) const {
-  float total = 0.0f;
-  for (int g = 0; g < kEvalGames; ++g) {
+Trainer::EvalResult Trainer::EvaluatePlayer(const AIPlayer& player) const {
+  EvalResult result;
+  for (int g = 0; g < eval_games_; ++g) {
     GameAIBridge game;
     int ticks_since_decision = 0;
     int game_ticks = 0;
@@ -96,29 +95,37 @@ float Trainer::EvaluatePlayer(const AIPlayer& player,
         game.Act(player.SelectAction(obs));
       }
     }
-    if (out_ticks) *out_ticks += game_ticks;
+    result.ticks += game_ticks;
     const AIEpisodeResult res = game.GetResult();
-    total += res.fitness;
-    if (out_tower_counts)
-      for (int i = 0; i < kAINumTowerTypes; ++i)
-        (*out_tower_counts)[static_cast<std::size_t>(i)] +=
-            res.tower_type_counts[static_cast<std::size_t>(i)];
-    if (out_upgrade_counts)
-      for (int i = 0; i < kAINumTowerTypes; ++i)
-        (*out_upgrade_counts)[static_cast<std::size_t>(i)] +=
-            res.tower_upgrade_counts[static_cast<std::size_t>(i)];
-    if (out_damage)
-      for (int i = 0; i < kAINumTowerTypes; ++i)
-        (*out_damage)[static_cast<std::size_t>(i)] +=
-            res.tower_damage_dealt[static_cast<std::size_t>(i)];
-    if (out_wins)   *out_wins   += res.victory ? 1 : 0;
-    if (out_losses) *out_losses += res.victory ? 0 : 1;
-    if (out_waves)  *out_waves  += res.waves_cleared;
+    result.fitness += res.fitness;
+    if (res.victory) ++result.wins; else ++result.losses;
+    result.waves += res.waves_cleared;
+    for (int i = 0; i < kAINumTowerTypes; ++i) {
+      const std::size_t si = static_cast<std::size_t>(i);
+      result.tower_counts[si]   += res.tower_type_counts[si];
+      result.upgrade_counts[si] += res.tower_upgrade_counts[si];
+      result.damage[si]         += res.tower_damage_dealt[si];
+    }
   }
-  return total / static_cast<float>(kEvalGames);
+  result.fitness /= static_cast<float>(eval_games_);
+  return result;
 }
 
 float Trainer::RunBatch(AIStats& stats) {
+  // Generate all candidate perturbations up front.
+  std::vector<AIPlayer> candidates;
+  candidates.reserve(static_cast<std::size_t>(candidates_));
+  for (int c = 0; c < candidates_; ++c)
+    candidates.push_back(best_player_.Perturbed(sigma_));
+
+  // Evaluate all candidates in parallel.
+  std::vector<std::future<EvalResult>> futures;
+  futures.reserve(static_cast<std::size_t>(candidates_));
+  for (const auto& cand : candidates)
+    futures.push_back(std::async(std::launch::async,
+        [this, &cand] { return EvaluatePlayer(cand); }));
+
+  // Collect results sequentially (preserves deterministic best-player selection).
   float batch_best = -1e9f;
   std::array<int, kAINumTowerTypes> batch_tower_counts{};
   std::array<int, kAINumTowerTypes> batch_upgrade_counts{};
@@ -127,25 +134,31 @@ float Trainer::RunBatch(AIStats& stats) {
   int best_cand_waves = 0;
   float best_cand_fitness = -1e9f;
 
-  for (int c = 0; c < kCandidates; ++c) {
-    const AIPlayer candidate = best_player_.Perturbed(sigma_);
-    int cand_waves = 0, cand_ticks = 0;
-    const float fitness = EvaluatePlayer(candidate, &batch_tower_counts, &batch_upgrade_counts,
-                                         &batch_damage, &batch_wins, &batch_losses,
-                                         &cand_waves, &cand_ticks);
-    batch_ticks += cand_ticks;
+  for (int c = 0; c < candidates_; ++c) {
+    const EvalResult r = futures[static_cast<std::size_t>(c)].get();
+    const float fitness = r.fitness;
+
+    for (int i = 0; i < kAINumTowerTypes; ++i) {
+      const std::size_t si = static_cast<std::size_t>(i);
+      batch_tower_counts[si]   += r.tower_counts[si];
+      batch_upgrade_counts[si] += r.upgrade_counts[si];
+      batch_damage[si]         += r.damage[si];
+    }
+    batch_wins   += r.wins;
+    batch_losses += r.losses;
+    batch_ticks  += r.ticks;
     ++eval_count_;
 
-    stats.episodes.fetch_add(kEvalGames);
+    stats.episodes.fetch_add(eval_games_);
     stats.last_fitness.store(fitness);
     stats.PushHistory(fitness);
 
     if (fitness > best_cand_fitness) {
       best_cand_fitness = fitness;
-      best_cand_waves   = cand_waves;
+      best_cand_waves   = r.waves;
     }
     if (fitness > best_fitness_) {
-      best_player_ = candidate;
+      best_player_  = candidates[static_cast<std::size_t>(c)];
       best_fitness_ = fitness;
       best_player_.Save(weights_path_);
       stats.best_fitness.store(best_fitness_);
@@ -156,30 +169,30 @@ float Trainer::RunBatch(AIStats& stats) {
 
   // Accumulate tower usage — never resets so bars only grow.
   for (int i = 0; i < kAINumTowerTypes; ++i) {
-    stats.tower_counts[static_cast<std::size_t>(i)].fetch_add(
-        batch_tower_counts[static_cast<std::size_t>(i)]);
-    stats.upgrade_counts[static_cast<std::size_t>(i)].fetch_add(
-        batch_upgrade_counts[static_cast<std::size_t>(i)]);
+    const std::size_t si = static_cast<std::size_t>(i);
+    stats.tower_counts[si].fetch_add(batch_tower_counts[si]);
+    stats.upgrade_counts[si].fetch_add(batch_upgrade_counts[si]);
   }
   stats.wins.fetch_add(batch_wins);
   stats.losses.fetch_add(batch_losses);
   stats.PushWinRate(batch_wins, batch_wins + batch_losses);
-  stats.PushWaves(static_cast<float>(best_cand_waves) / static_cast<float>(kEvalGames));
-  // Compute DPS per tower (average damage/sec per individual placed tower).
-  // Divide aggregate damage by total game time, then by average towers-per-game.
+  stats.PushWaves(static_cast<float>(best_cand_waves) / static_cast<float>(eval_games_));
+
+  // Compute DPS per tower: total damage / total time / avg towers per game.
   constexpr float kSecsPerTick = 1.0f / 60.0f;
   const float batch_time = static_cast<float>(batch_ticks) * kSecsPerTick;
-  const int   num_games  = kCandidates * kEvalGames;
+  const int   num_games  = candidates_ * eval_games_;
   for (int i = 0; i < kAINumTowerTypes; ++i) {
-    const int   count = batch_tower_counts[static_cast<std::size_t>(i)];
+    const std::size_t si = static_cast<std::size_t>(i);
+    const int   count = batch_tower_counts[si];
     const float dps   = (batch_time > 0.0f && count > 0)
-        ? static_cast<float>(batch_damage[static_cast<std::size_t>(i)]) * static_cast<float>(num_games)
+        ? static_cast<float>(batch_damage[si]) * static_cast<float>(num_games)
           / (batch_time * static_cast<float>(count))
         : 0.0f;
-    stats.last_batch_dps[static_cast<std::size_t>(i)].store(dps);
+    stats.last_batch_dps[si].store(dps);
   }
 
-  // 1/5 success rule: adjust sigma every 5 evaluations
+  // 1/5 success rule: adjust sigma every 5 evaluations.
   if (eval_count_ % 5 == 0) {
     if (success_count_ > 1) sigma_ *= 0.82f;
     else                    sigma_ = std::min(sigma_ * 1.22f, 0.5f);
@@ -200,12 +213,15 @@ public:
   AIGameComponent(ftxui::ScreenInteractive& screen,
                   const std::string& weights_path,
                   bool fast_forward,
-                  bool fresh)
-      : screen_(screen), fast_display_(fast_forward) {
+                  bool fresh,
+                  int candidates,
+                  int eval_games)
+      : screen_(screen), fast_display_(fast_forward),
+        candidates_(candidates), eval_games_(eval_games) {
     display_game_ = std::make_unique<GameAIBridge>(/*headless=*/false);
 
-    training_thread_ = std::thread([this, weights_path, fresh] {
-      Trainer trainer(weights_path, fresh);
+    training_thread_ = std::thread([this, weights_path, fresh, candidates, eval_games] {
+      Trainer trainer(weights_path, fresh, candidates, eval_games);
       // Seed the display player from whatever weights were loaded.
       {
         std::lock_guard<std::mutex> lock(player_mutex_);
@@ -395,7 +411,19 @@ private:
 
     // ── Training stats ───────────────────────────────────────────────────
     lines.push_back(stat_row("Speed",    fast_display_ ? "5x  [f]" : "1x  [f]"));
+    lines.push_back(stat_row("Config",
+        std::to_string(candidates_) + "c × " + std::to_string(eval_games_) + "g"));
     lines.push_back(stat_row("Episodes", std::to_string(stats_.episodes.load())));
+    {
+      const auto now = std::chrono::steady_clock::now();
+      if (std::chrono::duration<float>(now - epm_last_update_).count() >= 1.f) {
+        const float mins = std::chrono::duration<float>(now - stats_.start_time).count() / 60.f;
+        cached_epm_      = mins > 0.05f
+            ? static_cast<float>(stats_.episodes.load()) / mins : 0.f;
+        epm_last_update_ = now;
+      }
+      lines.push_back(stat_row("Eps/min", fmt(cached_epm_, 0)));
+    }
     {
       const int w = stats_.wins.load(), l = stats_.losses.load();
       const int total = w + l;
@@ -610,6 +638,11 @@ private:
 
   bool fast_display_ = false;
   int  quit_presses_ = 0;
+  int  candidates_   = 8;
+  int  eval_games_   = 10;
+
+  mutable float cached_epm_     = 0.f;
+  mutable std::chrono::steady_clock::time_point epm_last_update_{};
 
   std::unique_ptr<GameAIBridge>          display_game_;
   std::array<int, kAINumTowerTypes>      prev_display_counts_{};
@@ -629,6 +662,9 @@ private:
 ftxui::Component MakeAIComponent(ftxui::ScreenInteractive& screen,
                                  const std::string& weights_path,
                                  bool fast_forward,
-                                 bool fresh) {
-  return std::make_shared<AIGameComponent>(screen, weights_path, fast_forward, fresh);
+                                 bool fresh,
+                                 int candidates,
+                                 int eval_games) {
+  return std::make_shared<AIGameComponent>(
+      screen, weights_path, fast_forward, fresh, candidates, eval_games);
 }
