@@ -50,6 +50,18 @@
       "files": ["audio/sfx/tower_galactic_shoot.wav"],
       "volume": 0.9
     },
+    "tower_catastrophe_shoot": {
+      "files": ["audio/sfx/catastrophe_shoot.wav"],
+      "volume": 1
+    },
+    "tower_catastrophe_detonation": {
+      "files": ["audio/sfx/catastrophe_detonation.wav"],
+      "volume": 1
+    },
+    "tower_catastrophe_explosion": {
+      "files": ["audio/sfx/catastrophe_explosion.wav"],
+      "volume": 0.1
+    },
     "wave_start": { "files": ["audio/sfx/wave_start.wav"], "volume": 0.8 },
     "map_change": { "files": ["audio/sfx/map_change.wav"], "volume": 0.75 },
     "life_lost": { "files": ["audio/sfx/life_lost.wav"], "volume": 0.8 },

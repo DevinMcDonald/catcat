@@ -56,7 +56,8 @@ endif()
 # ── Shared game logic library (used by both catcat and tests) ────────────────
 add_library(
   catcat_lib STATIC src/game/game.cpp src/audio/audio.cpp
-                    src/version/version.cpp src/version/update_checker.cpp)
+                    src/version/version.cpp src/version/update_checker.cpp
+                    src/ai/nn.cpp src/ai/ai_driver.cpp)
 target_link_libraries(catcat_lib PUBLIC ftxui::component ftxui::dom
                                         ftxui::screen)
 target_include_directories(catcat_lib PUBLIC ${CMAKE_SOURCE_DIR}/src
