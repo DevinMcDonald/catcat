@@ -900,9 +900,28 @@ public:
 
     f[0] = std::min(static_cast<float>(kibbles_), 500.0f) / 500.0f;
     f[1] = static_cast<float>(lives_) / static_cast<float>(kStartingLives);
-    f[2] = static_cast<float>(wave_) / 30.0f;
+    f[2] = static_cast<float>(wave_) / 100.0f;
     f[3] = static_cast<float>(map_index_) / 9.0f;
     f[4] = wave_active_ ? 1.0f : 0.0f;
+    f[5] = static_cast<float>(wave_ % kWavesPerMap) / static_cast<float>(kWavesPerMap);
+    f[6] = wave_active_
+               ? static_cast<float>(spawn_remaining_) /
+                     static_cast<float>(std::max(1, SpawnCount(DifficultyLevel())))
+               : 0.0f;
+
+    // Precompute which path cells are already covered by existing towers
+    constexpr float kCoverageR2 = 3.5f * 3.5f;
+    std::vector<bool> path_covered(path_.size(), false);
+    for (const auto& tower : towers_) {
+      const float tr = GetDef(tower.type).range;
+      const float tr2 = tr * tr;
+      for (std::size_t pi = 0; pi < path_.size(); ++pi) {
+        const auto& p = path_[pi];
+        const float dx = static_cast<float>(tower.pos.x - p.x);
+        const float dy = static_cast<float>(tower.pos.y - p.y);
+        if (dx*dx + dy*dy <= tr2) path_covered[pi] = true;
+      }
+    }
 
     int base = kAIObsGlobal;
     for (int i = 0; i < kAINumTowerTypes; ++i) {
@@ -917,10 +936,24 @@ public:
     base = kAIObsGlobal + kAIObsTowerInfo;
     for (int j = 0; j < kAINumCandidates; ++j) {
       const Position& pos = ai_candidates_[static_cast<std::size_t>(j)];
-      const int off = base + j * 7;
+      const int off = base + j * 15;
       const auto tidx = TowerIndexAt(pos);
       f[static_cast<std::size_t>(off + 0)] =
           CanPlace(pos, 1, Tower::Type::Default, 3.2f, false) ? 1.0f : 0.0f;
+
+      // Incremental coverage: path cells in kCoverageR2 range not already covered
+      float incremental = 0.0f;
+      if (!path_.empty()) {
+        int uncovered = 0;
+        for (std::size_t pi = 0; pi < path_.size(); ++pi) {
+          const auto& p = path_[pi];
+          const float dx = static_cast<float>(pos.x - p.x);
+          const float dy = static_cast<float>(pos.y - p.y);
+          if (dx*dx + dy*dy <= kCoverageR2 && !path_covered[pi]) ++uncovered;
+        }
+        incremental = static_cast<float>(uncovered) / static_cast<float>(path_.size());
+      }
+
       if (tidx.has_value()) {
         const Tower& t = towers_[*tidx];
         int ti = 0;
@@ -929,15 +962,30 @@ public:
         f[static_cast<std::size_t>(off+1)] = 1.0f;
         f[static_cast<std::size_t>(off+2)] = static_cast<float>(ti) / static_cast<float>(kAINumTowerTypes-1);
         f[static_cast<std::size_t>(off+3)] = t.upgraded ? 1.0f : 0.0f;
-        f[static_cast<std::size_t>(off+4)] = ai_candidate_coverage_[static_cast<std::size_t>(j)];
+        f[static_cast<std::size_t>(off+4)] = incremental;
         f[static_cast<std::size_t>(off+5)] = std::min(t.cooldown / t.fire_rate, 1.0f);
         f[static_cast<std::size_t>(off+6)] = (!t.upgraded && kibbles_ >= GetDef(t.type).cost * kUpgradeCostMultiplier) ? 1.0f : 0.0f;
+        f[static_cast<std::size_t>(off+7)] = ai_candidate_path_pos_[static_cast<std::size_t>(j)];
       } else {
         f[static_cast<std::size_t>(off+1)] = 0.0f; f[static_cast<std::size_t>(off+2)] = 0.0f;
         f[static_cast<std::size_t>(off+3)] = 0.0f;
-        f[static_cast<std::size_t>(off+4)] = ai_candidate_coverage_[static_cast<std::size_t>(j)];
+        f[static_cast<std::size_t>(off+4)] = incremental;
         f[static_cast<std::size_t>(off+5)] = 0.0f;
         f[static_cast<std::size_t>(off+6)] = 0.0f;
+        f[static_cast<std::size_t>(off+7)] = ai_candidate_path_pos_[static_cast<std::size_t>(j)];
+      }
+
+      // off+8..off+14: neighbor presence flag per tower type within coverage radius
+      for (int k = 0; k < kAINumTowerTypes; ++k) {
+        const Tower::Type kt = kAllTowerTypes[static_cast<std::size_t>(k)];
+        bool found = false;
+        for (const auto& tower : towers_) {
+          if (tower.type != kt) continue;
+          const float dx = static_cast<float>(tower.pos.x - pos.x);
+          const float dy = static_cast<float>(tower.pos.y - pos.y);
+          if (dx*dx + dy*dy <= kCoverageR2) { found = true; break; }
+        }
+        f[static_cast<std::size_t>(off+8+k)] = found ? 1.0f : 0.0f;
       }
     }
 
@@ -1189,22 +1237,29 @@ private:
   // spread out so they don't all cluster around the same bend.
   void ComputeAICandidates() {
     constexpr float kCoverageR2 = 3.5f * 3.5f;
-    constexpr float kMinDist2   = 2.0f * 2.0f;  // min separation between candidates
+    constexpr float kMinDist2   = 2.0f * 2.0f;
 
-    struct Scored { int x, y; float score; };
+    struct Scored { int x, y; float score; float mean_path_pos; };
     std::vector<Scored> cells;
     cells.reserve(kBoardWidth * kBoardHeight);
+
+    const float path_len = static_cast<float>(std::max<std::size_t>(1, path_.size()));
 
     for (int y = 0; y < kBoardHeight; ++y) {
       for (int x = 0; x < kBoardWidth; ++x) {
         if (path_mask_[static_cast<std::size_t>(y)][static_cast<std::size_t>(x)]) continue;
         float s = 0.0f;
-        for (const auto& p : path_) {
+        float pos_sum = 0.0f;
+        for (int pi = 0; pi < static_cast<int>(path_.size()); ++pi) {
+          const auto& p = path_[static_cast<std::size_t>(pi)];
           const float dx = static_cast<float>(x - p.x);
           const float dy = static_cast<float>(y - p.y);
-          if (dx*dx + dy*dy <= kCoverageR2) s += 1.0f;
+          if (dx*dx + dy*dy <= kCoverageR2) {
+            s += 1.0f;
+            pos_sum += static_cast<float>(pi) / path_len;
+          }
         }
-        if (s > 0.0f) cells.push_back({x, y, s});
+        if (s > 0.0f) cells.push_back({x, y, s, pos_sum / s});
       }
     }
     std::sort(cells.begin(), cells.end(),
@@ -1212,6 +1267,7 @@ private:
 
     ai_candidates_.clear();
     ai_candidate_coverage_.fill(0.0f);
+    ai_candidate_path_pos_.fill(0.0f);
     const float max_cov = cells.empty() ? 1.0f : cells[0].score;
 
     for (const auto& c : cells) {
@@ -1223,11 +1279,12 @@ private:
         if (dx*dx + dy*dy < kMinDist2) { too_close = true; break; }
       }
       if (!too_close) {
-        ai_candidate_coverage_[ai_candidates_.size()] = c.score / max_cov;
+        const std::size_t idx = ai_candidates_.size();
+        ai_candidate_coverage_[idx] = c.score / max_cov;
+        ai_candidate_path_pos_[idx] = c.mean_path_pos;
         ai_candidates_.push_back({c.x, c.y});
       }
     }
-    // Pad with off-board dummies if fewer valid candidates found
     while (static_cast<int>(ai_candidates_.size()) < kAINumCandidates)
       ai_candidates_.push_back({-1, -1});
   }
@@ -3104,6 +3161,7 @@ private:
   std::array<int, kAINumTowerTypes> ai_damage_per_type_{};
   std::vector<Position>  ai_candidates_;
   std::array<float, kAINumCandidates> ai_candidate_coverage_{};
+  std::array<float, kAINumCandidates> ai_candidate_path_pos_{};
 };
 
 class GameComponent : public ftxui::ComponentBase {

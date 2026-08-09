@@ -7,18 +7,21 @@ constexpr int kAINumTowerTypes = 7;   // Default..Galactic
 constexpr int kAINumEnemies    = 8;   // top enemies tracked in obs
 
 // Feature vector layout (indices shown for each block):
-//  [0..4]              global: kibbles, lives, wave, map_idx, wave_active
-//  [5..11]             unlocked flag per tower type
-//  [12..18]            can-afford-build flag per tower type
-//  [19..25]            can-afford-unlock flag per tower type
-//  [26..235]           per candidate (30×7): buildable, has_tower,
-//                        type/6, upgraded, coverage, cooldown_frac, can_afford_upgrade
-//  [236..259]          top 8 enemies (3 each): progress, hp_norm, type_norm
-constexpr int kAIObsGlobal    = 5;
-constexpr int kAIObsTowerInfo = kAINumTowerTypes * 3;   // 21
-constexpr int kAIObsCandidates= kAINumCandidates * 7;  // 210
-constexpr int kAIObsEnemies   = kAINumEnemies * 3;     // 24
-constexpr int kAIObs = kAIObsGlobal + kAIObsTowerInfo + kAIObsCandidates + kAIObsEnemies; // 260
+//  [0..6]              global: kibbles, lives, wave, map_idx, wave_active,
+//                        local_wave_frac, spawn_remaining_frac
+//  [7..13]             unlocked flag per tower type
+//  [14..20]            can-afford-build flag per tower type
+//  [21..27]            can-afford-unlock flag per tower type
+//  [28..477]           per candidate (30×15): buildable, has_tower,
+//                        type/6, upgraded, incremental_coverage, cooldown_frac,
+//                        can_afford_upgrade, path_position_frac,
+//                        neighbor_type[0..6] (one flag per tower type)
+//  [478..501]          top 8 enemies (3 each): progress, hp_norm, type_norm
+constexpr int kAIObsGlobal    = 7;
+constexpr int kAIObsTowerInfo = kAINumTowerTypes * 3;    // 21
+constexpr int kAIObsCandidates= kAINumCandidates * 15;  // 450
+constexpr int kAIObsEnemies   = kAINumEnemies * 3;      // 24
+constexpr int kAIObs = kAIObsGlobal + kAIObsTowerInfo + kAIObsCandidates + kAIObsEnemies; // 502
 
 // Action space layout:
 //  0              NOOP
