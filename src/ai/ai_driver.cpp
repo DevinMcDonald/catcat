@@ -588,7 +588,8 @@ private:
 
     // ── Output bias section ─────────────────────────────────────────────────
     std::array<float, kAINumTowerTypes> pref{};
-    float upg_bias = 0.0f;
+    float upg_bias  = 0.0f;
+    float sell_bias = 0.0f;
     {
       std::lock_guard<std::mutex> lock(player_mutex_);
       const auto& net = display_player_.Net();
@@ -608,9 +609,13 @@ private:
       for (int j = 0; j < kAINumCandidates; ++j)
         us += b3[kAIActUpgrade + j];
       upg_bias = us / static_cast<float>(kAINumCandidates);
+      float ss = 0.0f;
+      for (int j = 0; j < kAINumCandidates; ++j)
+        ss += b3[kAIActSell + j];
+      sell_bias = ss / static_cast<float>(kAINumCandidates);
     }
 
-    float b_lo = upg_bias, b_hi = upg_bias;
+    float b_lo = std::min(upg_bias, sell_bias), b_hi = std::max(upg_bias, sell_bias);
     for (float v : pref) { b_lo = std::min(b_lo, v); b_hi = std::max(b_hi, v); }
     const float b_range = std::max(b_hi - b_lo, 0.001f);
 
@@ -645,7 +650,8 @@ private:
                                pref[static_cast<std::size_t>(t)],
                                kInfo[static_cast<std::size_t>(t)].col));
     lines.push_back(ftxui::separator());
-    lines.push_back(bias_row("Upgrade", upg_bias, Color::White));
+    lines.push_back(bias_row("Upgrade", upg_bias,  Color::Yellow1));
+    lines.push_back(bias_row("Sell",    sell_bias,  Color::Red3));
 
     return vbox(std::move(lines)) | ftxui::border;
   }

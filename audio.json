@@ -60,7 +60,7 @@
     },
     "tower_catastrophe_explosion": {
       "files": ["audio/sfx/catastrophe_explosion.wav"],
-      "volume": 0.3
+      "volume": 0.6
     },
     "wave_start": { "files": ["audio/sfx/wave_start.wav"], "volume": 0.8 },
     "map_change": { "files": ["audio/sfx/map_change.wav"], "volume": 0.75 },

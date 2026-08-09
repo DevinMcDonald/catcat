@@ -62,7 +62,7 @@ constexpr float kKittyJumpBonusRange = 1.5F; // extra reach for upgraded jumps
 // Catastrophe
 constexpr float kCatastropheTravelTime = 1.8F; // seconds of flight time
 constexpr float kCatastropheArcHeight = 3.5F;  // visual height peak in cells
-constexpr float kCatastropheSplashRadius = 1.5F;
+constexpr float kCatastropheSplashRadius = 2.9F; // covers full 5×5 square (corners at √8≈2.83)
 constexpr float kCatastropheZoneDuration = 3.0F;
 constexpr float kCatastropheZoneTickInterval = 0.40F;
 constexpr int kCatastropheZoneDamagePerTick = 3;
@@ -1035,6 +1035,7 @@ public:
         const TowerDef def = GetDef(t.type);
         obs.valid[static_cast<std::size_t>(kAIActUpgrade + j)] =
             !t.upgraded && kibbles_ >= def.cost * kUpgradeCostMultiplier;
+        obs.valid[static_cast<std::size_t>(kAIActSell + j)] = true;
       }
     }
     return obs;
@@ -2322,7 +2323,7 @@ private:
         AwardBounty(e.type);
         PlayDeathSfx(e.type);
       } else {
-        hit_splats_.push_back({EnemyCell(e), 0.25F, 1});
+        hit_splats_.push_back({EnemyCell(e), 0.25F, 2});
       }
     }
 
@@ -2372,7 +2373,7 @@ private:
             AwardBounty(e.type);
             PlayDeathSfx(e.type);
           } else {
-            hit_splats_.push_back({pos, 0.15F, 1});
+            hit_splats_.push_back({pos, 0.15F, 0});
           }
         }
       }
@@ -2748,18 +2749,36 @@ private:
       }
     }
 
-    // Toxic zones — render as a persistent tinted area under other effects.
+    // Toxic zones — 5×5 crater with 3 concentric square rings.
     for (const auto &zone : toxic_zones_) {
+      const int cx = static_cast<int>(zone.center.x);
+      const int cy = static_cast<int>(zone.center.y);
       for (const auto &cell : zone.cells) {
         if (cell.y < 0 || cell.y >= kBoardHeight || cell.x < 0 ||
             cell.x >= kBoardWidth)
           continue;
         const auto yi = static_cast<size_t>(cell.y);
         const auto xi = static_cast<size_t>(cell.x);
-        glyphs[yi][xi] = '~';
-        foregrounds[yi][xi] = ftxui::Color::DarkSeaGreen3;
-        backgrounds[yi][xi] =
-            BlendColor(backgrounds[yi][xi], ftxui::Color::DarkSeaGreen3, 0.15F);
+        const int ring = std::max(std::abs(cell.x - cx), std::abs(cell.y - cy));
+        if (ring == 0) {
+          backgrounds[yi][xi] = ftxui::Color::Black;
+          if (zone.explode_on_expire) {
+            glyphs[yi][xi] = '!';
+            foregrounds[yi][xi] = ftxui::Color::Red1;
+          } else {
+            glyphs[yi][xi] = ' ';
+          }
+        } else if (ring == 1) {
+          glyphs[yi][xi] = ':';
+          foregrounds[yi][xi] = ftxui::Color::Grey35;
+          backgrounds[yi][xi] =
+              BlendColor(backgrounds[yi][xi], ftxui::Color::Black, 0.60F);
+        } else {
+          glyphs[yi][xi] = '.';
+          foregrounds[yi][xi] = ftxui::Color::Grey50;
+          backgrounds[yi][xi] =
+              BlendColor(backgrounds[yi][xi], ftxui::Color::Black, 0.30F);
+        }
       }
     }
 
