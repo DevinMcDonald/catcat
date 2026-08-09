@@ -11,14 +11,14 @@ constexpr int kAINumEnemies    = 8;   // top enemies tracked in obs
 //  [5..11]             unlocked flag per tower type
 //  [12..18]            can-afford-build flag per tower type
 //  [19..25]            can-afford-unlock flag per tower type
-//  [26..205]           per candidate (30×6): buildable, has_tower,
-//                        type/6, upgraded, coverage, cooldown_frac
-//  [206..229]          top 8 enemies (3 each): progress, hp_norm, type_norm
+//  [26..235]           per candidate (30×7): buildable, has_tower,
+//                        type/6, upgraded, coverage, cooldown_frac, can_afford_upgrade
+//  [236..259]          top 8 enemies (3 each): progress, hp_norm, type_norm
 constexpr int kAIObsGlobal    = 5;
 constexpr int kAIObsTowerInfo = kAINumTowerTypes * 3;   // 21
-constexpr int kAIObsCandidates= kAINumCandidates * 6;  // 180
+constexpr int kAIObsCandidates= kAINumCandidates * 7;  // 210
 constexpr int kAIObsEnemies   = kAINumEnemies * 3;     // 24
-constexpr int kAIObs = kAIObsGlobal + kAIObsTowerInfo + kAIObsCandidates + kAIObsEnemies; // 230
+constexpr int kAIObs = kAIObsGlobal + kAIObsTowerInfo + kAIObsCandidates + kAIObsEnemies; // 260
 
 // Action space layout:
 //  0              NOOP

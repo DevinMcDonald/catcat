@@ -914,7 +914,7 @@ public:
     base = kAIObsGlobal + kAIObsTowerInfo;
     for (int j = 0; j < kAINumCandidates; ++j) {
       const Position& pos = ai_candidates_[static_cast<std::size_t>(j)];
-      const int off = base + j * 6;
+      const int off = base + j * 7;
       const auto tidx = TowerIndexAt(pos);
       f[static_cast<std::size_t>(off + 0)] =
           CanPlace(pos, 1, Tower::Type::Default, 3.2f, false) ? 1.0f : 0.0f;
@@ -928,11 +928,13 @@ public:
         f[static_cast<std::size_t>(off+3)] = t.upgraded ? 1.0f : 0.0f;
         f[static_cast<std::size_t>(off+4)] = ai_candidate_coverage_[static_cast<std::size_t>(j)];
         f[static_cast<std::size_t>(off+5)] = std::min(t.cooldown / t.fire_rate, 1.0f);
+        f[static_cast<std::size_t>(off+6)] = (!t.upgraded && kibbles_ >= GetDef(t.type).cost * 2) ? 1.0f : 0.0f;
       } else {
         f[static_cast<std::size_t>(off+1)] = 0.0f; f[static_cast<std::size_t>(off+2)] = 0.0f;
         f[static_cast<std::size_t>(off+3)] = 0.0f;
         f[static_cast<std::size_t>(off+4)] = ai_candidate_coverage_[static_cast<std::size_t>(j)];
         f[static_cast<std::size_t>(off+5)] = 0.0f;
+        f[static_cast<std::size_t>(off+6)] = 0.0f;
       }
     }
 

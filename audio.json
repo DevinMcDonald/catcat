@@ -28,7 +28,7 @@
     },
     "tower_default_shoot": {
       "files": ["audio/sfx/tower_default_shoot.wav"],
-      "volume": 0.85
+      "volume": 0.7
     },
     "tower_thunder_shoot": {
       "files": ["audio/sfx/tower_thunder_shoot.wav"],
@@ -52,15 +52,15 @@
     },
     "tower_catastrophe_shoot": {
       "files": ["audio/sfx/catastrophe_shoot.wav"],
-      "volume": 1
+      "volume": 4
     },
     "tower_catastrophe_detonation": {
       "files": ["audio/sfx/catastrophe_detonation.wav"],
-      "volume": 1
+      "volume": 2
     },
     "tower_catastrophe_explosion": {
       "files": ["audio/sfx/catastrophe_explosion.wav"],
-      "volume": 0.1
+      "volume": 0.3
     },
     "wave_start": { "files": ["audio/sfx/wave_start.wav"], "volume": 0.8 },
     "map_change": { "files": ["audio/sfx/map_change.wav"], "volume": 0.75 },
