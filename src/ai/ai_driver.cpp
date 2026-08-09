@@ -183,7 +183,8 @@ float Trainer::RunBatch(AIStats& stats, const std::atomic<bool>& running) {
   stats.wins.fetch_add(batch_wins);
   stats.losses.fetch_add(batch_losses);
   stats.PushWinRate(batch_wins, batch_wins + batch_losses);
-  stats.PushWaves(static_cast<float>(best_cand_waves) / static_cast<float>(eval_games_));
+  stats.PushWaves(static_cast<float>(best_cand_waves) / static_cast<float>(eval_games_),
+                  best_cand_waves / eval_games_);
 
   // Compute DPS per tower: total damage / total time / avg towers per game.
   constexpr float kSecsPerTick = 1.0f / 60.0f;
@@ -206,6 +207,7 @@ float Trainer::RunBatch(AIStats& stats, const std::atomic<bool>& running) {
     success_count_ = 0;
   }
   stats.sigma.store(sigma_);
+  stats.PushSigma(sigma_);
   return batch_best;
 }
 
@@ -451,15 +453,16 @@ private:
         val += "  (" + fmt(100.f * static_cast<float>(w) / static_cast<float>(total), 1) + "%)";
       lines.push_back(stat_row("W / L", val));
     }
+    // ── Sparklines ───────────────────────────────────────────────────────
     lines.push_back(separator());
     {
-      const float best = stats_.best_fitness.load();
-      lines.push_back(stat_row("Best fit", best < -1e8f ? "--" : fmt(best, 1)));
+      auto [top, bot, cur] = make_spark(stats_.sigma_history, stats_.sigma_head,
+                                        0.f, 0.5f, stats_.sigma_count.load());
+      lines.push_back(hbox({text(rpad(" sigma", 13)) | color(Color::GrayLight),
+                            text(fmt(cur, 3)) | bold}));
+      lines.push_back(text(" " + top) | color(Color::GrayLight));
+      lines.push_back(text(" " + bot) | color(Color::GrayLight));
     }
-    lines.push_back(stat_row("Last fit", fmt(stats_.last_fitness.load(), 1)));
-    lines.push_back(stat_row("Sigma",    fmt(stats_.sigma.load(), 3)));
-
-    // ── Sparklines ───────────────────────────────────────────────────────
     lines.push_back(separator());
     {
       auto [top, bot, cur] = make_spark(stats_.win_rate_history, stats_.win_rate_head, 0.f, 1.f);
@@ -469,17 +472,29 @@ private:
       lines.push_back(text(" " + bot) | color(Color::Yellow1));
     }
     {
+      const float best_fit = stats_.best_fitness.load();
+      const std::string best_str = best_fit < -1e8f ? "--" : fmt(best_fit, 0);
       auto [top, bot, cur] = make_spark(stats_.history, stats_.history_head, -1.f, -1.f);
-      lines.push_back(hbox({text(rpad(" fitness", 13)) | color(Color::GrayLight),
-                            text(fmt(cur, 1)) | bold}));
+      lines.push_back(hbox({
+        text(rpad(" fitness", 13)) | color(Color::GrayLight),
+        text(fmt(cur, 0))          | bold,
+        text("  b:")               | color(Color::GrayDark),
+        text(best_str)             | color(Color::GreenLight) | bold,
+      }));
       lines.push_back(text(" " + top) | color(Color::Green1));
       lines.push_back(text(" " + bot) | color(Color::Green1));
     }
     {
+      const int best_w = stats_.best_waves.load();
+      const std::string best_str = best_w > 0 ? std::to_string(best_w) : "--";
       auto [top, bot, cur] = make_spark(stats_.waves_history, stats_.waves_head, 0.f, 100.f,
                                         stats_.waves_count.load());
-      lines.push_back(hbox({text(rpad(" waves", 13)) | color(Color::GrayLight),
-                            text(fmt(cur, 1)) | bold}));
+      lines.push_back(hbox({
+        text(rpad(" waves", 13)) | color(Color::GrayLight),
+        text(fmt(cur, 1))        | bold,
+        text("  b:")             | color(Color::GrayDark),
+        text(best_str)           | color(Color::Cyan1) | bold,
+      }));
       lines.push_back(text(" " + top) | color(Color::Cyan1));
       lines.push_back(text(" " + bot) | color(Color::Cyan1));
     }

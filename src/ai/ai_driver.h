@@ -55,13 +55,28 @@ struct AIStats {
   std::array<std::atomic<float>, kHistLen> waves_history{};
   std::atomic<int> waves_head{0};
   std::atomic<int> waves_count{0}; // total pushes, capped at kHistLen
+  std::atomic<int> best_waves{0};
 
-  void PushWaves(float avg_waves) {
+  void PushWaves(float avg_waves, int best_this_batch) {
     const int h = waves_head.load();
     waves_history[static_cast<std::size_t>(h)].store(avg_waves);
     waves_head.store((h + 1) % kHistLen);
     const int c = waves_count.load();
     if (c < kHistLen) waves_count.store(c + 1);
+    if (best_this_batch > best_waves.load()) best_waves.store(best_this_batch);
+  }
+
+  // Sigma history ring buffer (fixed scale 0..0.5)
+  std::array<std::atomic<float>, kHistLen> sigma_history{};
+  std::atomic<int> sigma_head{0};
+  std::atomic<int> sigma_count{0};
+
+  void PushSigma(float s) {
+    const int h = sigma_head.load();
+    sigma_history[static_cast<std::size_t>(h)].store(s);
+    sigma_head.store((h + 1) % kHistLen);
+    const int c = sigma_count.load();
+    if (c < kHistLen) sigma_count.store(c + 1);
   }
 };
 
