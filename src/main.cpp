@@ -1,3 +1,7 @@
+#include <atomic>
+#include <chrono>
+#include <csignal>
+#include <cstdio>
 #include <filesystem>
 #include <string>
 
@@ -8,11 +12,63 @@
 #include "game/game.h"
 #include "version/version.h"
 
+// ── Headless training mode (--ai --train) ────────────────────────────────────
+
+static std::atomic<bool> g_train_running{true};
+static void TrainSignalHandler(int) { g_train_running = false; }
+
+static void RunHeadlessTraining(const std::string& weights_path,
+                                bool fresh, int candidates, int eval_games) {
+  std::signal(SIGINT,  TrainSignalHandler);
+  std::signal(SIGTERM, TrainSignalHandler);
+
+  std::printf("catcat headless training | %dc x %dg | %s\n",
+              candidates, eval_games, weights_path.c_str());
+  std::printf("Ctrl+C or SIGTERM to stop. Weights auto-saved on improvement.\n");
+  std::fflush(stdout);
+
+  AIStats    stats;
+  Trainer    trainer(weights_path, fresh, candidates, eval_games);
+  const auto t0 = std::chrono::steady_clock::now();
+
+  while (g_train_running) {
+    trainer.RunBatch(stats, g_train_running);
+    if (!g_train_running) break;
+
+    const int   ep   = stats.episodes.load();
+    const float mins = std::chrono::duration<float>(
+        std::chrono::steady_clock::now() - t0).count() / 60.0f;
+    const float epm  = mins > 0.05f ? static_cast<float>(ep) / mins : 0.0f;
+
+    // Last batch waves and fitness from ring buffers
+    const int wi = (stats.waves_head.load() + AIStats::kHistLen - 1) % AIStats::kHistLen;
+    const float last_waves = stats.waves_history[static_cast<std::size_t>(wi)].load();
+    const int   best_w     = stats.best_waves.load();
+
+    const int fi = (stats.history_head.load() + AIStats::kHistLen - 1) % AIStats::kHistLen;
+    const float last_fit = stats.history[static_cast<std::size_t>(fi)].load();
+    const float best_fit = stats.best_fitness.load();
+
+    const int wri = (stats.win_rate_head.load() + AIStats::kHistLen - 1) % AIStats::kHistLen;
+    const float wr = stats.win_rate_history[static_cast<std::size_t>(wri)].load();
+
+    std::printf("ep=%6d  epm=%5.0f  waves=%5.1f b:%-3d  fit=%6.0f b:%-6.0f  wr=%4.1f%%  s=%.3f\n",
+                ep, epm, last_waves, best_w,
+                last_fit, best_fit < -1e8f ? 0.0f : best_fit,
+                wr * 100.0f, stats.sigma.load());
+    std::fflush(stdout);
+  }
+
+  std::printf("Stopped at %d episodes. Weights saved.\n", stats.episodes.load());
+  std::fflush(stdout);
+}
+
 int main(int argc, const char *argv[]) {
   bool dev_mode     = false;
   bool ai_mode      = false;
   bool ai_fast      = false;
   bool ai_fresh     = false;
+  bool ai_train     = false;
   bool show_version = false;
   int  ai_candidates = 8;
   int  ai_games      = 10;
@@ -22,6 +78,7 @@ int main(int argc, const char *argv[]) {
     else if (arg == "--ai")      ai_mode      = true;
     else if (arg == "--fast")    ai_fast      = true;
     else if (arg == "--fresh")   ai_fresh     = true;
+    else if (arg == "--train")   ai_train     = true;
     else if (arg == "--version") show_version = true;
     else if (arg == "--candidates" && i + 1 < argc) ai_candidates = std::stoi(argv[++i]);
     else if (arg == "--games"      && i + 1 < argc) ai_games      = std::stoi(argv[++i]);
@@ -46,6 +103,14 @@ int main(int argc, const char *argv[]) {
     return 0;
   }
   if (CheckForUpdates() == UpdateAction::Exit) {
+    return 0;
+  }
+
+  if (ai_mode && ai_train) {
+    const auto weights_path =
+        (std::filesystem::path(std::getenv("HOME") ? std::getenv("HOME") : ".")
+         / ".config" / "catcat" / "ai_weights.bin").string();
+    RunHeadlessTraining(weights_path, ai_fresh, ai_candidates, ai_games);
     return 0;
   }
 
