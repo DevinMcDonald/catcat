@@ -519,11 +519,13 @@ private:
 
     // Load last-batch DPS values and compute efficiency = DPS / cost for color grading.
     float dps_val[kAINumTowerTypes] = {};
+    float dpm_val[kAINumTowerTypes] = {};
     float eff[kAINumTowerTypes]     = {};
-    float max_dps = 0.001f, min_eff = 1e9f, max_eff = -1e9f;
+    float max_dpm = 0.001f, min_eff = 1e9f, max_eff = -1e9f;
     for (int i = 0; i < kAINumTowerTypes; ++i) {
       dps_val[i] = stats_.last_batch_dps[static_cast<std::size_t>(i)].load();
-      max_dps = std::max(max_dps, dps_val[i]);
+      dpm_val[i] = dps_val[i] * 60.0f;
+      max_dpm = std::max(max_dpm, dpm_val[i]);
       if (dps_val[i] > 0.0f) {
         eff[i] = dps_val[i] / static_cast<float>(kCost[i]);
         min_eff = std::min(min_eff, eff[i]);
@@ -541,22 +543,21 @@ private:
     const int cnt_w     = std::max(3, static_cast<int>(std::to_string(max_cnt).size()));
     const int upg_w     = static_cast<int>(std::to_string(std::max(1, max_upg)).size());
     const int upg_col_w = 2 + upg_w; // " ★" + digits
-    // DPS column: fmt(max_dps, 1) + "/s" gives the widest possible string
-    const int dps_w = std::max(4, static_cast<int>(fmt(max_dps, 1).size()));
+    const int dpm_w = std::max(4, static_cast<int>(fmt(max_dpm, 0).size()));
 
     // Column header
     lines.push_back(hbox({
       text(rpad("", 13)),
       text(lpad("cnt", cnt_w))                | color(Color::GrayDark),
       text(lpad("upg", upg_col_w))            | color(Color::GrayDark),
-      text(" " + lpad("dps", dps_w))           | color(Color::GrayDark),
+      text(" " + lpad("dpm", dpm_w))          | color(Color::GrayDark),
     }));
 
     for (int i = 0; i < kAINumTowerTypes; ++i) {
       const std::size_t idx = static_cast<std::size_t>(i);
       const int   cnt = stats_.tower_counts[idx].load();
       const int   upg = stats_.upgrade_counts[idx].load();
-      const float dps = dps_val[i];
+      const float dpm = dpm_val[i];
       const bool  active = cnt > 0;
       const Color tc = active ? kInfo[i].col : Color::GrayDark;
 
@@ -571,13 +572,13 @@ private:
           : std::string(static_cast<std::size_t>(upg_col_w), ' ');
       auto upg_el = text(upg_str) | color(Color::Yellow1);
 
-      // DPS: "--" only if tower has never been placed.
+      // DPM: "--" only if tower has never been placed.
       // Once placed, show actual value (0.0 if idle this batch).
       // Color-grade by efficiency (DPS/cost) red→yellow→green.
-      Color dps_color = Color::GrayDark;
-      std::string dps_str = "--";
-      if (dps > 0.0f) {
-        dps_str = fmt(dps, 1);
+      Color dpm_color = Color::GrayDark;
+      std::string dpm_str = "--";
+      if (dpm > 0.0f) {
+        dpm_str = fmt(dpm, 0);
         // Interpolate hue 0°(red)→60°(yellow)→120°(green) based on efficiency rank
         const float t = (max_eff > min_eff)
             ? std::clamp((eff[i] - min_eff) / eff_range, 0.0f, 1.0f)
@@ -590,15 +591,14 @@ private:
           r = static_cast<uint8_t>((1.0f - t) * 2.0f * 255.0f);
           g = 255;
         }
-        dps_color = Color(r, g, static_cast<uint8_t>(0));
+        dpm_color = Color(r, g, static_cast<uint8_t>(0));
       } else if (active) {
-        // Previously placed but not used in the last batch — show 0.0 in neutral gray
-        dps_str = fmt(0.0f, 1);
-        dps_color = Color::GrayLight;
+        dpm_str = fmt(0.0f, 0);
+        dpm_color = Color::GrayLight;
       }
-      auto dps_el = text(" " + lpad(dps_str, dps_w)) | color(dps_color);
+      auto dpm_el = text(" " + lpad(dpm_str, dpm_w)) | color(dpm_color);
 
-      lines.push_back(hbox({name_el, cnt_el, upg_el, dps_el}));
+      lines.push_back(hbox({name_el, cnt_el, upg_el, dpm_el}));
     }
 
     // ── Output bias section ─────────────────────────────────────────────────

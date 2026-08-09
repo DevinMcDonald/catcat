@@ -1114,8 +1114,15 @@ public:
       if (pi >= kAINumCandidates) return false;
       const auto tidx = TowerIndexAt(ai_candidates_[static_cast<std::size_t>(pi)]);
       if (!tidx.has_value()) return false;
-      kibbles_ += SellRefund(GetDef(towers_[*tidx].type).cost);
+      const Tower::Type sold_type = towers_[*tidx].type;
+      kibbles_ += SellRefund(GetDef(sold_type).cost);
       towers_.erase(towers_.begin() + static_cast<long>(*tidx));
+      for (int i = 0; i < kAINumTowerTypes; ++i)
+        if (kAllTowerTypes[static_cast<std::size_t>(i)] == sold_type) {
+          if (ai_map_tower_counts_[static_cast<std::size_t>(i)] > 0)
+            ai_map_tower_counts_[static_cast<std::size_t>(i)]--;
+          break;
+        }
       Sfx("sell");
       return true;
     }
