@@ -98,7 +98,8 @@ public:
   // Run one training batch: candidates evaluated in parallel, each playing
   // eval_games games. Updates internal best weights and stats.
   // Returns the best fitness seen this batch.
-  float RunBatch(AIStats& stats);
+  // Pass running=false to abort early (returns 0 without updating stats).
+  float RunBatch(AIStats& stats, const std::atomic<bool>& running);
 
   const AIPlayer& BestPlayer() const { return best_player_; }
   int Candidates() const { return candidates_; }
@@ -114,7 +115,7 @@ public:
   };
 
 private:
-  EvalResult EvaluatePlayer(const AIPlayer& player) const;
+  EvalResult EvaluatePlayer(const AIPlayer& player, const std::atomic<bool>& running) const;
 
   AIPlayer    best_player_;
   float       best_fitness_;

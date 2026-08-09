@@ -45,35 +45,45 @@ constexpr MapEnemyWeights kMapWeights[10] = {
 };
 
 // ---------------------------------------------------------------------------
+// Game balance constants.
+// ---------------------------------------------------------------------------
+
+constexpr int   kWavesPerMap         = 10;   // waves before advancing to the next map
+constexpr int   kWaveCompletionBase  = 9;    // flat kibbles added on each wave clear
+constexpr int   kSpawnBase           = 6;    // enemies spawned per wave before difficulty scaling
+constexpr float kEnemyHPScalar       = 1.2F; // global HP multiplier applied after per-type scaling
+constexpr float kSellRefundFraction  = 0.33F; // fraction of base cost returned on sell
+
+// ---------------------------------------------------------------------------
 // Pure game-logic functions — no state, no FTXUI dependency.
 // ---------------------------------------------------------------------------
 
 // Difficulty level at a given (wave, map_index). Resets to 1-10 each map,
 // plus a permanent map bonus so later maps stay harder.
 inline int DifficultyLevel(int wave, int map_index) {
-  const int local = (wave - 1) % 10 + 1;
+  const int local = (wave - 1) % kWavesPerMap + 1;
   return local + map_index * 2;
 }
 
 // Kibbles awarded at the end of a wave. Local wave resets per map so late-game
 // income stays controlled.
 inline int WaveCompletionBonus(int wave) {
-  return 9 + ((wave - 1) % 10 + 1);
+  return kWaveCompletionBase + ((wave - 1) % kWavesPerMap + 1);
 }
 
 // Number of enemies spawned in a wave at the given difficulty.
 inline int SpawnCount(int diff) {
-  return 6 + diff;
+  return kSpawnBase + diff;
 }
 
 // Max HP of an enemy at a given difficulty level.
 inline int EnemyMaxHP(EnemyType type, int diff) {
   const float f = static_cast<float>(diff);
   switch (type) {
-  case EnemyType::Mouse:  return static_cast<int>((2.0F + f)          * 1.2F);
-  case EnemyType::Rat:    return static_cast<int>((5.0F + f * 2.5F)   * 1.2F);
-  case EnemyType::BigRat: return static_cast<int>((15.0F + f * 4.0F)  * 1.2F);
-  case EnemyType::Dog:    return static_cast<int>((28.0F + f * 6.0F)  * 1.2F);
+  case EnemyType::Mouse:  return static_cast<int>((2.0F + f)          * kEnemyHPScalar);
+  case EnemyType::Rat:    return static_cast<int>((5.0F + f * 2.5F)   * kEnemyHPScalar);
+  case EnemyType::BigRat: return static_cast<int>((15.0F + f * 4.0F)  * kEnemyHPScalar);
+  case EnemyType::Dog:    return static_cast<int>((28.0F + f * 6.0F)  * kEnemyHPScalar);
   }
   return 1;
 }
@@ -83,15 +93,15 @@ inline int EnemyBounty(EnemyType type) {
   switch (type) {
   case EnemyType::Mouse:  return 4;
   case EnemyType::Rat:    return 5;
-  case EnemyType::BigRat: return 9;
-  case EnemyType::Dog:    return 13;
+  case EnemyType::BigRat: return 10;
+  case EnemyType::Dog:    return 14;
   }
   return 5;
 }
 
-// Kibbles returned when selling a tower (20% of original cost).
+// Kibbles returned when selling a tower.
 inline int SellRefund(int cost) {
-  return static_cast<int>(std::round(static_cast<float>(cost) * 0.25F));
+  return static_cast<int>(std::round(static_cast<float>(cost) * kSellRefundFraction));
 }
 
 // Determine enemy type from a pre-supplied uniform random roll in [0, 1).

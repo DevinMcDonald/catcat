@@ -46,7 +46,9 @@ constexpr int kBoardWidth = 48;
 constexpr int kBoardHeight = 28;
 constexpr int kTickMs = 16; // ~60 FPS
 constexpr float kTickSeconds = kTickMs / 1000.0F;
-constexpr int kStartingKibbles = 90;
+constexpr int kStartingKibbles       = 90;
+constexpr int kUnlockCostMultiplier  = 8;  // tower unlock costs this multiple of base cost
+constexpr int kUpgradeCostMultiplier = 2;  // tower upgrade costs this multiple of base cost
 constexpr float kSpeedFactor = 1.3F; // Global pacing multiplier (~30% faster).
 constexpr float kFastForwardMultiplier = 5.0F;
 constexpr int kStartingLives = 9;
@@ -63,9 +65,9 @@ constexpr float kCatastropheArcHeight = 3.5F;  // visual height peak in cells
 constexpr float kCatastropheSplashRadius = 1.5F;
 constexpr float kCatastropheZoneDuration = 3.0F;
 constexpr float kCatastropheZoneTickInterval = 0.40F;
-constexpr int kCatastropheZoneDamagePerTick = 2;
+constexpr int kCatastropheZoneDamagePerTick = 3;
 constexpr float kCatastropheExplosionRadius = 3.0F;
-constexpr int kCatastropheExplosionDamage = 5;
+constexpr int kCatastropheExplosionDamage = 7;
 
 struct Position {
   int x = 0;
@@ -141,6 +143,7 @@ struct Tower {
 struct HitSplat {
   Position pos{};
   float time_left = 0.25F; // seconds
+  int radius = 0;          // 0 = single cell; 1 = diamond of adjacent cells
 };
 
 struct Projectile {
@@ -239,9 +242,9 @@ TowerDef GetDef(Tower::Type type) {
   case Tower::Type::Thunder:
     return {type, "Thundercat", 100, 7, 999.0F, 3.38F, false, 1};
   case Tower::Type::Catatonic:
-    return {type, "Catatonic", 150, 2, 3.2F, 2.2F, true, 1};
+    return {type, "Catatonic", 100, 2, 3.2F, 2.2F, true, 1};
   case Tower::Type::Catastrophe:
-    return {type, "Catastrophe", 175, 8, 5.0F, 4.5F, true, 1};
+    return {type, "Catastrophe", 150, 11, 5.0F, 4.5F, true, 1};
   case Tower::Type::Galactic:
     return {type, "Galacticat", 200, 20, 7.5F, 2.5F, true, 1};
   }
@@ -908,7 +911,7 @@ public:
       f[static_cast<std::size_t>(base + i)]                       = IsUnlocked(t) ? 1.0f : 0.0f;
       f[static_cast<std::size_t>(base + kAINumTowerTypes   + i)]  = (kibbles_ >= def.cost) ? 1.0f : 0.0f;
       f[static_cast<std::size_t>(base + kAINumTowerTypes*2 + i)]  =
-          (!IsUnlocked(t) && kibbles_ >= def.cost * 10) ? 1.0f : 0.0f;
+          (!IsUnlocked(t) && kibbles_ >= def.cost * kUnlockCostMultiplier) ? 1.0f : 0.0f;
     }
 
     base = kAIObsGlobal + kAIObsTowerInfo;
@@ -928,7 +931,7 @@ public:
         f[static_cast<std::size_t>(off+3)] = t.upgraded ? 1.0f : 0.0f;
         f[static_cast<std::size_t>(off+4)] = ai_candidate_coverage_[static_cast<std::size_t>(j)];
         f[static_cast<std::size_t>(off+5)] = std::min(t.cooldown / t.fire_rate, 1.0f);
-        f[static_cast<std::size_t>(off+6)] = (!t.upgraded && kibbles_ >= GetDef(t.type).cost * 2) ? 1.0f : 0.0f;
+        f[static_cast<std::size_t>(off+6)] = (!t.upgraded && kibbles_ >= GetDef(t.type).cost * kUpgradeCostMultiplier) ? 1.0f : 0.0f;
       } else {
         f[static_cast<std::size_t>(off+1)] = 0.0f; f[static_cast<std::size_t>(off+2)] = 0.0f;
         f[static_cast<std::size_t>(off+3)] = 0.0f;
@@ -968,7 +971,7 @@ public:
       const Tower::Type t   = kAllTowerTypes[static_cast<std::size_t>(i)];
       const TowerDef    def = GetDef(t);
       obs.valid[static_cast<std::size_t>(kAIActUnlock + i)] =
-          !IsUnlocked(t) && kibbles_ >= def.cost * 10;
+          !IsUnlocked(t) && kibbles_ >= def.cost * kUnlockCostMultiplier;
       const bool under_cap = ai_map_tower_counts_[static_cast<std::size_t>(i)] < kAIMaxTowersPerType;
       for (int j = 0; j < kAINumCandidates; ++j) {
         obs.valid[static_cast<std::size_t>(kAIActPlace + i*kAINumCandidates + j)] =
@@ -983,7 +986,7 @@ public:
         const Tower& t  = towers_[*tidx];
         const TowerDef def = GetDef(t.type);
         obs.valid[static_cast<std::size_t>(kAIActUpgrade + j)] =
-            !t.upgraded && kibbles_ >= def.cost * 2;
+            !t.upgraded && kibbles_ >= def.cost * kUpgradeCostMultiplier;
       }
     }
     return obs;
@@ -1008,8 +1011,8 @@ public:
       if (ti >= kAINumTowerTypes) return false;
       const Tower::Type type = kAllTowerTypes[static_cast<std::size_t>(ti)];
       const TowerDef def = GetDef(type);
-      if (IsUnlocked(type) || kibbles_ < def.cost * 10) return false;
-      Unlock(type); kibbles_ -= def.cost * 10;
+      if (IsUnlocked(type) || kibbles_ < def.cost * kUnlockCostMultiplier) return false;
+      Unlock(type); kibbles_ -= def.cost * kUnlockCostMultiplier;
       Sfx("unlock");
       return true;
     }
@@ -1044,8 +1047,8 @@ public:
       Tower& t = towers_[*tidx];
       if (t.upgraded) return false;
       const TowerDef def = GetDef(t.type);
-      if (kibbles_ < def.cost * 2) return false;
-      kibbles_ -= def.cost * 2; t.upgraded = true;
+      if (kibbles_ < def.cost * kUpgradeCostMultiplier) return false;
+      kibbles_ -= def.cost * kUpgradeCostMultiplier; t.upgraded = true;
       for (int i = 0; i < kAINumTowerTypes; ++i)
         if (kAllTowerTypes[static_cast<std::size_t>(i)] == t.type) {
           ai_tower_upgrade_counts_[static_cast<std::size_t>(i)]++;
@@ -1081,7 +1084,7 @@ public:
 
   AIEpisodeResult GetAIResult() const {
     AIEpisodeResult r;
-    r.waves_cleared = map_index_ * 10 + (wave_ % 10);
+    r.waves_cleared = map_index_ * kWavesPerMap + (wave_ % kWavesPerMap);
     r.victory       = victory_;
     r.tower_type_counts    = ai_tower_type_counts_;
     r.tower_upgrade_counts = ai_tower_upgrade_counts_;
@@ -1581,7 +1584,7 @@ private:
     ReturnKittiesHome();
     kibbles_ += WaveCompletionBonus(wave_);
 
-    if (wave_ % 10 == 0) {
+    if (wave_ % kWavesPerMap == 0) {
       const bool last_map = map_index_ == static_cast<int>(maps_.size()) - 1;
       if (last_map) {
         victory_ = true;
@@ -1619,7 +1622,7 @@ private:
     if (ai_mode_) ai_map_tower_counts_.fill(0);
     BuildPath();
     if (dev_skip) {
-      wave_ = map_index_ * 10;
+      wave_ = map_index_ * kWavesPerMap;
     }
     SetMusic(map_index_);
     Sfx("map_change");
@@ -1826,7 +1829,7 @@ private:
       return;
     }
     const auto def = GetDef(type);
-    const int unlock_cost = def.cost * 10;
+    const int unlock_cost = def.cost * kUnlockCostMultiplier;
     if (kibbles_ >= unlock_cost) {
       kibbles_ -= unlock_cost;
       Unlock(type);
@@ -2002,7 +2005,7 @@ private:
       return;
     }
     const auto def = GetDef(t.type);
-    const int cost = def.cost * 2;
+    const int cost = def.cost * kUpgradeCostMultiplier;
     if (kibbles_ < cost) {
       return;
     }
@@ -2262,7 +2265,7 @@ private:
         AwardBounty(e.type);
         PlayDeathSfx(e.type);
       } else {
-        hit_splats_.push_back({EnemyCell(e), 0.25F});
+        hit_splats_.push_back({EnemyCell(e), 0.25F, 1});
       }
     }
 
@@ -2312,7 +2315,7 @@ private:
             AwardBounty(e.type);
             PlayDeathSfx(e.type);
           } else {
-            hit_splats_.push_back({pos, 0.15F});
+            hit_splats_.push_back({pos, 0.15F, 1});
           }
         }
       }
@@ -2754,15 +2757,19 @@ private:
     }
 
     for (const auto &hs : hit_splats_) {
-      if (hs.pos.y < 0 || hs.pos.y >= kBoardHeight || hs.pos.x < 0 ||
-          hs.pos.x >= kBoardWidth) {
-        continue;
+      for (int dy = -hs.radius; dy <= hs.radius; ++dy) {
+        for (int dx = -hs.radius; dx <= hs.radius; ++dx) {
+          if (std::abs(dx) + std::abs(dy) > hs.radius) continue; // diamond shape
+          const int cx = hs.pos.x + dx;
+          const int cy = hs.pos.y + dy;
+          if (cy < 0 || cy >= kBoardHeight || cx < 0 || cx >= kBoardWidth) continue;
+          const auto yi = static_cast<size_t>(cy);
+          const auto xi = static_cast<size_t>(cx);
+          glyphs[yi][xi] = 'x';
+          backgrounds[yi][xi] = ftxui::Color::White;
+          foregrounds[yi][xi] = ftxui::Color::Red3;
+        }
       }
-      const auto yi = static_cast<size_t>(hs.pos.y);
-      const auto xi = static_cast<size_t>(hs.pos.x);
-      glyphs[yi][xi] = 'x';
-      backgrounds[yi][xi] = ftxui::Color::White;
-      foregrounds[yi][xi] = ftxui::Color::Red3;
     }
 
     const auto apply_tint = [&](size_t yi, size_t xi, const ftxui::Color &tint,
@@ -2852,7 +2859,7 @@ private:
         if (highlight[yi][xi]) {
           cell = cell | bold;
         }
-        if (cursor_.x == x && cursor_.y == y) {
+        if (!ai_mode_ && cursor_.x == x && cursor_.y == y) {
           cell = cell | inverted;
         }
         cells.push_back(std::move(cell));
@@ -2910,6 +2917,25 @@ private:
         text(fast_forward_ ? "Speed:   FAST x5 (f)" : "Speed:   Normal  (f)") |
         color(speed_color));
 
+#ifdef ENABLE_AUDIO
+    if (audio_) {
+      const bool sfx_on   = audio_->SfxEnabled();
+      const bool music_on = audio_->MusicEnabled();
+      lines.push_back(hbox({
+        text("SFX:     ") | color(ftxui::Color::GrayLight),
+        text(sfx_on ? "on " : "off") |
+            color(sfx_on ? ftxui::Color::GreenLight : ftxui::Color::GrayDark),
+        text("  (t)") | color(ftxui::Color::GrayDark),
+      }));
+      lines.push_back(hbox({
+        text("Music:   ") | color(ftxui::Color::GrayLight),
+        text(music_on ? "on " : "off") |
+            color(music_on ? ftxui::Color::GreenLight : ftxui::Color::GrayDark),
+        text("  (y)") | color(ftxui::Color::GrayDark),
+      }));
+    }
+#endif
+
     ftxui::Color lives_color = ftxui::Color::RedLight;
     if (lives_ > 6) {
       lives_color = ftxui::Color::GreenLight;
@@ -2939,7 +2965,7 @@ private:
       max_label_w = std::max(max_label_w, label.size());
       const std::string cost_str =
           IsUnlocked(def.type) ? std::to_string(def.cost)
-                               : std::to_string(def.cost * 10) + " unlock";
+                               : std::to_string(def.cost * kUnlockCostMultiplier) + " unlock";
       max_cost_w = std::max(max_cost_w, cost_str.size());
     }
 
@@ -2970,7 +2996,7 @@ private:
       // Cost right-aligned within a fixed-width field
       const std::string cost_str =
           unlocked ? std::to_string(def.cost)
-                   : std::to_string(def.cost * 10) + " unlock";
+                   : std::to_string(def.cost * kUnlockCostMultiplier) + " unlock";
       const std::string padded_cost =
           " " + std::string(max_cost_w - cost_str.size(), ' ') + cost_str;
       ftxui::Color cost_color = ftxui::Color::GrayLight;

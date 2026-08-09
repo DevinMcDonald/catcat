@@ -27,6 +27,20 @@ int main(int argc, const char *argv[]) {
     else if (arg == "--games"      && i + 1 < argc) ai_games      = std::stoi(argv[++i]);
   }
 
+  if (ai_mode && ai_fresh) {
+    const auto weights_path =
+        (std::filesystem::path(std::getenv("HOME") ? std::getenv("HOME") : ".")
+         / ".config" / "catcat" / "ai_weights.bin").string();
+    std::printf("--fresh will delete existing weights at:\n  %s\nProceed? [y/N] ",
+                weights_path.c_str());
+    std::fflush(stdout);
+    char c = '\0';
+    if (std::scanf(" %c", &c) != 1 || (c != 'y' && c != 'Y')) {
+      std::printf("Aborted.\n");
+      return 0;
+    }
+  }
+
   if (show_version) {
     CheckForUpdates(false, true);
     return 0;

@@ -79,13 +79,18 @@ Trainer::Trainer(const std::string& weights_path, bool fresh, int candidates, in
   if (!fresh) best_player_.Load(weights_path);
 }
 
-Trainer::EvalResult Trainer::EvaluatePlayer(const AIPlayer& player) const {
+Trainer::EvalResult Trainer::EvaluatePlayer(const AIPlayer& player,
+                                             const std::atomic<bool>& running) const {
+  // Safety: a full 100-wave game should never exceed ~200k ticks.
+  // If exceeded, something is wrong — treat as a loss and move on.
+  static constexpr int kMaxGameTicks = 300'000;
   EvalResult result;
   for (int g = 0; g < eval_games_; ++g) {
+    if (!running.load()) break;
     GameAIBridge game;
     int ticks_since_decision = 0;
     int game_ticks = 0;
-    while (!game.IsTerminal()) {
+    while (!game.IsTerminal() && game_ticks < kMaxGameTicks && running.load()) {
       game.Tick();
       ++ticks_since_decision;
       ++game_ticks;
@@ -111,7 +116,9 @@ Trainer::EvalResult Trainer::EvaluatePlayer(const AIPlayer& player) const {
   return result;
 }
 
-float Trainer::RunBatch(AIStats& stats) {
+float Trainer::RunBatch(AIStats& stats, const std::atomic<bool>& running) {
+  if (!running.load()) return 0.f;
+
   // Generate all candidate perturbations up front.
   std::vector<AIPlayer> candidates;
   candidates.reserve(static_cast<std::size_t>(candidates_));
@@ -123,7 +130,7 @@ float Trainer::RunBatch(AIStats& stats) {
   futures.reserve(static_cast<std::size_t>(candidates_));
   for (const auto& cand : candidates)
     futures.push_back(std::async(std::launch::async,
-        [this, &cand] { return EvaluatePlayer(cand); }));
+        [this, &cand, &running] { return EvaluatePlayer(cand, running); }));
 
   // Collect results sequentially (preserves deterministic best-player selection).
   float batch_best = -1e9f;
@@ -221,16 +228,22 @@ public:
     display_game_ = std::make_unique<GameAIBridge>(/*headless=*/false);
 
     training_thread_ = std::thread([this, weights_path, fresh, candidates, eval_games] {
-      Trainer trainer(weights_path, fresh, candidates, eval_games);
-      // Seed the display player from whatever weights were loaded.
-      {
-        std::lock_guard<std::mutex> lock(player_mutex_);
-        display_player_ = trainer.BestPlayer();
-      }
-      while (running_) {
-        trainer.RunBatch(stats_);
-        std::lock_guard<std::mutex> lock(player_mutex_);
-        display_player_ = trainer.BestPlayer();
+      try {
+        Trainer trainer(weights_path, fresh, candidates, eval_games);
+        {
+          std::lock_guard<std::mutex> lock(player_mutex_);
+          display_player_ = trainer.BestPlayer();
+        }
+        while (running_) {
+          trainer.RunBatch(stats_, running_);
+          if (!running_) break;
+          std::lock_guard<std::mutex> lock(player_mutex_);
+          display_player_ = trainer.BestPlayer();
+        }
+      } catch (const std::exception& e) {
+        training_error_ = std::string("Training error: ") + e.what();
+      } catch (...) {
+        training_error_ = "Training crashed (unknown exception)";
       }
     });
 
@@ -296,7 +309,7 @@ private:
       if (display_game_over_ticks_ == 0) {
         prev_display_counts_   = {};
         prev_display_upgrades_ = {};
-        display_game_ = std::make_unique<GameAIBridge>(/*headless=*/false);
+        display_game_->Reset();
         display_ticks_since_decision_ = 0;
       }
       return;
@@ -370,24 +383,23 @@ private:
     auto stat_row = [&](const std::string& lbl, const std::string& val) -> ftxui::Element {
       return hbox({text(rpad(" " + lbl, 13)) | color(Color::GrayLight), text(val) | bold});
     };
-    // Build sparkline from a ring buffer.
+    // Build a 2-row sparkline from a ring buffer (16 levels of resolution).
     // fixed_lo/fixed_hi: fixed scale (-1 = auto-detect from data).
     // n_points: how many trailing entries to render (AIStats::kHistLen = all).
-    // Returns {sparkline_string, most_recent_value}
+    // Returns {top_row, bot_row, most_recent_value}
+    struct SparkResult { std::string top, bot; float cur; };
     auto make_spark = [&](const std::array<std::atomic<float>, AIStats::kHistLen>& hist,
                           const std::atomic<int>& hd,
                           float fixed_lo, float fixed_hi,
-                          int n_points = AIStats::kHistLen) -> std::pair<std::string, float> {
+                          int n_points = AIStats::kHistLen) -> SparkResult {
       static constexpr const char* kB[] = {" ","▁","▂","▃","▄","▅","▆","▇","█"};
       const int h = hd.load();
       const int n = std::clamp(n_points, 1, AIStats::kHistLen);
-      // Load all values; real data occupies the last n slots of the ordered array.
       std::array<float, AIStats::kHistLen> vals{};
       for (int i = 0; i < AIStats::kHistLen; ++i) {
         const int idx = (h + i) % AIStats::kHistLen;
         vals[static_cast<std::size_t>(i)] = hist[static_cast<std::size_t>(idx)].load();
       }
-      // Determine scale from the n visible entries only.
       float minv = 1e9f, maxv = -1e9f;
       for (int i = AIStats::kHistLen - n; i < AIStats::kHistLen; ++i) {
         minv = std::min(minv, vals[static_cast<std::size_t>(i)]);
@@ -396,18 +408,25 @@ private:
       const float lo    = fixed_lo >= 0.f ? fixed_lo : minv;
       const float hi    = fixed_hi >= 0.f ? fixed_hi : maxv;
       const float range = std::max(hi - lo, 0.01f);
-      std::string spark;
+      std::string top_row, bot_row;
       for (int i = AIStats::kHistLen - n; i < AIStats::kHistLen; ++i) {
-        const float norm = std::clamp((vals[static_cast<std::size_t>(i)] - lo) / range, 0.f, 1.f);
-        spark += kB[static_cast<int>(norm * 8.f)];
+        const float norm  = std::clamp((vals[static_cast<std::size_t>(i)] - lo) / range, 0.f, 1.f);
+        const int   level = static_cast<int>(norm * 16.f);
+        top_row += kB[std::max(0, level - 8)];
+        bot_row += kB[std::min(8, level)];
       }
       const int last = (h + AIStats::kHistLen - 1) % AIStats::kHistLen;
-      return {spark, hist[static_cast<std::size_t>(last)].load()};
+      return {top_row, bot_row, hist[static_cast<std::size_t>(last)].load()};
     };
 
     // ── Header ───────────────────────────────────────────────────────────
     lines.push_back(text(" AI Training ") | bold | color(Color::Cyan1));
     lines.push_back(separator());
+    if (!training_error_.empty()) {
+      lines.push_back(text(" TRAINING STOPPED") | bold | color(Color::Red1));
+      lines.push_back(text(" " + training_error_) | color(Color::Red1));
+      lines.push_back(separator());
+    }
 
     // ── Training stats ───────────────────────────────────────────────────
     lines.push_back(stat_row("Speed",    fast_display_ ? "5x  [f]" : "1x  [f]"));
@@ -443,23 +462,26 @@ private:
     // ── Sparklines ───────────────────────────────────────────────────────
     lines.push_back(separator());
     {
-      auto [spark, cur] = make_spark(stats_.win_rate_history, stats_.win_rate_head, 0.f, 1.f);
+      auto [top, bot, cur] = make_spark(stats_.win_rate_history, stats_.win_rate_head, 0.f, 1.f);
       lines.push_back(hbox({text(rpad(" win rate", 13)) | color(Color::GrayLight),
                             text(fmt(cur * 100.f, 1) + "%") | bold}));
-      lines.push_back(text(" " + spark) | color(Color::Yellow1));
+      lines.push_back(text(" " + top) | color(Color::Yellow1));
+      lines.push_back(text(" " + bot) | color(Color::Yellow1));
     }
     {
-      auto [spark, cur] = make_spark(stats_.history, stats_.history_head, -1.f, -1.f);
+      auto [top, bot, cur] = make_spark(stats_.history, stats_.history_head, -1.f, -1.f);
       lines.push_back(hbox({text(rpad(" fitness", 13)) | color(Color::GrayLight),
                             text(fmt(cur, 1)) | bold}));
-      lines.push_back(text(" " + spark) | color(Color::Green1));
+      lines.push_back(text(" " + top) | color(Color::Green1));
+      lines.push_back(text(" " + bot) | color(Color::Green1));
     }
     {
-      auto [spark, cur] = make_spark(stats_.waves_history, stats_.waves_head, 0.f, 100.f,
-                                     stats_.waves_count.load());
+      auto [top, bot, cur] = make_spark(stats_.waves_history, stats_.waves_head, 0.f, 100.f,
+                                        stats_.waves_count.load());
       lines.push_back(hbox({text(rpad(" waves", 13)) | color(Color::GrayLight),
                             text(fmt(cur, 1)) | bold}));
-      lines.push_back(text(" " + spark) | color(Color::Cyan1));
+      lines.push_back(text(" " + top) | color(Color::Cyan1));
+      lines.push_back(text(" " + bot) | color(Color::Cyan1));
     }
 
     // ── Tower mix ────────────────────────────────────────────────────────
@@ -478,7 +500,7 @@ private:
     };
 
     // Tower costs — must stay in sync with GetDef() in game.cpp
-    static constexpr int kCost[kAINumTowerTypes] = {35, 35, 50, 100, 150, 175, 200};
+    static constexpr int kCost[kAINumTowerTypes] = {35, 35, 50, 100, 100, 150, 200};
 
     // Load last-batch DPS values and compute efficiency = DPS / cost for color grading.
     float dps_val[kAINumTowerTypes] = {};
@@ -655,6 +677,7 @@ private:
   std::atomic<bool> tick_pending_{false};
   std::thread       training_thread_;
   std::thread       ticker_;
+  std::string       training_error_; // set if training thread throws; read on UI thread after join
 };
 
 } // namespace

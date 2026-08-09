@@ -66,6 +66,14 @@ std::string NormalizeVersion(const std::string &v) {
   return v;
 }
 
+bool IsCleanVersion(const std::string &v) {
+  if (v.empty()) return false;
+  for (char c : v) {
+    if (!std::isdigit(static_cast<unsigned char>(c)) && c != '.') return false;
+  }
+  return true;
+}
+
 UpdatePrefs LoadPrefs() {
   UpdatePrefs prefs;
   const auto path = PrefsPath();

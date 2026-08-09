@@ -12,6 +12,12 @@ std::string CurrentVersion() { return CATCAT_VERSION; }
 UpdateAction CheckForUpdates(bool interactive_prompt, bool show_up_to_date) {
   const std::string current_raw = CurrentVersion();
   const std::string current = NormalizeVersion(current_raw);
+
+  // Skip update check for dev builds — git describe adds suffixes like
+  // "-3-gabcdef" or "-dirty" that distinguish them from clean releases.
+  if (!IsCleanVersion(current)) {
+    return UpdateAction::Continue;
+  }
   const auto latest = DetectLatestViaBrew();
   if (!latest.has_value() || latest->empty()) {
     if (show_up_to_date) {

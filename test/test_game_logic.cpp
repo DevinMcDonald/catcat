@@ -131,8 +131,8 @@ TEST(EnemyMaxHP, GrowsWithDifficulty) {
 TEST(EnemyBounty, ExactValues) {
   EXPECT_EQ(EnemyBounty(EnemyType::Mouse),  4);
   EXPECT_EQ(EnemyBounty(EnemyType::Rat),    5);
-  EXPECT_EQ(EnemyBounty(EnemyType::BigRat), 9);
-  EXPECT_EQ(EnemyBounty(EnemyType::Dog),   13);
+  EXPECT_EQ(EnemyBounty(EnemyType::BigRat), 10);
+  EXPECT_EQ(EnemyBounty(EnemyType::Dog),    14);
 }
 
 TEST(EnemyBounty, HarderEnemiesPayMore) {
@@ -143,17 +143,17 @@ TEST(EnemyBounty, HarderEnemiesPayMore) {
 
 // ── SellRefund ───────────────────────────────────────────────────────────────
 
-TEST(SellRefund, TwentyFivePercentExact) {
-  EXPECT_EQ(SellRefund(100), 25);
-  EXPECT_EQ(SellRefund(200), 50);
+TEST(SellRefund, ThirtyThreePercentExact) {
+  EXPECT_EQ(SellRefund(100), 33);  // round(100*0.33)=33
+  EXPECT_EQ(SellRefund(200), 66);  // round(200*0.33)=66
 }
 
 TEST(SellRefund, AllTowerCosts) {
-  EXPECT_EQ(SellRefund(35),  9);  // Default Cat / Fat Cat: round(35*0.25)=9
-  EXPECT_EQ(SellRefund(50),  13); // Kitty Cat: round(50*0.25)=13
-  EXPECT_EQ(SellRefund(100), 25); // Thundercat
-  EXPECT_EQ(SellRefund(150), 38); // Catatonic: round(150*0.25)=38
-  EXPECT_EQ(SellRefund(200), 50); // Galacticat
+  EXPECT_EQ(SellRefund(35),  12); // Default Cat / Fat Cat: round(35*0.33)=12
+  EXPECT_EQ(SellRefund(50),  17); // Kitty Cat: round(50*0.33)=17
+  EXPECT_EQ(SellRefund(100), 33); // Thundercat / Catatonic
+  EXPECT_EQ(SellRefund(150), 50); // Catastrophe: round(150*0.33)=50
+  EXPECT_EQ(SellRefund(200), 66); // Galacticat
 }
 
 TEST(SellRefund, NeverNegative) {
@@ -296,4 +296,38 @@ TEST(NormalizeVersion, EmptyStringUnchanged) {
 TEST(NormalizeVersion, PreservesGitDescribeSuffix) {
   // git describe can produce e.g. "v1.3.9-3-gabcdef"
   EXPECT_EQ(NormalizeVersion("v1.3.9-3-gabcdef"), "1.3.9-3-gabcdef");
+}
+
+// ── IsCleanVersion ────────────────────────────────────────────────────────────
+// Installed (Homebrew) builds have a clean semver; dev builds from git-describe
+// carry extra suffixes. Update checks are skipped for non-clean versions.
+
+TEST(IsCleanVersion, CleanSemverIsRelease) {
+  EXPECT_TRUE(IsCleanVersion("1.2.3"));
+  EXPECT_TRUE(IsCleanVersion("1.0.0"));
+  EXPECT_TRUE(IsCleanVersion("10.20.30"));
+}
+
+TEST(IsCleanVersion, GitDescribeCommitSuffixIsDev) {
+  EXPECT_FALSE(IsCleanVersion("1.2.3-3-gabcdef"));
+}
+
+TEST(IsCleanVersion, DirtySuffixIsDev) {
+  EXPECT_FALSE(IsCleanVersion("1.2.3-dirty"));
+  EXPECT_FALSE(IsCleanVersion("1.2.3-3-gabcdef-dirty"));
+}
+
+TEST(IsCleanVersion, BareHashIsDev) {
+  // No tags: git describe --always returns just the hash
+  EXPECT_FALSE(IsCleanVersion("abcdef0"));
+  EXPECT_FALSE(IsCleanVersion("abc1234"));
+}
+
+TEST(IsCleanVersion, EmptyStringIsDev) {
+  EXPECT_FALSE(IsCleanVersion(""));
+}
+
+TEST(IsCleanVersion, LeadingVAlreadyStripped) {
+  // NormalizeVersion should be called first; IsCleanVersion sees no 'v' prefix
+  EXPECT_FALSE(IsCleanVersion("v1.2.3")); // 'v' is not a digit or dot
 }
