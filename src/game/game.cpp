@@ -55,8 +55,8 @@ constexpr int kStartingLives = 9;
 constexpr float kCatSleepBase = 0.75F;
 constexpr float kCatSleepUpgrade = 1.5F;
 constexpr float kCatSleepCap = 5.0F;
-constexpr float kGalacticVoidChance = 0.50;
-constexpr float kGalacticVoidBackstep = 8.0F;
+constexpr float kGalacticResetChance  = 0.05F; // base chance; ×3 when upgraded
+constexpr float kGalacticRewindSpeed  = 15.0F; // cells/sec during rewind animation
 constexpr float kKittyJumpBonusRange = 1.5F; // extra reach for upgraded jumps
 
 // Catastrophe
@@ -122,6 +122,7 @@ struct Enemy {
   int lane_offset = 0; // lateral offset from center path
   EnemyType type = EnemyType::Rat;
   float sleep_timer = 0.0F;
+  float rewind_speed = 0.0F;  // > 0 while Galacticat rewind is active
 };
 
 struct Tower {
@@ -1341,6 +1342,14 @@ private:
   void MoveEnemies() {
     int lives_before = lives_;
     for (auto &e : enemies_) {
+      if (e.rewind_speed > 0.0F) {
+        e.path_progress -= e.rewind_speed * Dt();
+        if (e.path_progress <= 0.0F) {
+          e.path_progress = 0.0F;
+          e.rewind_speed  = 0.0F;
+        }
+        continue;
+      }
       if (e.sleep_timer > 0.0F) {
         e.sleep_timer = std::max(0.0F, e.sleep_timer - Dt());
         continue;
@@ -2259,7 +2268,10 @@ private:
       }
     }
 
-    bool void_proc = t.upgraded && Rand(0.0F, 1.0F) < kGalacticVoidChance;
+    const float reset_chance = t.upgraded
+        ? kGalacticResetChance * 3.0F
+        : kGalacticResetChance;
+    bool any_rewind = false;
     for (auto &e : enemies_) {
       const auto pos = EnemyCell(e);
       const bool hit =
@@ -2268,10 +2280,9 @@ private:
           });
       if (!hit)
         continue;
-      const bool teleported = void_proc;
-      if (teleported) {
-        e.path_progress =
-            std::max(0.0F, e.path_progress - kGalacticVoidBackstep);
+      if (Rand(0.0F, 1.0F) < reset_chance) {
+        e.rewind_speed = kGalacticRewindSpeed;
+        any_rewind = true;
       }
       e.hp -= t.damage;
       AITrackDamage(t.type, t.damage);
@@ -2285,9 +2296,9 @@ private:
 
     if (!cells.empty()) {
       area_highlights_.push_back(
-          {cells, void_proc ? 0.35F : 0.3F,
-           void_proc ? ftxui::Color::DarkMagenta : ftxui::Color::LightSteelBlue,
-           void_proc ? '~' : '*'});
+          {cells, any_rewind ? 0.35F : 0.3F,
+           any_rewind ? ftxui::Color::DarkViolet : ftxui::Color::LightSteelBlue,
+           any_rewind ? '~' : '*'});
     }
   }
 
@@ -2725,9 +2736,14 @@ private:
         break;
       }
       glyphs[yi][xi] = g;
-      if (bg_override.has_value())
-        backgrounds[yi][xi] = *bg_override;
-      foregrounds[yi][xi] = fg;
+      if (e.rewind_speed > 0.0F) {
+        backgrounds[yi][xi] = ftxui::Color::DarkViolet;
+        foregrounds[yi][xi] = ftxui::Color::White;
+      } else {
+        if (bg_override.has_value())
+          backgrounds[yi][xi] = *bg_override;
+        foregrounds[yi][xi] = fg;
+      }
       enemy_mask[yi][xi] = true;
     }
 

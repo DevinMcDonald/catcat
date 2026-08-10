@@ -17,13 +17,36 @@
 static std::atomic<bool> g_train_running{true};
 static void TrainSignalHandler(int) { g_train_running = false; }
 
+// Crash handler: print a raw backtrace via write() (async-signal-safe).
+// Requires -rdynamic or -Wl,--export-dynamic at link time for symbol names.
+#if defined(__linux__) || defined(__APPLE__)
+#  include <execinfo.h>
+#  include <unistd.h>
+static void CrashHandler(int sig) {
+  const char* msg = "catcat: fatal signal — stack trace:\n";
+  (void)write(STDERR_FILENO, msg, __builtin_strlen(msg));
+  void* frames[64];
+  int n = backtrace(frames, 64);
+  backtrace_symbols_fd(frames, n, STDERR_FILENO);
+  _exit(1);
+}
+#endif
+
 static void RunHeadlessTraining(const std::string& weights_path,
                                 bool fresh, int candidates, int eval_games) {
   std::signal(SIGINT,  TrainSignalHandler);
   std::signal(SIGTERM, TrainSignalHandler);
+#if defined(__linux__) || defined(__APPLE__)
+  std::signal(SIGSEGV, CrashHandler);
+  std::signal(SIGABRT, CrashHandler);
+#endif
 
   std::printf("catcat headless training | %dc x %dg | %s\n",
               candidates, eval_games, weights_path.c_str());
+#ifdef ENABLE_AUDIO
+  std::printf("Note: built with audio. If this crashes on a server, rebuild:\n");
+  std::printf("  cmake -DENABLE_AUDIO=OFF -DBUILD_TESTS=OFF .. && cmake --build .\n");
+#endif
   std::printf("Ctrl+C or SIGTERM to stop. Weights auto-saved on improvement.\n");
   std::fflush(stdout);
 

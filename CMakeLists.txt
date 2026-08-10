@@ -70,7 +70,7 @@ if(ENABLE_AUDIO)
   if(NOT EXISTS ${MINIAUDIO_HEADER})
     file(
       DOWNLOAD
-      https://raw.githubusercontent.com/mackron/miniaudio/master/miniaudio.h
+      https://raw.githubusercontent.com/mackron/miniaudio/0.11.22/miniaudio.h
       ${MINIAUDIO_HEADER}
       STATUS DL_MINIAUDIO
       SHOW_PROGRESS)
@@ -102,6 +102,9 @@ endif()
 # ── Main executable ──────────────────────────────────────────────────────────
 add_executable(catcat src/main.cpp)
 target_link_libraries(catcat PRIVATE catcat_lib)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(catcat PRIVATE -rdynamic)
+endif()
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 enable_testing()
