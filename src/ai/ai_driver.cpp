@@ -277,12 +277,16 @@ public:
 
   // ── Render ──────────────────────────────────────────────────────────────────
   ftxui::Element OnRender() override {
-    const int ep = stats_.episodes.load();
-    if (ep != title_episodes_) {
-      title_episodes_ = ep;
-      const int bw = stats_.best_waves.load();
-      SetTerminalTitle("catcat ai | ep " + std::to_string(ep) +
-                       " · best wave " + std::to_string(bw));
+    const int w = display_game_->Wave();
+    const int m = display_game_->MapIndex();
+    if (w != title_episodes_ || m != title_map_) {
+      title_episodes_ = w;
+      title_map_      = m;
+      if (w == 0)
+        SetTerminalTitle("catcat ai");
+      else
+        SetTerminalTitle("catcat ai | map " + std::to_string(m + 1) +
+                         " · wave " + std::to_string(w));
     }
     return hbox({
       display_game_render_,
@@ -712,6 +716,7 @@ private:
   int  display_game_over_ticks_ = 0; // countdown before resetting after game over
 
   int title_episodes_ = -1;
+  int title_map_      = -1;
 
   std::atomic<bool> running_{true};
   std::atomic<bool> tick_pending_{false};

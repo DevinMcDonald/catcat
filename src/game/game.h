@@ -27,6 +27,8 @@ public:
   bool IsTerminal() const;
   AIEpisodeResult GetResult() const;
   ftxui::Element Render() const;
+  int Wave()     const;
+  int MapIndex() const;
 
   void ToggleSfx();
   void ToggleMusic();

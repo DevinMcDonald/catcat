@@ -3345,3 +3345,5 @@ ftxui::Element GameAIBridge::Render() const {
 
 void GameAIBridge::ToggleSfx()   { impl_->game.ToggleSfx(); }
 void GameAIBridge::ToggleMusic() { impl_->game.ToggleMusic(); }
+int  GameAIBridge::Wave()        const { return impl_->game.Wave(); }
+int  GameAIBridge::MapIndex()    const { return impl_->game.MapIndex(); }
