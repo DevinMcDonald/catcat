@@ -1,74 +1,69 @@
 #!/usr/bin/env python3
-"""Write a complete catcat Homebrew formula to stdout.
+"""Render Formula/catcat.rb for the homebrew-catcat tap.
 
-Reads these environment variables (all required):
-  CATCAT_VERSION      — git tag, e.g. v1.2.3
-  URL_MACOS_ARM64     SHA_MACOS_ARM64
-  URL_MACOS_X86_64    SHA_MACOS_X86_64
-  URL_LINUX_ARM64     SHA_LINUX_ARM64
-  URL_LINUX_X86_64    SHA_LINUX_X86_64
+Reads release metadata from environment variables (set by the
+update-homebrew job in .github/workflows/cmake-multi-platform.yml)
+and prints the rendered formula to stdout.
 """
 
-import os, sys
+import os
 
-def require(name):
-    val = os.environ.get(name, "")
-    if not val:
-        print(f"error: {name} is not set", file=sys.stderr)
-        sys.exit(1)
-    return val
+VERSION = os.environ["CATCAT_VERSION"].removeprefix("v")
 
-raw_version  = require("CATCAT_VERSION")
-version      = raw_version.lstrip("v")   # "v1.2.3" → "1.2.3"
-
-url_mac_arm  = require("URL_MACOS_ARM64");  sha_mac_arm  = require("SHA_MACOS_ARM64")
-url_mac_x86  = require("URL_MACOS_X86_64"); sha_mac_x86  = require("SHA_MACOS_X86_64")
-url_lnx_arm  = require("URL_LINUX_ARM64");  sha_lnx_arm  = require("SHA_LINUX_ARM64")
-url_lnx_x86  = require("URL_LINUX_X86_64"); sha_lnx_x86  = require("SHA_LINUX_X86_64")
-
-# Note: {{ and }} are literal braces in Python f-strings.
-# Ruby's #{...} interpolation uses # + braces, so we write #{{...}} here.
-print(f"""\
+TEMPLATE = """\
 class Catcat < Formula
-  desc "Colorful terminal tower defense game"
+  desc "Terminal tower defense with cats"
   homepage "https://github.com/DevinMcDonald/catcat"
-  license "MIT"
   version "{version}"
+  license "MIT" # Update if your project uses a different license
 
   on_macos do
     on_arm do
-      url "{url_mac_arm}"
-      sha256 "{sha_mac_arm}"
+      url "{url_macos_arm64}"
+      sha256 "{sha_macos_arm64}"
     end
     on_intel do
-      url "{url_mac_x86}"
-      sha256 "{sha_mac_x86}"
+      url "{url_macos_x86_64}"
+      sha256 "{sha_macos_x86_64}"
     end
   end
 
   on_linux do
     on_arm do
-      url "{url_lnx_arm}"
-      sha256 "{sha_lnx_arm}"
+      url "{url_linux_arm64}"
+      sha256 "{sha_linux_arm64}"
     end
     on_intel do
-      url "{url_lnx_x86}"
-      sha256 "{sha_lnx_x86}"
+      url "{url_linux_x86_64}"
+      sha256 "{sha_linux_x86_64}"
     end
   end
 
   def install
-    # The game loads audio.json relative to CWD, so install everything into
-    # libexec and cd there before exec'ing the binary.
-    libexec.install Dir["*"]
-    (bin/"catcat").write <<~SH
-      #!/bin/sh
-      cd "#{{libexec}}" && exec "./catcat" "$@"
-    SH
+    bundle_root = (buildpath/"catcat_bundle").directory? ? buildpath/"catcat_bundle" : buildpath
+    libexec.install bundle_root.children
+    (bin/"catcat").write <<~EOS
+      #!/bin/bash
+      cd "#{{libexec}}"
+      exec "./catcat" "$@"
+    EOS
+    chmod 0555, bin/"catcat"
   end
 
   test do
-    assert_match version.to_s, shell_output("#{{bin}}/catcat --version 2>&1")
+    assert_predicate bin/"catcat", :executable?
   end
 end
-""")
+"""
+
+print(TEMPLATE.format(
+    version=VERSION,
+    url_macos_arm64=os.environ["URL_MACOS_ARM64"],
+    sha_macos_arm64=os.environ["SHA_MACOS_ARM64"],
+    url_macos_x86_64=os.environ["URL_MACOS_X86_64"],
+    sha_macos_x86_64=os.environ["SHA_MACOS_X86_64"],
+    url_linux_arm64=os.environ["URL_LINUX_ARM64"],
+    sha_linux_arm64=os.environ["SHA_LINUX_ARM64"],
+    url_linux_x86_64=os.environ["URL_LINUX_X86_64"],
+    sha_linux_x86_64=os.environ["SHA_LINUX_X86_64"],
+), end="")

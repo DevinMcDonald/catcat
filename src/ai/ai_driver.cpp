@@ -3,13 +3,23 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <future>
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/color.hpp>
 #include <iomanip>
 #include <random>
 #include <sstream>
+#include <string_view>
 #include <thread>
+
+static void SetTerminalTitle(const std::string& title) {
+  const char* term = std::getenv("TERM");
+  if (term && std::string_view(term) == "dumb") return;
+  std::printf("\033]0;%s\007", title.c_str());
+  std::fflush(stdout);
+}
 
 using ftxui::bold;
 using ftxui::color;
@@ -266,7 +276,14 @@ public:
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
-  ftxui::Element Render() override {
+  ftxui::Element OnRender() override {
+    const int ep = stats_.episodes.load();
+    if (ep != title_episodes_) {
+      title_episodes_ = ep;
+      const int bw = stats_.best_waves.load();
+      SetTerminalTitle("catcat ai | ep " + std::to_string(ep) +
+                       " · best wave " + std::to_string(bw));
+    }
     return hbox({
       display_game_render_,
       separator(),
@@ -693,6 +710,8 @@ private:
   ftxui::Element                display_game_render_ = text("");
   int  display_ticks_since_decision_ = 0;
   int  display_game_over_ticks_ = 0; // countdown before resetting after game over
+
+  int title_episodes_ = -1;
 
   std::atomic<bool> running_{true};
   std::atomic<bool> tick_pending_{false};

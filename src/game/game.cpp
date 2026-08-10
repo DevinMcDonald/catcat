@@ -30,6 +30,15 @@
 #include "game/ai_interface.h"
 #include "game/game_logic.h"
 
+// Emit an xterm-compatible window title. No-op on dumb terminals or pipes.
+static void SetTerminalTitle(const std::string& title) {
+  const char* term = std::getenv("TERM");
+  if (term && std::string_view(term) == "dumb") return;
+  // OSC 0: sets both icon name and window title; BEL-terminated.
+  std::printf("\033]0;%s\007", title.c_str());
+  std::fflush(stdout);
+}
+
 using namespace std::chrono_literals;
 using ftxui::bgcolor;
 using ftxui::bold;
@@ -245,7 +254,7 @@ TowerDef GetDef(Tower::Type type) {
   case Tower::Type::Catatonic:
     return {type, "Catatonic", 100, 2, 3.2F, 2.2F, true, 1};
   case Tower::Type::Catastrophe:
-    return {type, "Catastrophe", 150, 11, 5.0F, 4.5F, true, 1};
+    return {type, "Catastrophe", 150, 11, 15.0F, 4.5F, true, 1};
   case Tower::Type::Galactic:
     return {type, "Galacticat", 200, 20, 7.5F, 2.5F, true, 1};
   }
@@ -876,6 +885,8 @@ public:
 
   bool GameOver() const { return game_over_; }
   bool InIntro() const { return intro_stage_ != IntroStage::Playing; }
+  int  Wave()     const { return wave_; }
+  int  MapIndex() const { return map_index_; }
 
   // ── AI interface ──────────────────────────────────────────────────────────
   void EnterAIMode() {
@@ -2321,36 +2332,48 @@ private:
   }
 
   void LandCatastrophe(const ArcProjectile &ap) {
-    const Vec2 center{static_cast<float>(ap.target.x),
-                      static_cast<float>(ap.target.y)};
-    const float r2 = ap.splash_radius * ap.splash_radius;
+    const int cx = ap.target.x;
+    const int cy = ap.target.y;
+    constexpr int kCraterRadius = 2; // Chebyshev half-width → 5×5 square
 
+    // Build cells grouped by Chebyshev ring so the impact flash matches the
+    // ring structure of the toxic zone it creates.
+    std::vector<Position> ring0, ring1, ring2;
     std::vector<Position> splash_cells;
-    for (int y = 0; y < kBoardHeight; ++y) {
-      for (int x = 0; x < kBoardWidth; ++x) {
-        if (DistanceSquared(center, Position{x, y}) <= r2)
-          splash_cells.push_back({x, y});
+    for (int y = cy - kCraterRadius; y <= cy + kCraterRadius; ++y) {
+      for (int x = cx - kCraterRadius; x <= cx + kCraterRadius; ++x) {
+        if (x < 0 || x >= kBoardWidth || y < 0 || y >= kBoardHeight) continue;
+        const int ring = std::max(std::abs(x - cx), std::abs(y - cy));
+        splash_cells.push_back({x, y});
+        if      (ring == 0) ring0.push_back({x, y});
+        else if (ring == 1) ring1.push_back({x, y});
+        else                ring2.push_back({x, y});
       }
     }
 
     for (auto &e : enemies_) {
-      if (DistanceSquared(center, EnemyCell(e)) > r2) continue;
+      const auto pos = EnemyCell(e);
+      const bool hit = std::max(std::abs(pos.x - cx), std::abs(pos.y - cy)) <= kCraterRadius;
+      if (!hit) continue;
       e.hp -= ap.damage;
       AITrackDamage(Tower::Type::Catastrophe, ap.damage);
       if (e.hp <= 0) {
         AwardBounty(e.type);
         PlayDeathSfx(e.type);
       } else {
-        hit_splats_.push_back({EnemyCell(e), 0.25F, 2});
+        hit_splats_.push_back({pos, 0.25F}); // radius 0 — normal enemy flash
       }
     }
 
-    area_highlights_.push_back({splash_cells, 0.4F, ftxui::Color::OrangeRed1, '*'});
+    // Flash each ring with a colour that mirrors the crater gradient.
+    if (!ring0.empty()) area_highlights_.push_back({ring0, 0.4F, ftxui::Color::White,     '!'});
+    if (!ring1.empty()) area_highlights_.push_back({ring1, 0.4F, ftxui::Color::OrangeRed1, ':'});
+    if (!ring2.empty()) area_highlights_.push_back({ring2, 0.4F, ftxui::Color::DarkKhaki,  '.'});
     Sfx("tower_catastrophe_detonation");
 
     ToxicZone zone;
     zone.cells = splash_cells;
-    zone.center = center;
+    zone.center = {static_cast<float>(cx), static_cast<float>(cy)};
     zone.explode_on_expire = ap.upgraded;
     toxic_zones_.push_back(std::move(zone));
   }
@@ -3228,7 +3251,22 @@ public:
     }
   }
 
-  ftxui::Element Render() override { return game_.Render(); }
+  ftxui::Element OnRender() override {
+    const int w = game_.Wave();
+    const int m = game_.MapIndex();
+    if (w != title_wave_ || m != title_map_) {
+      title_wave_ = w;
+      title_map_  = m;
+      if (game_.GameOver())
+        SetTerminalTitle("catcat | game over");
+      else if (w == 0)
+        SetTerminalTitle("catcat");
+      else
+        SetTerminalTitle("catcat | map " + std::to_string(m + 1) +
+                         " · wave " + std::to_string(w));
+    }
+    return game_.Render();
+  }
 
   bool OnEvent(ftxui::Event event) override {
     if (event == ftxui::Event::Character('q') && !game_.InIntro() &&
@@ -3258,6 +3296,8 @@ private:
   std::atomic<bool> tick_pending_{false};
   std::thread ticker_;
   int quit_presses_ = 0;
+  int title_wave_ = -1;
+  int title_map_  = -1;
 };
 
 } // namespace

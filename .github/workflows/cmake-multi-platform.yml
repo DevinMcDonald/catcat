@@ -1,3 +1,4 @@
+
 name: Build & Test
 
 on:
@@ -26,24 +27,28 @@ jobs:
             c_compiler: gcc
             cpp_compiler: g++
             artifact_name: catcat-linux-gcc
+            cmake_arch: ""
 
           - os: ubuntu-latest
             build_type: Release
             c_compiler: clang
             cpp_compiler: clang++
             artifact_name: catcat-linux-clang
+            cmake_arch: ""
 
           - os: macos-14
             build_type: Release
             c_compiler: clang
             cpp_compiler: clang++
             artifact_name: catcat-macos-arm64
+            cmake_arch: arm64
 
-          - os: macos-13
+          - os: macos-14
             build_type: Release
             c_compiler: clang
             cpp_compiler: clang++
             artifact_name: catcat-macos-x86_64
+            cmake_arch: x86_64
 
     steps:
     - uses: actions/checkout@v4.2.2
@@ -55,10 +60,15 @@ jobs:
 
     - name: Configure (CMake)
       run: |
+        EXTRA_ARGS=""
+        if [[ "${{ matrix.os }}" == macos-* ]]; then
+          EXTRA_ARGS="-DCMAKE_OSX_ARCHITECTURES=${{ matrix.cmake_arch }}"
+        fi
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Release \
           -DENABLE_AUDIO=OFF \
           -DBUILD_TESTS=ON \
+          $EXTRA_ARGS \
           -S ${{ github.workspace }}
 
     - name: Compile
@@ -104,22 +114,31 @@ jobs:
         include:
           - os: macos-14
             asset: catcat-macos-arm64.zip
-          - os: macos-13
+            cmake_arch: arm64
+          - os: macos-14
             asset: catcat-macos-x86_64.zip
+            cmake_arch: x86_64
           - os: ubuntu-latest
             asset: catcat-linux-x86_64.zip
+            cmake_arch: ""
           - os: ubuntu-24.04-arm
             asset: catcat-linux-arm64.zip
+            cmake_arch: ""
 
     steps:
     - uses: actions/checkout@v4.2.2
 
     - name: Configure (CMake)
       run: |
+        EXTRA_ARGS=""
+        if [[ "${{ matrix.os }}" == macos-* ]]; then
+          EXTRA_ARGS="-DCMAKE_OSX_ARCHITECTURES=${{ matrix.cmake_arch }}"
+        fi
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Release \
           -DENABLE_AUDIO=ON \
           -DBUILD_TESTS=OFF \
+          $EXTRA_ARGS \
           -S .
 
     - name: Build & Package

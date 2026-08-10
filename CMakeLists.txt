@@ -28,7 +28,7 @@ configure_file(${CMAKE_SOURCE_DIR}/src/version/version.h.in
 FetchContent_Declare(
   ftxui
   GIT_REPOSITORY https://github.com/ArthurSonzogni/ftxui.git
-  GIT_TAG v5.0.0
+  GIT_TAG v7.0.3
   GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(ftxui)
 
