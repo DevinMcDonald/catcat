@@ -2207,7 +2207,7 @@ private:
           AwardBounty(e.type);
           PlayDeathSfx(e.type);
         } else {
-          hit_splats_.push_back({pos, 0.22F, t.upgraded ? 2 : 1});
+          hit_splats_.push_back({pos, 0.22F});
         }
       }
     }
