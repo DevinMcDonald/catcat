@@ -224,8 +224,8 @@ float Trainer::RunBatch(AIStats& stats, const std::atomic<bool>& running) {
 // ── FTXUI AI component ────────────────────────────────────────────────────────
 namespace {
 
-constexpr int kTickMs            = 16;
-constexpr int kDisplayFastSteps  = 5;  // game ticks per display tick in fast mode
+constexpr int kTickMs = 16;
+constexpr std::array<int, 3> kDisplaySpeeds = {1, 5, 20};
 
 class AIGameComponent : public ftxui::ComponentBase {
 public:
@@ -235,7 +235,7 @@ public:
                   bool fresh,
                   int candidates,
                   int eval_games)
-      : screen_(screen), fast_display_(fast_forward),
+      : screen_(screen), speed_idx_(fast_forward ? 1 : 0),
         candidates_(candidates), eval_games_(eval_games) {
     display_game_ = std::make_unique<GameAIBridge>(/*headless=*/false);
 
@@ -278,15 +278,12 @@ public:
   // ── Render ──────────────────────────────────────────────────────────────────
   ftxui::Element OnRender() override {
     const int w = display_game_->Wave();
-    const int m = display_game_->MapIndex();
-    if (w != title_episodes_ || m != title_map_) {
+    if (w != title_episodes_) {
       title_episodes_ = w;
-      title_map_      = m;
       if (w == 0)
         SetTerminalTitle("catcat ai");
       else
-        SetTerminalTitle("catcat ai | map " + std::to_string(m + 1) +
-                         " · wave " + std::to_string(w));
+        SetTerminalTitle("catcat ai | wave " + std::to_string(w));
     }
     return hbox({
       display_game_render_,
@@ -306,7 +303,7 @@ public:
       return true;
     }
     if (event == ftxui::Event::Character('f')) {
-      fast_display_ = !fast_display_;
+      speed_idx_ = (speed_idx_ + 1) % static_cast<int>(kDisplaySpeeds.size());
       return true;
     }
     if (event == ftxui::Event::Character('t')) {
@@ -338,7 +335,7 @@ private:
       return;
     }
 
-    const int steps = fast_display_ ? kDisplayFastSteps : 1;
+    const int steps = kDisplaySpeeds[static_cast<std::size_t>(speed_idx_)];
     for (int s = 0; s < steps; ++s) {
       display_game_->Tick();
       ++display_ticks_since_decision_;
@@ -452,7 +449,8 @@ private:
     }
 
     // ── Training stats ───────────────────────────────────────────────────
-    lines.push_back(stat_row("Speed",    fast_display_ ? "5x  [f]" : "1x  [f]"));
+    lines.push_back(stat_row("Speed",
+        std::to_string(kDisplaySpeeds[static_cast<std::size_t>(speed_idx_)]) + "x  [f]"));
     lines.push_back(stat_row("Config",
         std::to_string(candidates_) + "c × " + std::to_string(eval_games_) + "g"));
     lines.push_back(stat_row("Episodes", std::to_string(stats_.episodes.load())));
@@ -700,7 +698,7 @@ private:
   mutable std::mutex player_mutex_;
   AIPlayer           display_player_{42};
 
-  bool fast_display_ = false;
+  int  speed_idx_    = 0; // index into kDisplaySpeeds: 0=1x, 1=5x, 2=20x
   int  quit_presses_ = 0;
   int  candidates_   = 8;
   int  eval_games_   = 10;
@@ -716,7 +714,6 @@ private:
   int  display_game_over_ticks_ = 0; // countdown before resetting after game over
 
   int title_episodes_ = -1;
-  int title_map_      = -1;
 
   std::atomic<bool> running_{true};
   std::atomic<bool> tick_pending_{false};

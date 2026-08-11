@@ -64,7 +64,7 @@ constexpr int kStartingLives = 9;
 constexpr float kCatSleepBase = 0.75F;
 constexpr float kCatSleepUpgrade = 1.5F;
 constexpr float kCatSleepCap = 5.0F;
-constexpr float kGalacticResetChance  = 0.05F; // base chance; ×3 when upgraded
+constexpr float kGalacticResetChance  = 0.10F; // base chance; ×3 when upgraded
 constexpr float kGalacticRewindSpeed  = 15.0F; // cells/sec during rewind animation
 constexpr float kKittyJumpBonusRange = 1.5F; // extra reach for upgraded jumps
 
@@ -204,6 +204,13 @@ struct ArcProjectile {
   bool upgraded = false;
 };
 
+// Explosion-in-progress: crater and toxic zone form after a short delay.
+struct PendingCatastrophe {
+  Position target{};
+  bool     upgraded = false;
+  float    timer    = 0.35F; // seconds until crater forms
+};
+
 // Lingering damage zone left by a landed Catastrophe projectile.
 struct ToxicZone {
   std::vector<Position> cells;
@@ -298,6 +305,7 @@ public:
     hit_splats_.clear();
     projectiles_.clear();
     arc_projectiles_.clear();
+    pending_catastrophes_.clear();
     toxic_zones_.clear();
     shockwaves_.clear();
     beams_.clear();
@@ -615,6 +623,7 @@ public:
     MoveProjectiles();
     ResolveProjectiles();
     UpdateArcProjectiles();
+    UpdatePendingCatastrophes();
     UpdateToxicZones();
     UpdateShockwaves();
     UpdateBeams();
@@ -2198,7 +2207,7 @@ private:
           AwardBounty(e.type);
           PlayDeathSfx(e.type);
         } else {
-          hit_splats_.push_back({pos, 0.22F});
+          hit_splats_.push_back({pos, 0.22F, t.upgraded ? 2 : 1});
         }
       }
     }
@@ -2331,15 +2340,65 @@ private:
     arc_projectiles_.push_back(ap);
   }
 
-  void LandCatastrophe(const ArcProjectile &ap) {
+  // Phase 1 — called when the arc projectile lands: apply damage, play the
+  // bright explosion animation, and queue the crater to form after a delay.
+  void ExplodeCatastrophe(const ArcProjectile &ap) {
     const int cx = ap.target.x;
     const int cy = ap.target.y;
-    constexpr int kCraterRadius = 2; // Chebyshev half-width → 5×5 square
+    constexpr int kCraterRadius = 2;
 
-    // Build cells grouped by Chebyshev ring so the impact flash matches the
-    // ring structure of the toxic zone it creates.
+    for (auto &e : enemies_) {
+      const auto pos = EnemyCell(e);
+      if (std::max(std::abs(pos.x - cx), std::abs(pos.y - cy)) > kCraterRadius) continue;
+      e.hp -= ap.damage;
+      AITrackDamage(Tower::Type::Catastrophe, ap.damage);
+      if (e.hp <= 0) {
+        AwardBounty(e.type);
+        PlayDeathSfx(e.type);
+      } else {
+        hit_splats_.push_back({pos, 0.25F});
+      }
+    }
+
     std::vector<Position> ring0, ring1, ring2;
-    std::vector<Position> splash_cells;
+    for (int y = cy - kCraterRadius; y <= cy + kCraterRadius; ++y) {
+      for (int x = cx - kCraterRadius; x <= cx + kCraterRadius; ++x) {
+        if (x < 0 || x >= kBoardWidth || y < 0 || y >= kBoardHeight) continue;
+        const int ring = std::max(std::abs(x - cx), std::abs(y - cy));
+        if      (ring == 0) ring0.push_back({x, y});
+        else if (ring == 1) ring1.push_back({x, y});
+        else                ring2.push_back({x, y});
+      }
+    }
+
+    // Expanding shockwave from impact point.
+    Shockwave sw;
+    sw.center    = {static_cast<float>(cx), static_cast<float>(cy)};
+    sw.radius    = 0.0F;
+    sw.max_radius = static_cast<float>(kCraterRadius) + 0.8F;
+    sw.speed     = 7.0F;
+    sw.time_left = 0.45F;
+    sw.max_time  = 0.45F;
+    shockwaves_.push_back(sw);
+
+    // Bright explosion flash: white core → yellow mid-ring → orange outer.
+    if (!ring0.empty()) area_highlights_.push_back({ring0, 0.45F, ftxui::Color::White,   '*'});
+    if (!ring1.empty()) area_highlights_.push_back({ring1, 0.38F, ftxui::Color::Yellow1, '*'});
+    if (!ring2.empty()) area_highlights_.push_back({ring2, 0.30F, ftxui::Color::Orange1, '*'});
+
+    Sfx("tower_catastrophe_detonation");
+
+    pending_catastrophes_.push_back({ap.target, ap.upgraded});
+  }
+
+  // Phase 2 — called after the explosion settles: show the crater gradient and
+  // create the lingering toxic zone.
+  void FormCrater(const PendingCatastrophe &pc) {
+    const int cx = pc.target.x;
+    const int cy = pc.target.y;
+    constexpr int kCraterRadius = 2;
+
+    std::vector<Position> ring0, ring1, ring2, splash_cells;
     for (int y = cy - kCraterRadius; y <= cy + kCraterRadius; ++y) {
       for (int x = cx - kCraterRadius; x <= cx + kCraterRadius; ++x) {
         if (x < 0 || x >= kBoardWidth || y < 0 || y >= kBoardHeight) continue;
@@ -2351,31 +2410,28 @@ private:
       }
     }
 
-    for (auto &e : enemies_) {
-      const auto pos = EnemyCell(e);
-      const bool hit = std::max(std::abs(pos.x - cx), std::abs(pos.y - cy)) <= kCraterRadius;
-      if (!hit) continue;
-      e.hp -= ap.damage;
-      AITrackDamage(Tower::Type::Catastrophe, ap.damage);
-      if (e.hp <= 0) {
-        AwardBounty(e.type);
-        PlayDeathSfx(e.type);
-      } else {
-        hit_splats_.push_back({pos, 0.25F}); // radius 0 — normal enemy flash
-      }
-    }
-
-    // Flash each ring with a colour that mirrors the crater gradient.
-    if (!ring0.empty()) area_highlights_.push_back({ring0, 0.4F, ftxui::Color::White,     '!'});
+    if (!ring0.empty()) area_highlights_.push_back({ring0, 0.4F, ftxui::Color::White,      '!'});
     if (!ring1.empty()) area_highlights_.push_back({ring1, 0.4F, ftxui::Color::OrangeRed1, ':'});
     if (!ring2.empty()) area_highlights_.push_back({ring2, 0.4F, ftxui::Color::DarkKhaki,  '.'});
-    Sfx("tower_catastrophe_detonation");
 
     ToxicZone zone;
-    zone.cells = splash_cells;
-    zone.center = {static_cast<float>(cx), static_cast<float>(cy)};
-    zone.explode_on_expire = ap.upgraded;
+    zone.cells          = splash_cells;
+    zone.center         = {static_cast<float>(cx), static_cast<float>(cy)};
+    zone.explode_on_expire = pc.upgraded;
     toxic_zones_.push_back(std::move(zone));
+  }
+
+  void UpdatePendingCatastrophes() {
+    std::vector<PendingCatastrophe> survivors;
+    for (auto &pc : pending_catastrophes_) {
+      pc.timer -= Dt();
+      if (pc.timer <= 0.0F) {
+        FormCrater(pc);
+      } else {
+        survivors.push_back(pc);
+      }
+    }
+    pending_catastrophes_ = std::move(survivors);
   }
 
   void UpdateArcProjectiles() {
@@ -2386,7 +2442,7 @@ private:
       ap.ground.x = ap.start.x + t * (static_cast<float>(ap.target.x) - ap.start.x);
       ap.ground.y = ap.start.y + t * (static_cast<float>(ap.target.y) - ap.start.y);
       if (ap.progress >= 1.0F) {
-        LandCatastrophe(ap);
+        ExplodeCatastrophe(ap);
       } else {
         survivors.push_back(ap);
       }
@@ -3179,8 +3235,9 @@ private:
   std::vector<Tower> towers_;
   std::vector<HitSplat> hit_splats_;
   std::vector<Projectile> projectiles_;
-  std::vector<ArcProjectile> arc_projectiles_;
-  std::vector<ToxicZone> toxic_zones_;
+  std::vector<ArcProjectile>       arc_projectiles_;
+  std::vector<PendingCatastrophe>  pending_catastrophes_;
+  std::vector<ToxicZone>           toxic_zones_;
   std::vector<Shockwave> shockwaves_;
   std::vector<Beam> beams_;
   std::vector<AreaHighlight> area_highlights_;
@@ -3253,17 +3310,14 @@ public:
 
   ftxui::Element OnRender() override {
     const int w = game_.Wave();
-    const int m = game_.MapIndex();
-    if (w != title_wave_ || m != title_map_) {
+    if (w != title_wave_) {
       title_wave_ = w;
-      title_map_  = m;
       if (game_.GameOver())
         SetTerminalTitle("catcat | game over");
       else if (w == 0)
         SetTerminalTitle("catcat");
       else
-        SetTerminalTitle("catcat | map " + std::to_string(m + 1) +
-                         " · wave " + std::to_string(w));
+        SetTerminalTitle("catcat | wave " + std::to_string(w));
     }
     return game_.Render();
   }
@@ -3297,7 +3351,6 @@ private:
   std::thread ticker_;
   int quit_presses_ = 0;
   int title_wave_ = -1;
-  int title_map_  = -1;
 };
 
 } // namespace
