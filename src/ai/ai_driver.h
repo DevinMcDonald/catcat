@@ -1,5 +1,4 @@
 #pragma once
-#include "ai/nn.h"
 #include "game/ai_interface.h"
 #include "game/game.h"   // for GameAIBridge
 
@@ -10,6 +9,56 @@
 #include <ftxui/component/screen_interactive.hpp>
 #include <random>
 #include <string>
+#include <vector>
+
+// ── Structured network: global-context MLP + shared per-candidate MLP ────────
+//
+// Parameter layout (all contiguous in params[]):
+//   global MLP : kGIn→kGH→kGEmb    (processes global+tower_info+enemy features)
+//   candidate MLP: (kCIn+kGEmb)→kCH→kCEmb  (shared across all 30 candidates)
+//   special head : kGEmb→kSpec      (noop / start_wave / unlock×7)
+//   place head   : kCEmb→kNTypes    (one score per tower type, per candidate)
+//   upgrade head : kCEmb→1
+//   sell head    : kCEmb→1
+struct CandidateNet {
+    static constexpr int kGIn    = kAIObsGlobal + kAIObsTowerInfo + kAIObsEnemies; // 52
+    static constexpr int kGH     = 64;
+    static constexpr int kGEmb   = 32;
+    static constexpr int kCIn    = kAICandidateFeats;  // 18
+    static constexpr int kCH     = 48;
+    static constexpr int kCEmb   = 32;
+    static constexpr int kSpec   = 1 + 1 + kAINumTowerTypes; // noop+start+unlock×7 = 9
+    static constexpr int kNTypes = kAINumTowerTypes;
+
+    // Cumulative offsets into params[] — public for display-panel introspection.
+    static constexpr int kOffGW1 = 0;
+    static constexpr int kOffGB1 = kOffGW1 + kGIn  * kGH;
+    static constexpr int kOffGW2 = kOffGB1 + kGH;
+    static constexpr int kOffGB2 = kOffGW2 + kGH   * kGEmb;
+    static constexpr int kOffCW1 = kOffGB2 + kGEmb;
+    static constexpr int kOffCB1 = kOffCW1 + (kCIn + kGEmb) * kCH;
+    static constexpr int kOffCW2 = kOffCB1 + kCH;
+    static constexpr int kOffCB2 = kOffCW2 + kCH   * kCEmb;
+    static constexpr int kOffSPW = kOffCB2 + kCEmb;
+    static constexpr int kOffSPB = kOffSPW + kGEmb  * kSpec;
+    static constexpr int kOffPLW = kOffSPB + kSpec;
+    static constexpr int kOffPLB = kOffPLW + kCEmb  * kNTypes;
+    static constexpr int kOffUPW = kOffPLB + kNTypes;
+    static constexpr int kOffUPB = kOffUPW + kCEmb;
+    static constexpr int kOffSLW = kOffUPB + 1;
+    static constexpr int kOffSLB = kOffSLW + kCEmb;
+    static constexpr int kTotal  = kOffSLB + 1;  // 3698
+
+    std::vector<float> params;
+
+    CandidateNet();
+
+    std::vector<float> Forward(const std::vector<float>& obs) const;
+    CandidateNet       Perturbed(float sigma) const;
+    bool               Save(const std::string& path) const;
+    bool               Load(const std::string& path);
+    std::size_t        NumParams() const { return params.size(); }
+};
 
 // ── Training state shared between the training loop and the FTXUI render ────
 struct AIStats {
@@ -85,22 +134,15 @@ class AIPlayer {
 public:
   explicit AIPlayer(int seed = 42);
 
-  // Load weights from disk; returns false if file missing / incompatible.
   bool Load(const std::string& path);
   bool Save(const std::string& path) const;
 
-  // Select an action given an observation.
-  AICommand SelectAction(const AIObservation& obs) const;
-
-  // Return a new AIPlayer with Gaussian noise added to all weights.
-  AIPlayer Perturbed(float sigma) const;
-
-  // Network exposed for Save/Load delegation from Trainer.
-  NeuralNet& Net() { return net_; }
-  const NeuralNet& Net() const { return net_; }
+  AICommand           SelectAction(const AIObservation& obs) const;
+  AIPlayer            Perturbed(float sigma) const;
+  const CandidateNet& Net() const { return net_; }
 
 private:
-  NeuralNet net_;
+  CandidateNet        net_;
   mutable std::mt19937_64 rng_;
 };
 

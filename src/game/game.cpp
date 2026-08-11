@@ -957,22 +957,35 @@ public:
     base = kAIObsGlobal + kAIObsTowerInfo;
     for (int j = 0; j < kAINumCandidates; ++j) {
       const Position& pos = ai_candidates_[static_cast<std::size_t>(j)];
-      const int off = base + j * 15;
+      const int off = base + j * kAICandidateFeats;
       const auto tidx = TowerIndexAt(pos);
-      f[static_cast<std::size_t>(off + 0)] =
-          CanPlace(pos, 1, Tower::Type::Default, 3.2f, false) ? 1.0f : 0.0f;
 
-      // Incremental coverage: path cells in kCoverageR2 range not already covered
-      float incremental = 0.0f;
+      // off+0: buildable for 1×1 towers; off+1: buildable for 2×2 (Fat Cat)
+      f[static_cast<std::size_t>(off+0)] =
+          CanPlace(pos, 1, Tower::Type::Default, 3.2f, false) ? 1.0f : 0.0f;
+      f[static_cast<std::size_t>(off+1)] =
+          CanPlace(pos, 2, Tower::Type::Fat, 2.4f, false) ? 1.0f : 0.0f;
+
+      // off+5..7: incremental coverage (uncovered path cells) at three radii
+      constexpr float kSmallR2 = 2.5f * 2.5f;
+      constexpr float kLargeR2 = 5.0f * 5.0f;
+      float inc_small = 0.0f, inc_mid = 0.0f, inc_large = 0.0f;
       if (!path_.empty()) {
-        int uncovered = 0;
+        int us = 0, um = 0, ul = 0;
         for (std::size_t pi = 0; pi < path_.size(); ++pi) {
+          if (path_covered[pi]) continue;
           const auto& p = path_[pi];
           const float dx = static_cast<float>(pos.x - p.x);
           const float dy = static_cast<float>(pos.y - p.y);
-          if (dx*dx + dy*dy <= kCoverageR2 && !path_covered[pi]) ++uncovered;
+          const float d2 = dx*dx + dy*dy;
+          if (d2 <= kSmallR2) ++us;
+          if (d2 <= kCoverageR2) ++um;
+          if (d2 <= kLargeR2) ++ul;
         }
-        incremental = static_cast<float>(uncovered) / static_cast<float>(path_.size());
+        const float path_len = static_cast<float>(path_.size());
+        inc_small = static_cast<float>(us) / path_len;
+        inc_mid   = static_cast<float>(um) / path_len;
+        inc_large = static_cast<float>(ul) / path_len;
       }
 
       if (tidx.has_value()) {
@@ -980,23 +993,28 @@ public:
         int ti = 0;
         for (int i = 0; i < kAINumTowerTypes; ++i)
           if (kAllTowerTypes[static_cast<std::size_t>(i)] == t.type) { ti = i; break; }
-        f[static_cast<std::size_t>(off+1)] = 1.0f;
-        f[static_cast<std::size_t>(off+2)] = static_cast<float>(ti) / static_cast<float>(kAINumTowerTypes-1);
-        f[static_cast<std::size_t>(off+3)] = t.upgraded ? 1.0f : 0.0f;
-        f[static_cast<std::size_t>(off+4)] = incremental;
-        f[static_cast<std::size_t>(off+5)] = std::min(t.cooldown / t.fire_rate, 1.0f);
-        f[static_cast<std::size_t>(off+6)] = (!t.upgraded && kibbles_ >= GetDef(t.type).cost * kUpgradeCostMultiplier) ? 1.0f : 0.0f;
-        f[static_cast<std::size_t>(off+7)] = ai_candidate_path_pos_[static_cast<std::size_t>(j)];
+        f[static_cast<std::size_t>(off+2)]  = 1.0f;
+        f[static_cast<std::size_t>(off+3)]  = static_cast<float>(ti) / static_cast<float>(kAINumTowerTypes-1);
+        f[static_cast<std::size_t>(off+4)]  = t.upgraded ? 1.0f : 0.0f;
+        f[static_cast<std::size_t>(off+5)]  = inc_small;
+        f[static_cast<std::size_t>(off+6)]  = inc_mid;
+        f[static_cast<std::size_t>(off+7)]  = inc_large;
+        f[static_cast<std::size_t>(off+8)]  = std::min(t.cooldown / t.fire_rate, 1.0f);
+        f[static_cast<std::size_t>(off+9)]  = (!t.upgraded && kibbles_ >= GetDef(t.type).cost * kUpgradeCostMultiplier) ? 1.0f : 0.0f;
+        f[static_cast<std::size_t>(off+10)] = ai_candidate_path_pos_[static_cast<std::size_t>(j)];
       } else {
-        f[static_cast<std::size_t>(off+1)] = 0.0f; f[static_cast<std::size_t>(off+2)] = 0.0f;
-        f[static_cast<std::size_t>(off+3)] = 0.0f;
-        f[static_cast<std::size_t>(off+4)] = incremental;
-        f[static_cast<std::size_t>(off+5)] = 0.0f;
-        f[static_cast<std::size_t>(off+6)] = 0.0f;
-        f[static_cast<std::size_t>(off+7)] = ai_candidate_path_pos_[static_cast<std::size_t>(j)];
+        f[static_cast<std::size_t>(off+2)]  = 0.0f;
+        f[static_cast<std::size_t>(off+3)]  = 0.0f;
+        f[static_cast<std::size_t>(off+4)]  = 0.0f;
+        f[static_cast<std::size_t>(off+5)]  = inc_small;
+        f[static_cast<std::size_t>(off+6)]  = inc_mid;
+        f[static_cast<std::size_t>(off+7)]  = inc_large;
+        f[static_cast<std::size_t>(off+8)]  = 0.0f;
+        f[static_cast<std::size_t>(off+9)]  = 0.0f;
+        f[static_cast<std::size_t>(off+10)] = ai_candidate_path_pos_[static_cast<std::size_t>(j)];
       }
 
-      // off+8..off+14: neighbor presence flag per tower type within coverage radius
+      // off+11..17: neighbor presence per tower type within coverage radius
       for (int k = 0; k < kAINumTowerTypes; ++k) {
         const Tower::Type kt = kAllTowerTypes[static_cast<std::size_t>(k)];
         bool found = false;
@@ -1006,7 +1024,7 @@ public:
           const float dy = static_cast<float>(tower.pos.y - pos.y);
           if (dx*dx + dy*dy <= kCoverageR2) { found = true; break; }
         }
-        f[static_cast<std::size_t>(off+8+k)] = found ? 1.0f : 0.0f;
+        f[static_cast<std::size_t>(off+11+k)] = found ? 1.0f : 0.0f;
       }
     }
 

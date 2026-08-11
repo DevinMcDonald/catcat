@@ -5,6 +5,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <future>
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/color.hpp>
@@ -48,9 +50,172 @@ static std::vector<float> Softmax(const std::vector<float>& logits,
   return probs;
 }
 
+// ── CandidateNet ──────────────────────────────────────────────────────────────
+
+static_assert(CandidateNet::kTotal == 10082, "param count changed — update this assert");
+
+CandidateNet::CandidateNet() {
+    params.resize(static_cast<std::size_t>(kTotal), 0.0f);
+    std::mt19937 rng(std::random_device{}());
+    auto xavier = [&](int fan_in) {
+        return std::normal_distribution<float>(0.0f, std::sqrt(2.0f / static_cast<float>(fan_in)));
+    };
+    auto fill = [&](int off, int count, std::normal_distribution<float>& d) {
+        for (int i = 0; i < count; ++i)
+            params[static_cast<std::size_t>(off + i)] = d(rng);
+    };
+    auto dg1 = xavier(kGIn);         fill(kOffGW1, kGIn  * kGH,          dg1);
+    auto dg2 = xavier(kGH);          fill(kOffGW2, kGH   * kGEmb,        dg2);
+    auto dc1 = xavier(kCIn + kGEmb); fill(kOffCW1, (kCIn+kGEmb) * kCH,  dc1);
+    auto dc2 = xavier(kCH);          fill(kOffCW2, kCH   * kCEmb,        dc2);
+    auto dsp = xavier(kGEmb);        fill(kOffSPW, kGEmb  * kSpec,       dsp);
+    auto dpl = xavier(kCEmb);        fill(kOffPLW, kCEmb  * kNTypes,     dpl);
+    auto dup = xavier(kCEmb);        fill(kOffUPW, kCEmb,                dup);
+    auto dsl = xavier(kCEmb);        fill(kOffSLW, kCEmb,                dsl);
+}
+
+std::vector<float> CandidateNet::Forward(const std::vector<float>& obs) const {
+    const float* p = params.data();
+
+    // ── 1. Assemble global input: global(7) + tower_info(21) + enemies(24) ──
+    // obs: [0..6]=global [7..27]=tower_info [28..477]=candidates [478..501]=enemies
+    constexpr int kGlobEnd  = kAIObsGlobal + kAIObsTowerInfo;          // 28
+    constexpr int kCandEnd  = kGlobEnd + kAIObsCandidates;              // 478
+    float gin[kGIn];
+    for (int i = 0; i < kGlobEnd; ++i)  gin[i] = obs[static_cast<std::size_t>(i)];
+    for (int i = 0; i < kAIObsEnemies; ++i)
+        gin[kGlobEnd + i] = obs[static_cast<std::size_t>(kCandEnd + i)];
+
+    // ── 2. Global MLP: kGIn → kGH → kGEmb (ReLU hidden, linear out) ────────
+    const float* gw1 = p + kOffGW1;  const float* gb1 = p + kOffGB1;
+    const float* gw2 = p + kOffGW2;  const float* gb2 = p + kOffGB2;
+    float gh[kGH], gemb[kGEmb];
+    for (int j = 0; j < kGH; ++j) {
+        float s = gb1[j];
+        for (int i = 0; i < kGIn; ++i) s += gw1[j*kGIn + i] * gin[i];
+        gh[j] = std::max(0.0f, s);
+    }
+    for (int j = 0; j < kGEmb; ++j) {
+        float s = gb2[j];
+        for (int i = 0; i < kGH; ++i) s += gw2[j*kGH + i] * gh[i];
+        gemb[j] = std::max(0.0f, s);
+    }
+
+    // ── 3. Shared candidate MLP: (kCIn+kGEmb) → kCH → kCEmb ────────────────
+    const float* cw1 = p + kOffCW1;  const float* cb1 = p + kOffCB1;
+    const float* cw2 = p + kOffCW2;  const float* cb2 = p + kOffCB2;
+    constexpr int kCTotal = kCIn + kGEmb;  // 31
+    float cemb[kAINumCandidates][kCEmb];
+    for (int j = 0; j < kAINumCandidates; ++j) {
+        const int coff = kGlobEnd + j * kCIn;
+        float cin[kCTotal];
+        for (int i = 0; i < kCIn; ++i)
+            cin[i] = obs[static_cast<std::size_t>(coff + i)];
+        for (int i = 0; i < kGEmb; ++i)
+            cin[kCIn + i] = gemb[i];
+
+        float ch[kCH];
+        for (int k = 0; k < kCH; ++k) {
+            float s = cb1[k];
+            for (int i = 0; i < kCTotal; ++i) s += cw1[k*kCTotal + i] * cin[i];
+            ch[k] = std::max(0.0f, s);
+        }
+        for (int k = 0; k < kCEmb; ++k) {
+            float s = cb2[k];
+            for (int i = 0; i < kCH; ++i) s += cw2[k*kCH + i] * ch[i];
+            cemb[j][k] = std::max(0.0f, s);
+        }
+    }
+
+    // ── 4. Special head: gemb → [noop, start_wave, unlock×7] ────────────────
+    const float* spw = p + kOffSPW;  const float* spb = p + kOffSPB;
+    float spec[kSpec];
+    for (int k = 0; k < kSpec; ++k) {
+        float s = spb[k];
+        for (int i = 0; i < kGEmb; ++i) s += spw[k*kGEmb + i] * gemb[i];
+        spec[k] = s;
+    }
+
+    // ── 5. Place head: cemb[j] → score per tower type ────────────────────────
+    const float* plw = p + kOffPLW;  const float* plb = p + kOffPLB;
+    float place[kAINumCandidates][kNTypes];
+    for (int j = 0; j < kAINumCandidates; ++j)
+        for (int t = 0; t < kNTypes; ++t) {
+            float s = plb[t];
+            for (int i = 0; i < kCEmb; ++i) s += plw[t*kCEmb + i] * cemb[j][i];
+            place[j][t] = s;
+        }
+
+    // ── 6. Upgrade head: cemb[j] → scalar ───────────────────────────────────
+    const float* upw = p + kOffUPW;  const float upb = p[kOffUPB];
+    float upgrade[kAINumCandidates];
+    for (int j = 0; j < kAINumCandidates; ++j) {
+        float s = upb;
+        for (int i = 0; i < kCEmb; ++i) s += upw[i] * cemb[j][i];
+        upgrade[j] = s;
+    }
+
+    // ── 7. Sell head: cemb[j] → scalar ──────────────────────────────────────
+    const float* slw = p + kOffSLW;  const float slb = p[kOffSLB];
+    float sell[kAINumCandidates];
+    for (int j = 0; j < kAINumCandidates; ++j) {
+        float s = slb;
+        for (int i = 0; i < kCEmb; ++i) s += slw[i] * cemb[j][i];
+        sell[j] = s;
+    }
+
+    // ── 8. Assemble output in action-index order ─────────────────────────────
+    std::vector<float> out(kAINumActions, 0.0f);
+    out[kAIActNoop]      = spec[0];
+    out[kAIActStartWave] = spec[1];
+    for (int t = 0; t < kNTypes; ++t)
+        out[static_cast<std::size_t>(kAIActUnlock + t)] = spec[2 + t];
+    for (int t = 0; t < kNTypes; ++t)
+        for (int j = 0; j < kAINumCandidates; ++j)
+            out[static_cast<std::size_t>(kAIActPlace + t*kAINumCandidates + j)] = place[j][t];
+    for (int j = 0; j < kAINumCandidates; ++j)
+        out[static_cast<std::size_t>(kAIActUpgrade + j)] = upgrade[j];
+    for (int j = 0; j < kAINumCandidates; ++j)
+        out[static_cast<std::size_t>(kAIActSell + j)] = sell[j];
+    return out;
+}
+
+CandidateNet CandidateNet::Perturbed(float sigma) const {
+    CandidateNet copy = *this;
+    std::mt19937 rng(std::random_device{}());
+    std::normal_distribution<float> dist(0.0f, sigma);
+    for (auto& v : copy.params) v += dist(rng);
+    return copy;
+}
+
+bool CandidateNet::Save(const std::string& path) const {
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+    std::ofstream f(path, std::ios::binary);
+    if (!f) return false;
+    const int magic = 0xCA7CA7;
+    const int n     = static_cast<int>(params.size());
+    f.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
+    f.write(reinterpret_cast<const char*>(&n),     sizeof(n));
+    f.write(reinterpret_cast<const char*>(params.data()),
+            static_cast<std::streamsize>(static_cast<std::size_t>(n) * sizeof(float)));
+    return f.good();
+}
+
+bool CandidateNet::Load(const std::string& path) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return false;
+    int magic = 0, n = 0;
+    f.read(reinterpret_cast<char*>(&magic), sizeof(magic));
+    f.read(reinterpret_cast<char*>(&n),     sizeof(n));
+    if (!f || magic != 0xCA7CA7 || n != static_cast<int>(params.size())) return false;
+    f.read(reinterpret_cast<char*>(params.data()),
+           static_cast<std::streamsize>(static_cast<std::size_t>(n) * sizeof(float)));
+    return f.good();
+}
+
 // ── AIPlayer ──────────────────────────────────────────────────────────────────
 AIPlayer::AIPlayer(int seed)
-    : net_(kAIObs, 64, 32, kAINumActions),
+    : net_(),
       rng_(static_cast<std::mt19937_64::result_type>(seed)) {}
 
 bool AIPlayer::Load(const std::string& path) { return net_.Load(path); }
@@ -67,7 +232,6 @@ AICommand AIPlayer::SelectAction(const AIObservation& obs) const {
   const std::vector<float> logits = net_.Forward(input);
   const std::vector<float> probs  = Softmax(logits, obs.valid);
 
-  // Check if any valid action exists
   bool any_valid = false;
   for (bool v : obs.valid) if (v) { any_valid = true; break; }
   if (!any_valid) return AICommand{kAIActNoop};
@@ -627,26 +791,12 @@ private:
     {
       std::lock_guard<std::mutex> lock(player_mutex_);
       const auto& net = display_player_.Net();
-      const int off_b3 = net.n_in * net.n_h1
-                       + net.n_h1
-                       + net.n_h1 * net.n_h2
-                       + net.n_h2
-                       + net.n_h2 * net.n_out;
-      const float* b3 = net.params.data() + off_b3;
-      for (int t = 0; t < kAINumTowerTypes; ++t) {
-        float s = 0.0f;
-        for (int j = 0; j < kAINumCandidates; ++j)
-          s += b3[kAIActPlace + t * kAINumCandidates + j];
-        pref[static_cast<std::size_t>(t)] = s / static_cast<float>(kAINumCandidates);
-      }
-      float us = 0.0f;
-      for (int j = 0; j < kAINumCandidates; ++j)
-        us += b3[kAIActUpgrade + j];
-      upg_bias = us / static_cast<float>(kAINumCandidates);
-      float ss = 0.0f;
-      for (int j = 0; j < kAINumCandidates; ++j)
-        ss += b3[kAIActSell + j];
-      sell_bias = ss / static_cast<float>(kAINumCandidates);
+      // Read unconditional biases directly from the scoring heads.
+      for (int t = 0; t < kAINumTowerTypes; ++t)
+        pref[static_cast<std::size_t>(t)] =
+            net.params[static_cast<std::size_t>(CandidateNet::kOffPLB + t)];
+      upg_bias  = net.params[static_cast<std::size_t>(CandidateNet::kOffUPB)];
+      sell_bias = net.params[static_cast<std::size_t>(CandidateNet::kOffSLB)];
     }
 
     float b_lo = std::min(upg_bias, sell_bias), b_hi = std::max(upg_bias, sell_bias);
