@@ -3,7 +3,6 @@
 #include <array>
 #include <chrono>
 #include <cstdio>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <future>
@@ -106,19 +105,9 @@ void SavePrefs(const UpdatePrefs &prefs) {
   out << "skip_version=" << prefs.skip_version << "\n";
 }
 
-bool HasNetworkConnectivity() {
-  // Quick connectivity probe with 1s timeout; avoid blocking when offline.
-  int ret = std::system("ping -c 1 -W 1 8.8.8.8 >/dev/null 2>&1");
-  return ret == 0;
-}
-
 std::optional<std::string> DetectLatestViaBrew() {
   const auto start_time = std::chrono::steady_clock::now();
   const auto overall_timeout = std::chrono::seconds(3);
-
-  if (!HasNetworkConnectivity()) {
-    return std::nullopt;
-  }
 
   const std::array<std::string, 2> cmds = {
       "brew info --json=v2 devinmcdonald/catcat/catcat 2>/dev/null",

@@ -17,5 +17,4 @@ bool IsCleanVersion(const std::string &v);
 UpdatePrefs LoadPrefs();
 void SavePrefs(const UpdatePrefs &prefs);
 
-bool HasNetworkConnectivity();
 std::optional<std::string> DetectLatestViaBrew();
