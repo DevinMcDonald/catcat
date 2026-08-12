@@ -122,7 +122,7 @@ int main(int argc, const char *argv[]) {
   }
 
   if (show_version) {
-    CheckForUpdates(false, true);
+    std::printf("catcat %s\n", CurrentVersion().c_str());
     return 0;
   }
   if (CheckForUpdates() == UpdateAction::Exit) {
