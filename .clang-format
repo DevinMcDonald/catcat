@@ -1,1 +1,11 @@
+# Choose a base style (e.g., LLVM, Google, Chromium, Mozilla, WebKit)
 BasedOnStyle: LLVM
+
+# Disable the use of tabs for indentation
+UseTab: Never
+
+# Set the number of spaces per indent level
+IndentWidth: 4
+
+# Match tab width settings to keep alignment consistent
+TabWidth: 4

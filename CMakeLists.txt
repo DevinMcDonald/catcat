@@ -145,7 +145,7 @@ if(CLANG_TIDY)
       OUTPUT_VARIABLE APPLE_SDK_PATH
       OUTPUT_STRIP_TRAILING_WHITESPACE)
     if(APPLE_SDK_PATH)
-      set(CLANG_TIDY_EXTRA_ARGS "--extra-arg=--sysroot=${APPLE_SDK_PATH}")
+      list(APPEND CLANG_TIDY_EXTRA_ARGS "--extra-arg=--sysroot=${APPLE_SDK_PATH}")
     endif()
   endif()
 

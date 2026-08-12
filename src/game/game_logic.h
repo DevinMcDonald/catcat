@@ -16,9 +16,9 @@ enum class EnemyType { Mouse, Rat, BigRat, Dog };
 // ---------------------------------------------------------------------------
 
 struct MapEnemyWeights {
-  float mouse_start, mouse_end;
-  float bigrat_start, bigrat_end;
-  float dog_start, dog_end;
+    float mouse_start, mouse_end;
+    float bigrat_start, bigrat_end;
+    float dog_start, dog_end;
 };
 
 constexpr MapEnemyWeights kMapWeights[10] = {
@@ -64,14 +64,14 @@ constexpr float kSellRefundFraction =
 // Difficulty level at a given (wave, map_index). Resets to 1-10 each map,
 // plus a permanent map bonus so later maps stay harder.
 inline int DifficultyLevel(int wave, int map_index) {
-  const int local = (wave - 1) % kWavesPerMap + 1;
-  return local + map_index * 2;
+    const int local = (wave - 1) % kWavesPerMap + 1;
+    return local + map_index * 2;
 }
 
 // Kibbles awarded at the end of a wave. Local wave resets per map so late-game
 // income stays controlled.
 inline int WaveCompletionBonus(int wave) {
-  return kWaveCompletionBase + ((wave - 1) % kWavesPerMap + 1);
+    return kWaveCompletionBase + ((wave - 1) % kWavesPerMap + 1);
 }
 
 // Number of enemies spawned in a wave at the given difficulty.
@@ -79,55 +79,55 @@ inline int SpawnCount(int diff) { return kSpawnBase + diff; }
 
 // Max HP of an enemy at a given difficulty level.
 inline int EnemyMaxHP(EnemyType type, int diff) {
-  const float f = static_cast<float>(diff);
-  switch (type) {
-  case EnemyType::Mouse:
-    return static_cast<int>((2.0F + f) * kEnemyHPScalar);
-  case EnemyType::Rat:
-    return static_cast<int>((5.0F + f * 2.5F) * kEnemyHPScalar);
-  case EnemyType::BigRat:
-    return static_cast<int>((15.0F + f * 4.0F) * kEnemyHPScalar);
-  case EnemyType::Dog:
-    return static_cast<int>((28.0F + f * 6.0F) * kEnemyHPScalar);
-  }
-  return 1;
+    const float f = static_cast<float>(diff);
+    switch (type) {
+    case EnemyType::Mouse:
+        return static_cast<int>((2.0F + f) * kEnemyHPScalar);
+    case EnemyType::Rat:
+        return static_cast<int>((5.0F + f * 2.5F) * kEnemyHPScalar);
+    case EnemyType::BigRat:
+        return static_cast<int>((15.0F + f * 4.0F) * kEnemyHPScalar);
+    case EnemyType::Dog:
+        return static_cast<int>((28.0F + f * 6.0F) * kEnemyHPScalar);
+    }
+    return 1;
 }
 
 // Kill reward by enemy type.
 inline int EnemyBounty(EnemyType type) {
-  switch (type) {
-  case EnemyType::Mouse:
-    return 4;
-  case EnemyType::Rat:
+    switch (type) {
+    case EnemyType::Mouse:
+        return 4;
+    case EnemyType::Rat:
+        return 5;
+    case EnemyType::BigRat:
+        return 10;
+    case EnemyType::Dog:
+        return 14;
+    }
     return 5;
-  case EnemyType::BigRat:
-    return 10;
-  case EnemyType::Dog:
-    return 14;
-  }
-  return 5;
 }
 
 // Kibbles returned when selling a tower.
 inline int SellRefund(int cost) {
-  return static_cast<int>(
-      std::round(static_cast<float>(cost) * kSellRefundFraction));
+    return static_cast<int>(
+        std::round(static_cast<float>(cost) * kSellRefundFraction));
 }
 
 // Determine enemy type from a pre-supplied uniform random roll in [0, 1).
 // Separating the RNG call makes this testable without seeding.
 inline EnemyType EnemyTypeForRoll(int map_idx, int wave, float roll) {
-  map_idx = std::clamp(map_idx, 0, 9);
-  const MapEnemyWeights &w = kMapWeights[map_idx];
-  const float t = static_cast<float>((wave - 1) % 10) / 9.0F;
-  const float mouse_w = w.mouse_start + t * (w.mouse_end - w.mouse_start);
-  const float bigrat_w = w.bigrat_start + t * (w.bigrat_end - w.bigrat_start);
-  const float dog_w = w.dog_start + t * (w.dog_end - w.dog_start);
-  if (roll < mouse_w)
-    return EnemyType::Mouse;
-  if (roll < mouse_w + bigrat_w)
-    return EnemyType::BigRat;
-  if (roll < mouse_w + bigrat_w + dog_w)
-    return EnemyType::Dog;
-  return EnemyType::Rat;
+    map_idx = std::clamp(map_idx, 0, 9);
+    const MapEnemyWeights &w = kMapWeights[map_idx];
+    const float t = static_cast<float>((wave - 1) % 10) / 9.0F;
+    const float mouse_w = w.mouse_start + t * (w.mouse_end - w.mouse_start);
+    const float bigrat_w = w.bigrat_start + t * (w.bigrat_end - w.bigrat_start);
+    const float dog_w = w.dog_start + t * (w.dog_end - w.dog_start);
+    if (roll < mouse_w)
+        return EnemyType::Mouse;
+    if (roll < mouse_w + bigrat_w)
+        return EnemyType::BigRat;
+    if (roll < mouse_w + bigrat_w + dog_w)
+        return EnemyType::Dog;
+    return EnemyType::Rat;
 }

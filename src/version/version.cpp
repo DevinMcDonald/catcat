@@ -10,60 +10,60 @@
 std::string CurrentVersion() { return CATCAT_VERSION; }
 
 UpdateAction CheckForUpdates(bool interactive_prompt, bool show_up_to_date) {
-  const std::string current_raw = CurrentVersion();
-  const std::string current = NormalizeVersion(current_raw);
+    const std::string current_raw = CurrentVersion();
+    const std::string current = NormalizeVersion(current_raw);
 
-  // Skip update check for dev builds — git describe adds suffixes like
-  // "-3-gabcdef" or "-dirty" that distinguish them from clean releases.
-  if (!IsCleanVersion(current)) {
-    return UpdateAction::Continue;
-  }
-  const auto latest = DetectLatestViaBrew();
-  if (!latest.has_value() || latest->empty()) {
-    if (show_up_to_date) {
-      std::cout << "catcat " << current_raw
-                << " (could not determine latest; check internet and run "
-                   "brew update)\n";
+    // Skip update check for dev builds — git describe adds suffixes like
+    // "-3-gabcdef" or "-dirty" that distinguish them from clean releases.
+    if (!IsCleanVersion(current)) {
+        return UpdateAction::Continue;
     }
-    return UpdateAction::Continue;
-  }
-  const std::string latest_norm = NormalizeVersion(*latest);
-  if (latest_norm == current) {
-    if (show_up_to_date) {
-      std::cout << "catcat " << current_raw << " (up to date)\n";
+    const auto latest = DetectLatestViaBrew();
+    if (!latest.has_value() || latest->empty()) {
+        if (show_up_to_date) {
+            std::cout << "catcat " << current_raw
+                      << " (could not determine latest; check internet and run "
+                         "brew update)\n";
+        }
+        return UpdateAction::Continue;
     }
-    return UpdateAction::Continue;
-  }
-  if (!interactive_prompt) {
-    std::cout
-        << "catcat " << current_raw << " (latest " << *latest
-        << "). Run: brew update && brew upgrade devinmcdonald/catcat/catcat\n";
-    return UpdateAction::Continue;
-  }
+    const std::string latest_norm = NormalizeVersion(*latest);
+    if (latest_norm == current) {
+        if (show_up_to_date) {
+            std::cout << "catcat " << current_raw << " (up to date)\n";
+        }
+        return UpdateAction::Continue;
+    }
+    if (!interactive_prompt) {
+        std::cout << "catcat " << current_raw << " (latest " << *latest
+                  << "). Run: brew update && brew upgrade "
+                     "devinmcdonald/catcat/catcat\n";
+        return UpdateAction::Continue;
+    }
 
-  UpdatePrefs prefs = LoadPrefs();
-  if (!prefs.skip_version.empty() && prefs.skip_version == latest_norm) {
-    return UpdateAction::Continue;
-  }
+    UpdatePrefs prefs = LoadPrefs();
+    if (!prefs.skip_version.empty() && prefs.skip_version == latest_norm) {
+        return UpdateAction::Continue;
+    }
 
-  std::cout << "\nA new catcat version is available.\n"
-            << "Current: " << current_raw << "\n"
-            << "Latest : " << *latest << "\n"
-            << "[u]pdate, [s]kip once, [k]eep skipping this version: "
-            << std::flush;
-  std::string choice;
-  std::getline(std::cin, choice);
-  if (!choice.empty()) {
-    const char c = static_cast<char>(std::tolower(choice[0]));
-    if (c == 'u') {
-      std::cout
-          << "Run: brew update && brew upgrade devinmcdonald/catcat/catcat\n";
-      return UpdateAction::Exit;
+    std::cout << "\nA new catcat version is available.\n"
+              << "Current: " << current_raw << "\n"
+              << "Latest : " << *latest << "\n"
+              << "[u]pdate, [s]kip once, [k]eep skipping this version: "
+              << std::flush;
+    std::string choice;
+    std::getline(std::cin, choice);
+    if (!choice.empty()) {
+        const char c = static_cast<char>(std::tolower(choice[0]));
+        if (c == 'u') {
+            std::cout << "Run: brew update && brew upgrade "
+                         "devinmcdonald/catcat/catcat\n";
+            return UpdateAction::Exit;
+        }
+        if (c == 'k') {
+            prefs.skip_version = latest_norm;
+            SavePrefs(prefs);
+        }
     }
-    if (c == 'k') {
-      prefs.skip_version = latest_norm;
-      SavePrefs(prefs);
-    }
-  }
-  return UpdateAction::Continue;
+    return UpdateAction::Continue;
 }

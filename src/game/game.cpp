@@ -32,12 +32,12 @@
 
 // Emit an xterm-compatible window title. No-op on dumb terminals or pipes.
 static void SetTerminalTitle(const std::string &title) {
-  const char *term = std::getenv("TERM");
-  if (term && std::string_view(term) == "dumb")
-    return;
-  // OSC 0: sets both icon name and window title; BEL-terminated.
-  std::printf("\033]0;%s\007", title.c_str());
-  std::fflush(stdout);
+    const char *term = std::getenv("TERM");
+    if (term && std::string_view(term) == "dumb")
+        return;
+    // OSC 0: sets both icon name and window title; BEL-terminated.
+    std::printf("\033]0;%s\007", title.c_str());
+    std::fflush(stdout);
 }
 
 using namespace std::chrono_literals;
@@ -84,171 +84,172 @@ constexpr float kCatastropheExplosionRadius = 3.0F;
 constexpr int kCatastropheExplosionDamage = 7;
 
 struct Position {
-  int x = 0;
-  int y = 0;
+    int x = 0;
+    int y = 0;
 };
 
 struct Vec2 {
-  float x = 0.0F;
-  float y = 0.0F;
+    float x = 0.0F;
+    float y = 0.0F;
 };
 
 float DistanceSquared(const Vec2 &a, const Position &b) {
-  const float dx = a.x - static_cast<float>(b.x);
-  const float dy = a.y - static_cast<float>(b.y);
-  return dx * dx + dy * dy;
+    const float dx = a.x - static_cast<float>(b.x);
+    const float dy = a.y - static_cast<float>(b.y);
+    return dx * dx + dy * dy;
 }
 
 std::vector<Position> KittyOverlayCells(const Vec2 &center) {
-  std::vector<Position> cells;
-  const std::array<std::pair<int, int>, 4> dirs = {
-      std::pair<int, int>{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-  for (const auto &[px, py] : dirs) {
-    const int perp_x = -py;
-    const int perp_y = px;
-    const std::array<int, 3> offs = {-1, 0, 1}; // overlapping 2-wide bands
-    for (int step = 1; step <= 3; ++step) {
-      for (int off : offs) {
-        const int gx =
-            static_cast<int>(std::round(center.x)) + px * step + perp_x * off;
-        const int gy =
-            static_cast<int>(std::round(center.y)) + py * step + perp_y * off;
-        if (gx < 0 || gy < 0 || gx >= kBoardWidth || gy >= kBoardHeight) {
-          continue;
+    std::vector<Position> cells;
+    const std::array<std::pair<int, int>, 4> dirs = {
+        std::pair<int, int>{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+    for (const auto &[px, py] : dirs) {
+        const int perp_x = -py;
+        const int perp_y = px;
+        const std::array<int, 3> offs = {-1, 0, 1}; // overlapping 2-wide bands
+        for (int step = 1; step <= 3; ++step) {
+            for (int off : offs) {
+                const int gx = static_cast<int>(std::round(center.x)) +
+                               px * step + perp_x * off;
+                const int gy = static_cast<int>(std::round(center.y)) +
+                               py * step + perp_y * off;
+                if (gx < 0 || gy < 0 || gx >= kBoardWidth ||
+                    gy >= kBoardHeight) {
+                    continue;
+                }
+                cells.push_back({gx, gy});
+            }
         }
-        cells.push_back({gx, gy});
-      }
     }
-  }
-  return cells;
+    return cells;
 }
 
 ftxui::Color BlendColor(const ftxui::Color &base, const ftxui::Color &overlay,
                         float alpha) {
-  return ftxui::Color::Interpolate(alpha, base, overlay);
+    return ftxui::Color::Interpolate(alpha, base, overlay);
 }
 
 struct Enemy {
-  float path_progress = 0.0F; // index along path cells
-  float speed = 1.0F;         // cells per second
-  int hp = 1;
-  int max_hp = 1;
-  int lane_offset = 0; // lateral offset from center path
-  EnemyType type = EnemyType::Rat;
-  float sleep_timer = 0.0F;
-  float rewind_speed = 0.0F; // > 0 while Galacticat rewind is active
+    float path_progress = 0.0F; // index along path cells
+    float speed = 1.0F;         // cells per second
+    int hp = 1;
+    int max_hp = 1;
+    int lane_offset = 0; // lateral offset from center path
+    EnemyType type = EnemyType::Rat;
+    float sleep_timer = 0.0F;
+    float rewind_speed = 0.0F; // > 0 while Galacticat rewind is active
 };
 
 struct Tower {
-  enum class Type {
-    Default,
-    Fat,
-    Kitty,
-    Thunder,
-    Catatonic,
-    Catastrophe,
-    Galactic
-  };
+    enum class Type {
+        Default,
+        Fat,
+        Kitty,
+        Thunder,
+        Catatonic,
+        Catastrophe,
+        Galactic
+    };
 
-  Position pos{};
-  Position home{};
-  int damage = 2;
-  float range = 3.2F;
-  float cooldown = 0.0F;  // time until next shot
-  float fire_rate = 1.2F; // seconds between shots
-  Type type = Type::Default;
-  int size = 1; // 1x1 or 2x2 for Fat
-  bool upgraded = false;
+    Position pos{};
+    Position home{};
+    int damage = 2;
+    float range = 3.2F;
+    float cooldown = 0.0F;  // time until next shot
+    float fire_rate = 1.2F; // seconds between shots
+    Type type = Type::Default;
+    int size = 1; // 1x1 or 2x2 for Fat
+    bool upgraded = false;
 };
 
 struct HitSplat {
-  Position pos{};
-  float time_left = 0.25F; // seconds
-  int radius = 0;          // 0 = single cell; 1 = diamond of adjacent cells
+    Position pos{};
+    float time_left = 0.25F; // seconds
+    int radius = 0;          // 0 = single cell; 1 = diamond of adjacent cells
 };
 
 struct Projectile {
-  float x = 0.0F;
-  float y = 0.0F;
-  Position target{};
-  float speed = 17.0F; // cells per second
-  int damage = 0;
+    float x = 0.0F;
+    float y = 0.0F;
+    Position target{};
+    float speed = 17.0F; // cells per second
+    int damage = 0;
 };
 
 struct Shockwave {
-  Vec2 center{};
-  float radius = 0.0F;
-  float max_radius = 0.0F;
-  float speed = 10.0F;
-  float time_left = 0.4F;
-  float max_time = 0.4F;
+    Vec2 center{};
+    float radius = 0.0F;
+    float max_radius = 0.0F;
+    float speed = 10.0F;
+    float time_left = 0.4F;
+    float max_time = 0.4F;
 };
 
 struct Beam {
-  std::vector<Position> cells;
-  float time_left = 0.18F;
+    std::vector<Position> cells;
+    float time_left = 0.18F;
 };
 
 struct HeldTower {
-  Tower tower;
-  Position original{};
+    Tower tower;
+    Position original{};
 };
 
 struct AreaHighlight {
-  std::vector<Position> cells;
-  float time_left = 0.2F;
-  ftxui::Color color = ftxui::Color::Pink1;
-  char glyph = '#';
+    std::vector<Position> cells;
+    float time_left = 0.2F;
+    ftxui::Color color = ftxui::Color::Pink1;
+    char glyph = '#';
 };
 
 // Slow arc projectile fired by Catastrophe. Ground position moves linearly;
 // visual offset follows a parabola so it appears to lob through the air.
 struct ArcProjectile {
-  Vec2 start{};
-  Vec2 ground{};         // current interpolated ground position
-  Position target{};     // landing cell
-  float progress = 0.0F; // 0 → 1
-  float total_time = kCatastropheTravelTime;
-  float arc_height = kCatastropheArcHeight;
-  int damage = 0;
-  float splash_radius = kCatastropheSplashRadius;
-  bool upgraded = false;
+    Vec2 start{};
+    Vec2 ground{};         // current interpolated ground position
+    Position target{};     // landing cell
+    float progress = 0.0F; // 0 → 1
+    float total_time = kCatastropheTravelTime;
+    float arc_height = kCatastropheArcHeight;
+    int damage = 0;
+    float splash_radius = kCatastropheSplashRadius;
+    bool upgraded = false;
 };
 
 // Explosion-in-progress: crater and toxic zone form after a short delay.
 struct PendingCatastrophe {
-  Position target{};
-  bool upgraded = false;
-  float timer = 0.35F; // seconds until crater forms
+    Position target{};
+    bool upgraded = false;
+    float timer = 0.35F; // seconds until crater forms
 };
 
 // Lingering damage zone left by a landed Catastrophe projectile.
 struct ToxicZone {
-  std::vector<Position> cells;
-  Vec2 center{};
-  float time_left = kCatastropheZoneDuration;
-  float tick_timer = kCatastropheZoneTickInterval;
-  float tick_interval = kCatastropheZoneTickInterval;
-  int damage_per_tick = kCatastropheZoneDamagePerTick;
-  bool explode_on_expire = false;
+    std::vector<Position> cells;
+    Vec2 center{};
+    float time_left = kCatastropheZoneDuration;
+    float tick_timer = kCatastropheZoneTickInterval;
+    float tick_interval = kCatastropheZoneTickInterval;
+    int damage_per_tick = kCatastropheZoneDamagePerTick;
+    bool explode_on_expire = false;
 };
 
 struct TowerDef {
-  Tower::Type type;
-  std::string name;
-  int cost;
-  int damage;
-  float range;
-  float fire_rate;
-  bool show_range;
-  int size;
+    Tower::Type type;
+    std::string name;
+    int cost;
+    int damage;
+    float range;
+    float fire_rate;
+    bool show_range;
+    int size;
 };
 
 struct MapDef {
-  std::vector<Position> anchors;
-  int path_width = 1;
-  ftxui::Color background = ftxui::Color::DarkGreen;
-  ftxui::Color path_color = ftxui::Color::DarkGoldenrod;
+    std::vector<Position> anchors;
+    int path_width = 1;
+    ftxui::Color background = ftxui::Color::DarkGreen;
+    ftxui::Color path_color = ftxui::Color::DarkGoldenrod;
 };
 
 // Single source of truth for all tower types. SortedDefs, TypeKey, and
@@ -260,572 +261,582 @@ constexpr std::array<Tower::Type, 7> kAllTowerTypes = {
 };
 
 TowerDef GetDef(Tower::Type type) {
-  switch (type) {
-  case Tower::Type::Default:
-    return {type, "Default Cat", 35, 3, 4.5F, 1.10F, true, 1};
-  case Tower::Type::Fat:
-    return {type, "Fat Cat", 35, 5, 2.4F, 1.4F, true, 2};
-  case Tower::Type::Kitty:
-    return {type, "Kitty Cat", 50, 4, 3.0F, 1.0F, true, 1};
-  case Tower::Type::Thunder:
-    return {type, "Thundercat", 100, 7, 999.0F, 3.38F, false, 1};
-  case Tower::Type::Catatonic:
-    return {type, "Catatonic", 100, 2, 3.2F, 2.2F, true, 1};
-  case Tower::Type::Catastrophe:
-    return {type, "Catastrophe", 150, 11, 15.0F, 4.5F, true, 1};
-  case Tower::Type::Galactic:
-    return {type, "Galacticat", 200, 20, 7.5F, 2.5F, true, 1};
-  }
-  return {Tower::Type::Default, "Default Cat", 35, 3, 4.5F, 1.10F, true, 1};
+    switch (type) {
+    case Tower::Type::Default:
+        return {type, "Default Cat", 35, 3, 4.5F, 1.10F, true, 1};
+    case Tower::Type::Fat:
+        return {type, "Fat Cat", 35, 5, 2.4F, 1.4F, true, 2};
+    case Tower::Type::Kitty:
+        return {type, "Kitty Cat", 50, 4, 3.0F, 1.0F, true, 1};
+    case Tower::Type::Thunder:
+        return {type, "Thundercat", 100, 7, 999.0F, 3.38F, false, 1};
+    case Tower::Type::Catatonic:
+        return {type, "Catatonic", 100, 2, 3.2F, 2.2F, true, 1};
+    case Tower::Type::Catastrophe:
+        return {type, "Catastrophe", 150, 11, 15.0F, 4.5F, true, 1};
+    case Tower::Type::Galactic:
+        return {type, "Galacticat", 200, 20, 7.5F, 2.5F, true, 1};
+    }
+    return {Tower::Type::Default, "Default Cat", 35, 3, 4.5F, 1.10F, true, 1};
 }
 
 class Game {
-public:
-  explicit Game(bool dev_mode = false, bool headless = false)
-      : dev_mode_(dev_mode) {
-    BuildMaps();
-    ResetState();
+  public:
+    explicit Game(bool dev_mode = false, bool headless = false)
+        : dev_mode_(dev_mode) {
+        BuildMaps();
+        ResetState();
 #ifdef ENABLE_AUDIO
-    if (!headless) {
-      audio_ = std::make_unique<AudioSystem>();
-      audio_->Init("audio.json");
-      LoadSettings();
-      audio_->SetMusicForMap(map_index_);
-    }
+        if (!headless) {
+            audio_ = std::make_unique<AudioSystem>();
+            audio_->Init("audio.json");
+            LoadSettings();
+            audio_->SetMusicForMap(map_index_);
+        }
 #endif
-  }
-
-  void ResetState() {
-    wave_active_ = false;
-    game_over_ = false;
-    game_over_display_timer_ = 0.0f;
-    victory_ = false;
-    wave_ = 0;
-    map_index_ = 0;
-    kibbles_ = dev_mode_ ? 1000000 : kStartingKibbles;
-    lives_ = kStartingLives;
-    spawn_remaining_ = 0;
-    spawn_cooldown_ms_ = 0;
-    auto_waves_ = false;
-    fast_forward_ = false;
-    cursor_ = {3, kBoardHeight / 2};
-    selected_type_ = Tower::Type::Default;
-    show_controls_ = false;
-    towers_.clear();
-    enemies_.clear();
-    hit_splats_.clear();
-    projectiles_.clear();
-    arc_projectiles_.clear();
-    pending_catastrophes_.clear();
-    toxic_zones_.clear();
-    shockwaves_.clear();
-    beams_.clear();
-    area_highlights_.clear();
-    held_tower_.reset();
-    rng_ = std::mt19937(std::random_device{}());
-    unlocked_types_ = {Tower::Type::Default};
-    if (dev_mode_) {
-      for (auto t : kAllTowerTypes)
-        unlocked_types_.insert(t);
     }
-    BuildPath();
+
+    void ResetState() {
+        wave_active_ = false;
+        game_over_ = false;
+        game_over_display_timer_ = 0.0f;
+        victory_ = false;
+        wave_ = 0;
+        map_index_ = 0;
+        kibbles_ = dev_mode_ ? 1000000 : kStartingKibbles;
+        lives_ = kStartingLives;
+        spawn_remaining_ = 0;
+        spawn_cooldown_ms_ = 0;
+        auto_waves_ = false;
+        fast_forward_ = false;
+        cursor_ = {3, kBoardHeight / 2};
+        selected_type_ = Tower::Type::Default;
+        show_controls_ = false;
+        towers_.clear();
+        enemies_.clear();
+        hit_splats_.clear();
+        projectiles_.clear();
+        arc_projectiles_.clear();
+        pending_catastrophes_.clear();
+        toxic_zones_.clear();
+        shockwaves_.clear();
+        beams_.clear();
+        area_highlights_.clear();
+        held_tower_.reset();
+        rng_ = std::mt19937(std::random_device{}());
+        unlocked_types_ = {Tower::Type::Default};
+        if (dev_mode_) {
+            for (auto t : kAllTowerTypes)
+                unlocked_types_.insert(t);
+        }
+        BuildPath();
 #ifdef ENABLE_AUDIO
-    if (audio_) {
-      audio_->SetMusicForMap(map_index_);
-    }
+        if (audio_) {
+            audio_->SetMusicForMap(map_index_);
+        }
 #endif
-    intro_stage_ = IntroStage::Title;
-  }
-
-  std::vector<std::vector<bool>>
-  TowerOccupancyMaskSkipping(const std::vector<size_t> &skip_indices) const {
-    std::vector<bool> skip_lookup(towers_.size(), false);
-    for (size_t idx : skip_indices) {
-      if (idx < skip_lookup.size()) {
-        skip_lookup[idx] = true;
-      }
+        intro_stage_ = IntroStage::Title;
     }
-    std::vector<std::vector<bool>> mask(kBoardHeight,
-                                        std::vector<bool>(kBoardWidth, false));
-    for (size_t i = 0; i < towers_.size(); ++i) {
-      if (skip_lookup[i]) {
-        continue;
-      }
-      const auto &t = towers_[i];
-      for (int dy = 0; dy < t.size; ++dy) {
-        for (int dx = 0; dx < t.size; ++dx) {
-          const int cx = t.pos.x + dx;
-          const int cy = t.pos.y + dy;
-          if (cx < 0 || cy < 0 || cx >= kBoardWidth || cy >= kBoardHeight) {
-            continue;
-          }
-          mask[static_cast<size_t>(cy)][static_cast<size_t>(cx)] = true;
+
+    std::vector<std::vector<bool>>
+    TowerOccupancyMaskSkipping(const std::vector<size_t> &skip_indices) const {
+        std::vector<bool> skip_lookup(towers_.size(), false);
+        for (size_t idx : skip_indices) {
+            if (idx < skip_lookup.size()) {
+                skip_lookup[idx] = true;
+            }
         }
-      }
-    }
-    return mask;
-  }
-
-  std::vector<Position> KittyAttackArea(const Vec2 &center,
-                                        const Position &target_cell) const {
-    const float dx = static_cast<float>(target_cell.x) - center.x;
-    const float dy = static_cast<float>(target_cell.y) - center.y;
-    const bool horizontal = std::abs(dx) >= std::abs(dy);
-    const int primary_x = horizontal ? ((dx > 0) - (dx < 0)) : 0;
-    const int primary_y = horizontal ? 0 : ((dy > 0) - (dy < 0));
-    const int perp_x = horizontal ? 0 : -primary_y;
-    const int perp_y = horizontal ? primary_x : 0;
-
-    std::vector<Position> area_cells;
-    for (int step = 1; step <= 3; ++step) { // depth 3
-      for (int off : {-1, 0, 1}) {          // overlapping 2-wide bands
-        const int gx = static_cast<int>(std::round(center.x)) +
-                       primary_x * step + perp_x * off;
-        const int gy = static_cast<int>(std::round(center.y)) +
-                       primary_y * step + perp_y * off;
-        if (gx < 0 || gy < 0 || gx >= kBoardWidth || gy >= kBoardHeight) {
-          continue;
+        std::vector<std::vector<bool>> mask(
+            kBoardHeight, std::vector<bool>(kBoardWidth, false));
+        for (size_t i = 0; i < towers_.size(); ++i) {
+            if (skip_lookup[i]) {
+                continue;
+            }
+            const auto &t = towers_[i];
+            for (int dy = 0; dy < t.size; ++dy) {
+                for (int dx = 0; dx < t.size; ++dx) {
+                    const int cx = t.pos.x + dx;
+                    const int cy = t.pos.y + dy;
+                    if (cx < 0 || cy < 0 || cx >= kBoardWidth ||
+                        cy >= kBoardHeight) {
+                        continue;
+                    }
+                    mask[static_cast<size_t>(cy)][static_cast<size_t>(cx)] =
+                        true;
+                }
+            }
         }
-        area_cells.push_back({gx, gy});
-      }
+        return mask;
     }
-    return area_cells;
-  }
 
-  bool KittyAreaHitsEnemy(const std::vector<Position> &cells) const {
-    for (const auto &e : enemies_) {
-      if (e.hp <= 0) {
-        continue;
-      }
-      const auto pos = EnemyCell(e);
-      const bool hit =
-          std::any_of(cells.begin(), cells.end(), [&](const Position &c) {
-            return c.x == pos.x && c.y == pos.y;
-          });
-      if (hit) {
-        return true;
-      }
-    }
-    return false;
-  }
+    std::vector<Position> KittyAttackArea(const Vec2 &center,
+                                          const Position &target_cell) const {
+        const float dx = static_cast<float>(target_cell.x) - center.x;
+        const float dy = static_cast<float>(target_cell.y) - center.y;
+        const bool horizontal = std::abs(dx) >= std::abs(dy);
+        const int primary_x = horizontal ? ((dx > 0) - (dx < 0)) : 0;
+        const int primary_y = horizontal ? 0 : ((dy > 0) - (dy < 0));
+        const int perp_x = horizontal ? 0 : -primary_y;
+        const int perp_y = horizontal ? primary_x : 0;
 
-  bool KittyCellBlocked(
-      const Position &p, const std::vector<std::vector<bool>> &static_blocked,
-      const std::vector<std::vector<bool>> &reserved,
-      const std::optional<Position> &ignore_reserved = std::nullopt) const {
-    if (p.x < 0 || p.y < 0 || p.x >= kBoardWidth || p.y >= kBoardHeight) {
-      return true;
+        std::vector<Position> area_cells;
+        for (int step = 1; step <= 3; ++step) { // depth 3
+            for (int off : {-1, 0, 1}) {        // overlapping 2-wide bands
+                const int gx = static_cast<int>(std::round(center.x)) +
+                               primary_x * step + perp_x * off;
+                const int gy = static_cast<int>(std::round(center.y)) +
+                               primary_y * step + perp_y * off;
+                if (gx < 0 || gy < 0 || gx >= kBoardWidth ||
+                    gy >= kBoardHeight) {
+                    continue;
+                }
+                area_cells.push_back({gx, gy});
+            }
+        }
+        return area_cells;
     }
-    if (OccupiesPath(p, 1)) {
-      return true;
-    }
-    const bool reserved_here =
-        reserved[static_cast<size_t>(p.y)][static_cast<size_t>(p.x)];
-    if (reserved_here) {
-      if (!ignore_reserved.has_value() || ignore_reserved->x != p.x ||
-          ignore_reserved->y != p.y) {
-        return true;
-      }
-    }
-    return static_blocked[static_cast<size_t>(p.y)][static_cast<size_t>(p.x)];
-  }
 
-  bool CanKittyOccupyCell(size_t kitty_index, const Position &p) const {
-    if (p.x < 0 || p.y < 0 || p.x >= kBoardWidth || p.y >= kBoardHeight) {
-      return false;
-    }
-    if (OccupiesPath(p, 1)) {
-      return false;
-    }
-    for (size_t i = 0; i < towers_.size(); ++i) {
-      if (i == kitty_index) {
-        continue;
-      }
-      const auto &t = towers_[i];
-      const int tx2 = t.pos.x + t.size - 1;
-      const int ty2 = t.pos.y + t.size - 1;
-      if (p.x >= t.pos.x && p.x <= tx2 && p.y >= t.pos.y && p.y <= ty2) {
+    bool KittyAreaHitsEnemy(const std::vector<Position> &cells) const {
+        for (const auto &e : enemies_) {
+            if (e.hp <= 0) {
+                continue;
+            }
+            const auto pos = EnemyCell(e);
+            const bool hit =
+                std::any_of(cells.begin(), cells.end(), [&](const Position &c) {
+                    return c.x == pos.x && c.y == pos.y;
+                });
+            if (hit) {
+                return true;
+            }
+        }
         return false;
-      }
     }
-    return true;
-  }
 
-  std::optional<Position>
-  ChooseKittyLanding(size_t tower_index,
-                     const std::vector<std::vector<bool>> &static_blocked,
-                     std::vector<std::vector<bool>> &reserved) {
-    const Tower &t = towers_[tower_index];
-    const Vec2 origin = TowerCenter(t);
-    const float jump_range = t.range + kKittyJumpBonusRange;
-    const float jump_r2 = jump_range * jump_range;
-
-    std::vector<Position> candidates;
-    for (int y = 0; y < kBoardHeight; ++y) {
-      for (int x = 0; x < kBoardWidth; ++x) {
-        Position cell{x, y};
-        if (KittyCellBlocked(cell, static_blocked, reserved, t.pos)) {
-          continue;
+    bool KittyCellBlocked(
+        const Position &p, const std::vector<std::vector<bool>> &static_blocked,
+        const std::vector<std::vector<bool>> &reserved,
+        const std::optional<Position> &ignore_reserved = std::nullopt) const {
+        if (p.x < 0 || p.y < 0 || p.x >= kBoardWidth || p.y >= kBoardHeight) {
+            return true;
         }
-        const float d2 = DistanceSquared(origin, cell);
-        if (d2 > jump_r2) {
-          continue;
+        if (OccupiesPath(p, 1)) {
+            return true;
         }
-
-        const Vec2 landing_center = TowerCenterAt(cell, t.size);
-        const auto target_idx = FindTargetAt(t, landing_center);
-        if (!target_idx.has_value()) {
-          continue;
+        const bool reserved_here =
+            reserved[static_cast<size_t>(p.y)][static_cast<size_t>(p.x)];
+        if (reserved_here) {
+            if (!ignore_reserved.has_value() || ignore_reserved->x != p.x ||
+                ignore_reserved->y != p.y) {
+                return true;
+            }
         }
-        const auto area =
-            KittyAttackArea(landing_center, EnemyCell(enemies_[*target_idx]));
-        if (!KittyAreaHitsEnemy(area)) {
-          continue;
+        return static_blocked[static_cast<size_t>(p.y)]
+                             [static_cast<size_t>(p.x)];
+    }
+
+    bool CanKittyOccupyCell(size_t kitty_index, const Position &p) const {
+        if (p.x < 0 || p.y < 0 || p.x >= kBoardWidth || p.y >= kBoardHeight) {
+            return false;
         }
-
-        candidates.push_back(cell);
-      }
-    }
-
-    if (candidates.empty()) {
-      const auto yi = static_cast<size_t>(t.pos.y);
-      const auto xi = static_cast<size_t>(t.pos.x);
-      if (!KittyCellBlocked(t.pos, static_blocked, reserved, t.pos)) {
-        reserved[yi][xi] = true;
-        return t.pos;
-      }
-      return std::nullopt;
-    }
-
-    std::shuffle(candidates.begin(), candidates.end(), rng_);
-    for (const auto &c : candidates) {
-      const auto yi = static_cast<size_t>(c.y);
-      const auto xi = static_cast<size_t>(c.x);
-      if (reserved[yi][xi] && !(c.x == t.pos.x && c.y == t.pos.y)) {
-        continue;
-      }
-      reserved[yi][xi] = true;
-      return c;
-    }
-    return std::nullopt;
-  }
-
-  void HandleKittyAttacks() {
-    std::vector<size_t> ready_kitties;
-    for (size_t i = 0; i < towers_.size(); ++i) {
-      Tower &t = towers_[i];
-      if (t.type != Tower::Type::Kitty || t.cooldown > 0.0F) {
-        continue;
-      }
-      if (enemies_.empty()) {
-        continue;
-      }
-      ready_kitties.push_back(i);
-    }
-    if (ready_kitties.empty()) {
-      return;
-    }
-
-    std::vector<size_t> jumping_kitties;
-    for (size_t idx : ready_kitties) {
-      if (towers_[idx].upgraded) {
-        jumping_kitties.push_back(idx);
-      }
-    }
-
-    auto static_blocked = TowerOccupancyMaskSkipping(jumping_kitties);
-    std::vector<std::vector<bool>> reserved(
-        kBoardHeight, std::vector<bool>(kBoardWidth, false));
-    for (size_t idx : jumping_kitties) {
-      const auto &p = towers_[idx].pos;
-      if (p.y >= 0 && p.y < kBoardHeight && p.x >= 0 && p.x < kBoardWidth) {
-        reserved[static_cast<size_t>(p.y)][static_cast<size_t>(p.x)] = true;
-      }
-    }
-    std::unordered_map<size_t, Position> planned_landings;
-
-    std::vector<size_t> jump_order = jumping_kitties;
-    std::shuffle(jump_order.begin(), jump_order.end(), rng_);
-    for (size_t idx : jump_order) {
-      auto landing = ChooseKittyLanding(idx, static_blocked, reserved);
-      if (landing.has_value()) {
-        planned_landings[idx] = *landing;
-      }
-    }
-
-    for (size_t idx : ready_kitties) {
-      Tower &t = towers_[idx];
-      const Position original = t.pos;
-      Position destination = t.pos;
-      if (t.upgraded) {
-        const auto it = planned_landings.find(idx);
-        if (it != planned_landings.end()) {
-          destination = it->second;
+        if (OccupiesPath(p, 1)) {
+            return false;
         }
-        const bool destination_changed =
-            destination.x != t.pos.x || destination.y != t.pos.y;
-        if (destination_changed && !CanKittyOccupyCell(idx, destination)) {
-          destination = t.pos;
+        for (size_t i = 0; i < towers_.size(); ++i) {
+            if (i == kitty_index) {
+                continue;
+            }
+            const auto &t = towers_[i];
+            const int tx2 = t.pos.x + t.size - 1;
+            const int ty2 = t.pos.y + t.size - 1;
+            if (p.x >= t.pos.x && p.x <= tx2 && p.y >= t.pos.y && p.y <= ty2) {
+                return false;
+            }
         }
-        if (destination.x != t.pos.x || destination.y != t.pos.y) {
-          t.pos = destination;
-        }
-      }
-
-      const auto target = FindTarget(t);
-      if (!target.has_value()) {
-        t.pos = original;
-        continue;
-      }
-
-      FireKitty(t, enemies_[*target]);
-      Sfx("tower_kitty_shoot");
-      t.cooldown = NextCooldown(t.fire_rate);
-    }
-  }
-
-  void ReturnKittiesHome() {
-    std::vector<size_t> kitty_indices;
-    for (size_t i = 0; i < towers_.size(); ++i) {
-      if (towers_[i].type == Tower::Type::Kitty) {
-        kitty_indices.push_back(i);
-      }
-    }
-    if (kitty_indices.empty()) {
-      return;
-    }
-
-    auto static_blocked = TowerOccupancyMaskSkipping(kitty_indices);
-    std::vector<std::vector<bool>> reserved(
-        kBoardHeight, std::vector<bool>(kBoardWidth, false));
-
-    for (size_t idx : kitty_indices) {
-      Tower &t = towers_[idx];
-      if (t.pos.x == t.home.x && t.pos.y == t.home.y) {
-        reserved[static_cast<size_t>(t.pos.y)][static_cast<size_t>(t.pos.x)] =
-            true;
-        continue;
-      }
-      Position dest = NearestOpenCell(t.home, static_blocked, reserved, t.pos);
-      t.pos = dest;
-    }
-  }
-
-  void Tick() {
-#ifdef ENABLE_AUDIO
-    if (audio_)
-      audio_->Update();
-#endif
-    if (warning_timer_ > 0.0F) {
-      warning_timer_ = std::max(0.0F, warning_timer_ - Dt());
-      if (warning_timer_ <= 0.0F) {
-        warning_text_.clear();
-      }
-    }
-    if (game_over_ || victory_) {
-      if (game_over_display_timer_ > 0.0f) {
-        game_over_display_timer_ =
-            std::max(0.0f, game_over_display_timer_ - kTickSeconds);
-      }
-      return;
-    }
-
-    SpawnTick();
-    MoveEnemies();
-    TowersAct();
-    MoveProjectiles();
-    ResolveProjectiles();
-    UpdateArcProjectiles();
-    UpdatePendingCatastrophes();
-    UpdateToxicZones();
-    UpdateShockwaves();
-    UpdateBeams();
-    UpdateAreas();
-    Cleanup();
-    UpdateHitSplats();
-    CheckWaveCompletion();
-    if (lives_ <= 0) {
-      if (!game_over_) {
-        game_over_ = true;
-        auto_waves_ = false;
-        SetMusic(-1);
-        if (!ai_mode_)
-          game_over_display_timer_ = 5.0f;
-      }
-    }
-  }
-
-  bool HandleEvent(const ftxui::Event &event) {
-    if ((game_over_ || victory_) && event != ftxui::Event::Custom) {
-      if (game_over_display_timer_ > 0.0f)
         return true;
-      ResetState();
-      return true;
     }
 
-    if (!game_over_ && !victory_ && intro_stage_ != IntroStage::Playing &&
-        event != ftxui::Event::Custom) {
-      intro_stage_ = intro_stage_ == IntroStage::Title
-                         ? IntroStage::Instructions
-                         : IntroStage::Playing;
-      return true;
-    }
+    std::optional<Position>
+    ChooseKittyLanding(size_t tower_index,
+                       const std::vector<std::vector<bool>> &static_blocked,
+                       std::vector<std::vector<bool>> &reserved) {
+        const Tower &t = towers_[tower_index];
+        const Vec2 origin = TowerCenter(t);
+        const float jump_range = t.range + kKittyJumpBonusRange;
+        const float jump_r2 = jump_range * jump_range;
 
-    if (game_over_) {
-      return false;
-    }
+        std::vector<Position> candidates;
+        for (int y = 0; y < kBoardHeight; ++y) {
+            for (int x = 0; x < kBoardWidth; ++x) {
+                Position cell{x, y};
+                if (KittyCellBlocked(cell, static_blocked, reserved, t.pos)) {
+                    continue;
+                }
+                const float d2 = DistanceSquared(origin, cell);
+                if (d2 > jump_r2) {
+                    continue;
+                }
 
-    if (event == ftxui::Event::Character('h')) {
-      show_controls_ = !show_controls_;
-      return true;
-    }
+                const Vec2 landing_center = TowerCenterAt(cell, t.size);
+                const auto target_idx = FindTargetAt(t, landing_center);
+                if (!target_idx.has_value()) {
+                    continue;
+                }
+                const auto area = KittyAttackArea(
+                    landing_center, EnemyCell(enemies_[*target_idx]));
+                if (!KittyAreaHitsEnemy(area)) {
+                    continue;
+                }
 
-    const auto move_cursor = [&](int dx, int dy) {
-      cursor_.x = std::clamp(cursor_.x + dx, 0, kBoardWidth - 1);
-      cursor_.y = std::clamp(cursor_.y + dy, 0, kBoardHeight - 1);
-    };
-
-    bool handled = false;
-
-    if (event == ftxui::Event::ArrowUp ||
-        event == ftxui::Event::Character('w')) {
-      move_cursor(0, -1);
-      handled = true;
-    }
-    if (event == ftxui::Event::ArrowDown ||
-        event == ftxui::Event::Character('s')) {
-      move_cursor(0, 1);
-      handled = true;
-    }
-    if (event == ftxui::Event::ArrowLeft ||
-        event == ftxui::Event::Character('a')) {
-      move_cursor(-1, 0);
-      handled = true;
-    }
-    if (event == ftxui::Event::ArrowRight ||
-        event == ftxui::Event::Character('d')) {
-      move_cursor(1, 0);
-      handled = true;
-    }
-
-    if (event == ftxui::Event::Character('c') ||
-        event == ftxui::Event::Character(' ')) {
-      PlaceTower();
-      handled = true;
-    }
-
-    if (event == ftxui::Event::Character('n')) {
-      auto_waves_ = false;
-      StartWave();
-      handled = true;
-    }
-    if (event == ftxui::Event::Character('N')) {
-      if (auto_waves_) {
-        auto_waves_ = false;
-      } else {
-        auto_waves_ = true;
-        if (!wave_active_) {
-          StartWave();
+                candidates.push_back(cell);
+            }
         }
-      }
-      handled = true;
-    }
-    if (event == ftxui::Event::Character('f')) {
-      fast_forward_ = !fast_forward_;
-      handled = true;
-    }
 
-    if (!held_tower_.has_value()) {
-      const auto defs = SortedDefs();
-      for (size_t i = 0; i < defs.size() && i < 9; ++i) {
-        const char key = static_cast<char>('1' + static_cast<int>(i));
-        if (event == ftxui::Event::Character(key)) {
-          if (i == 0) {
-            selected_type_ = defs[i].type; // Default is always unlocked
-          } else {
-            TryUnlockOrSelect(defs[i].type);
-          }
-          overlay_enabled_ = true;
-          handled = true;
+        if (candidates.empty()) {
+            const auto yi = static_cast<size_t>(t.pos.y);
+            const auto xi = static_cast<size_t>(t.pos.x);
+            if (!KittyCellBlocked(t.pos, static_blocked, reserved, t.pos)) {
+                reserved[yi][xi] = true;
+                return t.pos;
+            }
+            return std::nullopt;
         }
-      }
-    }
-    if (event == ftxui::Event::Character('t')) { // toggle sfx
-      ToggleSfx();
-      handled = true;
-    }
-    if (event == ftxui::Event::Character('y')) { // toggle music
-      ToggleMusic();
-      handled = true;
-    }
-    if (event == ftxui::Event::Escape) {
-      show_controls_ = false;
-      if (held_tower_) {
-        CancelHold();
-      }
-      overlay_enabled_ = false;
-      handled = true;
-    }
-    if (event == ftxui::Event::Character('m')) {
-      if (held_tower_) {
-        TryPlaceHeld();
-      } else {
-        PickUpTower();
-      }
-      handled = true;
-    }
-    if (event == ftxui::Event::Character('u')) {
-      UpgradeTowerAtCursor();
-      handled = true;
-    }
-    if (event == ftxui::Event::Character('x')) {
-      SellTowerAtCursor();
-      handled = true;
+
+        std::shuffle(candidates.begin(), candidates.end(), rng_);
+        for (const auto &c : candidates) {
+            const auto yi = static_cast<size_t>(c.y);
+            const auto xi = static_cast<size_t>(c.x);
+            if (reserved[yi][xi] && !(c.x == t.pos.x && c.y == t.pos.y)) {
+                continue;
+            }
+            reserved[yi][xi] = true;
+            return c;
+        }
+        return std::nullopt;
     }
 
-    if (dev_mode_ && event == ftxui::Event::Character('>')) {
-      AdvanceMap(true);
-      handled = true;
+    void HandleKittyAttacks() {
+        std::vector<size_t> ready_kitties;
+        for (size_t i = 0; i < towers_.size(); ++i) {
+            Tower &t = towers_[i];
+            if (t.type != Tower::Type::Kitty || t.cooldown > 0.0F) {
+                continue;
+            }
+            if (enemies_.empty()) {
+                continue;
+            }
+            ready_kitties.push_back(i);
+        }
+        if (ready_kitties.empty()) {
+            return;
+        }
+
+        std::vector<size_t> jumping_kitties;
+        for (size_t idx : ready_kitties) {
+            if (towers_[idx].upgraded) {
+                jumping_kitties.push_back(idx);
+            }
+        }
+
+        auto static_blocked = TowerOccupancyMaskSkipping(jumping_kitties);
+        std::vector<std::vector<bool>> reserved(
+            kBoardHeight, std::vector<bool>(kBoardWidth, false));
+        for (size_t idx : jumping_kitties) {
+            const auto &p = towers_[idx].pos;
+            if (p.y >= 0 && p.y < kBoardHeight && p.x >= 0 &&
+                p.x < kBoardWidth) {
+                reserved[static_cast<size_t>(p.y)][static_cast<size_t>(p.x)] =
+                    true;
+            }
+        }
+        std::unordered_map<size_t, Position> planned_landings;
+
+        std::vector<size_t> jump_order = jumping_kitties;
+        std::shuffle(jump_order.begin(), jump_order.end(), rng_);
+        for (size_t idx : jump_order) {
+            auto landing = ChooseKittyLanding(idx, static_blocked, reserved);
+            if (landing.has_value()) {
+                planned_landings[idx] = *landing;
+            }
+        }
+
+        for (size_t idx : ready_kitties) {
+            Tower &t = towers_[idx];
+            const Position original = t.pos;
+            Position destination = t.pos;
+            if (t.upgraded) {
+                const auto it = planned_landings.find(idx);
+                if (it != planned_landings.end()) {
+                    destination = it->second;
+                }
+                const bool destination_changed =
+                    destination.x != t.pos.x || destination.y != t.pos.y;
+                if (destination_changed &&
+                    !CanKittyOccupyCell(idx, destination)) {
+                    destination = t.pos;
+                }
+                if (destination.x != t.pos.x || destination.y != t.pos.y) {
+                    t.pos = destination;
+                }
+            }
+
+            const auto target = FindTarget(t);
+            if (!target.has_value()) {
+                t.pos = original;
+                continue;
+            }
+
+            FireKitty(t, enemies_[*target]);
+            Sfx("tower_kitty_shoot");
+            t.cooldown = NextCooldown(t.fire_rate);
+        }
     }
 
-    if (handled && event != ftxui::Event::Custom) {
-      show_controls_ = false;
+    void ReturnKittiesHome() {
+        std::vector<size_t> kitty_indices;
+        for (size_t i = 0; i < towers_.size(); ++i) {
+            if (towers_[i].type == Tower::Type::Kitty) {
+                kitty_indices.push_back(i);
+            }
+        }
+        if (kitty_indices.empty()) {
+            return;
+        }
+
+        auto static_blocked = TowerOccupancyMaskSkipping(kitty_indices);
+        std::vector<std::vector<bool>> reserved(
+            kBoardHeight, std::vector<bool>(kBoardWidth, false));
+
+        for (size_t idx : kitty_indices) {
+            Tower &t = towers_[idx];
+            if (t.pos.x == t.home.x && t.pos.y == t.home.y) {
+                reserved[static_cast<size_t>(t.pos.y)]
+                        [static_cast<size_t>(t.pos.x)] = true;
+                continue;
+            }
+            Position dest =
+                NearestOpenCell(t.home, static_blocked, reserved, t.pos);
+            t.pos = dest;
+        }
     }
-    return handled;
-  }
 
-  ftxui::Element Render() const {
-    const bool intro = intro_stage_ != IntroStage::Playing;
-    auto board = intro ? BlankBoard() : RenderBoard();
-    if (game_over_) {
-      auto big_letters =
-          ftxui::vbox({ftxui::text("┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼"),
-                       ftxui::text("███▀▀▀██┼███▀▀▀███┼███▀█▄█▀███┼██▀▀▀"),
-                       ftxui::text("██┼┼┼┼██┼██┼┼┼┼┼██┼██┼┼┼█┼┼┼██┼██┼┼┼"),
-                       ftxui::text("██┼┼┼▄▄▄┼██▄▄▄▄▄██┼██┼┼┼▀┼┼┼██┼██▀▀▀"),
-                       ftxui::text("██┼┼┼┼██┼██┼┼┼┼┼██┼██┼┼┼┼┼┼┼██┼██┼┼┼"),
-                       ftxui::text("███▄▄▄██┼██┼┼┼┼┼██┼██┼┼┼┼┼┼┼██┼██▄▄▄"),
-                       ftxui::text("┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼"),
-                       ftxui::text("███▀▀▀███┼▀███┼┼██▀┼██▀▀▀┼██▀▀▀▀██▄┼"),
-                       ftxui::text("██┼┼┼┼┼██┼┼┼██┼┼██┼┼██┼┼┼┼██┼┼┼┼┼██┼"),
-                       ftxui::text("██┼┼┼┼┼██┼┼┼██┼┼██┼┼██▀▀▀┼██▄▄▄▄▄▀▀┼"),
-                       ftxui::text("██┼┼┼┼┼██┼┼┼██┼┼█▀┼┼██┼┼┼┼██┼┼┼┼┼██┼"),
-                       ftxui::text("███▄▄▄███┼┼┼─▀█▀┼┼─┼██▄▄▄┼██┼┼┼┼┼██▄"),
-                       ftxui::text("┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼")}) |
-          color(ftxui::Color::DarkRed) | bgcolor(ftxui::Color::Black) | bold |
-          ftxui::center;
-      auto overlay =
-          ftxui::center(ftxui::vbox({
-                            ftxui::filler(),
-                            big_letters | border | bgcolor(ftxui::Color::Black),
-                            ftxui::filler(),
-                        }) |
-                        ftxui::center);
-      board = ftxui::dbox({board, overlay});
-    } else if (victory_) {
-      auto banner = ftxui::vbox({
+    void Tick() {
+#ifdef ENABLE_AUDIO
+        if (audio_)
+            audio_->Update();
+#endif
+        if (warning_timer_ > 0.0F) {
+            warning_timer_ = std::max(0.0F, warning_timer_ - Dt());
+            if (warning_timer_ <= 0.0F) {
+                warning_text_.clear();
+            }
+        }
+        if (game_over_ || victory_) {
+            if (game_over_display_timer_ > 0.0f) {
+                game_over_display_timer_ =
+                    std::max(0.0f, game_over_display_timer_ - kTickSeconds);
+            }
+            return;
+        }
 
-                        // clang-format off
+        SpawnTick();
+        MoveEnemies();
+        TowersAct();
+        MoveProjectiles();
+        ResolveProjectiles();
+        UpdateArcProjectiles();
+        UpdatePendingCatastrophes();
+        UpdateToxicZones();
+        UpdateShockwaves();
+        UpdateBeams();
+        UpdateAreas();
+        Cleanup();
+        UpdateHitSplats();
+        CheckWaveCompletion();
+        if (lives_ <= 0) {
+            if (!game_over_) {
+                game_over_ = true;
+                auto_waves_ = false;
+                SetMusic(-1);
+                if (!ai_mode_)
+                    game_over_display_timer_ = 5.0f;
+            }
+        }
+    }
+
+    bool HandleEvent(const ftxui::Event &event) {
+        if ((game_over_ || victory_) && event != ftxui::Event::Custom) {
+            if (game_over_display_timer_ > 0.0f)
+                return true;
+            ResetState();
+            return true;
+        }
+
+        if (!game_over_ && !victory_ && intro_stage_ != IntroStage::Playing &&
+            event != ftxui::Event::Custom) {
+            intro_stage_ = intro_stage_ == IntroStage::Title
+                               ? IntroStage::Instructions
+                               : IntroStage::Playing;
+            return true;
+        }
+
+        if (game_over_) {
+            return false;
+        }
+
+        if (event == ftxui::Event::Character('h')) {
+            show_controls_ = !show_controls_;
+            return true;
+        }
+
+        const auto move_cursor = [&](int dx, int dy) {
+            cursor_.x = std::clamp(cursor_.x + dx, 0, kBoardWidth - 1);
+            cursor_.y = std::clamp(cursor_.y + dy, 0, kBoardHeight - 1);
+        };
+
+        bool handled = false;
+
+        if (event == ftxui::Event::ArrowUp ||
+            event == ftxui::Event::Character('w')) {
+            move_cursor(0, -1);
+            handled = true;
+        }
+        if (event == ftxui::Event::ArrowDown ||
+            event == ftxui::Event::Character('s')) {
+            move_cursor(0, 1);
+            handled = true;
+        }
+        if (event == ftxui::Event::ArrowLeft ||
+            event == ftxui::Event::Character('a')) {
+            move_cursor(-1, 0);
+            handled = true;
+        }
+        if (event == ftxui::Event::ArrowRight ||
+            event == ftxui::Event::Character('d')) {
+            move_cursor(1, 0);
+            handled = true;
+        }
+
+        if (event == ftxui::Event::Character('c') ||
+            event == ftxui::Event::Character(' ')) {
+            PlaceTower();
+            handled = true;
+        }
+
+        if (event == ftxui::Event::Character('n')) {
+            auto_waves_ = false;
+            StartWave();
+            handled = true;
+        }
+        if (event == ftxui::Event::Character('N')) {
+            if (auto_waves_) {
+                auto_waves_ = false;
+            } else {
+                auto_waves_ = true;
+                if (!wave_active_) {
+                    StartWave();
+                }
+            }
+            handled = true;
+        }
+        if (event == ftxui::Event::Character('f')) {
+            fast_forward_ = !fast_forward_;
+            handled = true;
+        }
+
+        if (!held_tower_.has_value()) {
+            const auto defs = SortedDefs();
+            for (size_t i = 0; i < defs.size() && i < 9; ++i) {
+                const char key = static_cast<char>('1' + static_cast<int>(i));
+                if (event == ftxui::Event::Character(key)) {
+                    if (i == 0) {
+                        selected_type_ =
+                            defs[i].type; // Default is always unlocked
+                    } else {
+                        TryUnlockOrSelect(defs[i].type);
+                    }
+                    overlay_enabled_ = true;
+                    handled = true;
+                }
+            }
+        }
+        if (event == ftxui::Event::Character('t')) { // toggle sfx
+            ToggleSfx();
+            handled = true;
+        }
+        if (event == ftxui::Event::Character('y')) { // toggle music
+            ToggleMusic();
+            handled = true;
+        }
+        if (event == ftxui::Event::Escape) {
+            show_controls_ = false;
+            if (held_tower_) {
+                CancelHold();
+            }
+            overlay_enabled_ = false;
+            handled = true;
+        }
+        if (event == ftxui::Event::Character('m')) {
+            if (held_tower_) {
+                TryPlaceHeld();
+            } else {
+                PickUpTower();
+            }
+            handled = true;
+        }
+        if (event == ftxui::Event::Character('u')) {
+            UpgradeTowerAtCursor();
+            handled = true;
+        }
+        if (event == ftxui::Event::Character('x')) {
+            SellTowerAtCursor();
+            handled = true;
+        }
+
+        if (dev_mode_ && event == ftxui::Event::Character('>')) {
+            AdvanceMap(true);
+            handled = true;
+        }
+
+        if (handled && event != ftxui::Event::Custom) {
+            show_controls_ = false;
+        }
+        return handled;
+    }
+
+    ftxui::Element Render() const {
+        const bool intro = intro_stage_ != IntroStage::Playing;
+        auto board = intro ? BlankBoard() : RenderBoard();
+        if (game_over_) {
+            auto big_letters =
+                ftxui::vbox(
+                    {ftxui::text("┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼"),
+                     ftxui::text("███▀▀▀██┼███▀▀▀███┼███▀█▄█▀███┼██▀▀▀"),
+                     ftxui::text("██┼┼┼┼██┼██┼┼┼┼┼██┼██┼┼┼█┼┼┼██┼██┼┼┼"),
+                     ftxui::text("██┼┼┼▄▄▄┼██▄▄▄▄▄██┼██┼┼┼▀┼┼┼██┼██▀▀▀"),
+                     ftxui::text("██┼┼┼┼██┼██┼┼┼┼┼██┼██┼┼┼┼┼┼┼██┼██┼┼┼"),
+                     ftxui::text("███▄▄▄██┼██┼┼┼┼┼██┼██┼┼┼┼┼┼┼██┼██▄▄▄"),
+                     ftxui::text("┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼"),
+                     ftxui::text("███▀▀▀███┼▀███┼┼██▀┼██▀▀▀┼██▀▀▀▀██▄┼"),
+                     ftxui::text("██┼┼┼┼┼██┼┼┼██┼┼██┼┼██┼┼┼┼██┼┼┼┼┼██┼"),
+                     ftxui::text("██┼┼┼┼┼██┼┼┼██┼┼██┼┼██▀▀▀┼██▄▄▄▄▄▀▀┼"),
+                     ftxui::text("██┼┼┼┼┼██┼┼┼██┼┼█▀┼┼██┼┼┼┼██┼┼┼┼┼██┼"),
+                     ftxui::text("███▄▄▄███┼┼┼─▀█▀┼┼─┼██▄▄▄┼██┼┼┼┼┼██▄"),
+                     ftxui::text("┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼┼")}) |
+                color(ftxui::Color::DarkRed) | bgcolor(ftxui::Color::Black) |
+                bold | ftxui::center;
+            auto overlay = ftxui::center(
+                ftxui::vbox({
+                    ftxui::filler(),
+                    big_letters | border | bgcolor(ftxui::Color::Black),
+                    ftxui::filler(),
+                }) |
+                ftxui::center);
+            board = ftxui::dbox({board, overlay});
+        } else if (victory_) {
+            auto banner = ftxui::vbox({
+
+                              // clang-format off
                   ftxui::text("                      .o8                              .o8   "),
                   ftxui::text(" .ooooo.   .oooo.   .o888oo       .ooooo.   .oooo.   .o888oo "),
                   ftxui::text("d88' `\"Y8 `P  )88b    888        d88' `\"Y8 `P  )88b    888   "),
@@ -836,20 +847,22 @@ public:
                   ftxui::text("                V I C T O R Y "),
                   ftxui::text(""),
 
-                        // clang-format on
-                    }) |
-                    color(ftxui::Color::GreenLight) |
-                    bgcolor(ftxui::Color::DarkBlue) | bold | ftxui::center;
-      auto msg = text("You cleared every map! Press any key to play again.") |
-                 color(ftxui::Color::GreenLight) | ftxui::center;
-      auto overlay =
-          ftxui::center(ftxui::vbox({ftxui::filler(), banner | border, msg,
-                                     ftxui::filler()}) |
-                        ftxui::center | bgcolor(ftxui::Color::Black));
-      board = ftxui::dbox({board, overlay});
-    } else if (intro_stage_ == IntroStage::Title) {
-      auto title =
-          // clang-format off
+                              // clang-format on
+                          }) |
+                          color(ftxui::Color::GreenLight) |
+                          bgcolor(ftxui::Color::DarkBlue) | bold |
+                          ftxui::center;
+            auto msg =
+                text("You cleared every map! Press any key to play again.") |
+                color(ftxui::Color::GreenLight) | ftxui::center;
+            auto overlay =
+                ftxui::center(ftxui::vbox({ftxui::filler(), banner | border,
+                                           msg, ftxui::filler()}) |
+                              ftxui::center | bgcolor(ftxui::Color::Black));
+            board = ftxui::dbox({board, overlay});
+        } else if (intro_stage_ == IntroStage::Title) {
+            auto title =
+                // clang-format off
           ftxui::vbox(
               {
                 ftxui::text("                      .o8                              .o8   "),
@@ -868,2679 +881,2747 @@ public:
                 ftxui::text("   ///_.-' _..--.'_    \\                    `( ) ) // //"),
                 ftxui::text("   / (_..-' // (< _     ;_..__               ; `' / ///"),
                 ftxui::text("    / // // //  `-._,_)' // / ``--...____..-' /// / // ")}) |
-          // clang-format on
-          color(ftxui::Color::YellowLight) | bgcolor(ftxui::Color::Blue3) |
-          bold | ftxui::center;
-      auto subtitle = ftxui::text("don't let the vermin into your den!") |
-                      color(ftxui::Color::YellowLight) | ftxui::center;
-      auto overlay = ftxui::center(
-          ftxui::vbox({ftxui::filler(),
-                       title | border | bgcolor(ftxui::Color::Blue3), subtitle,
-                       ftxui::filler()}) |
-          ftxui::center | bgcolor(ftxui::Color::DarkBlue));
-      board = ftxui::dbox({board, overlay});
-    } else if (intro_stage_ == IntroStage::Instructions) {
-      auto card =
-          ftxui::vbox({
-              text("how to play") | bold | color(ftxui::Color::YellowLight),
-              separator(),
-              text("Place cats with space/c. Start waves with n."),
-              text("Earn kibbles, buy more cats, upgrade/sell."),
-              text("Keep vermin from reaching your burrow."),
-              text("Press h any time for the controls menu."),
-              separator(),
-              text("press any key to begin") |
-                  color(ftxui::Color::YellowLight) | bold,
-          }) |
-          bgcolor(ftxui::Color::DarkBlue) | border |
-          color(ftxui::Color::White) | ftxui::center;
-      auto overlay =
-          ftxui::center(ftxui::vbox({ftxui::filler(), card, ftxui::filler()}) |
-                        ftxui::center);
-      board = ftxui::dbox({board, overlay});
-    }
-    auto stats = RenderStats();
-    return hbox({
-        board | border,
-        separator(),
-        stats | border,
-    });
-  }
-
-  bool GameOver() const { return game_over_; }
-  bool InIntro() const { return intro_stage_ != IntroStage::Playing; }
-  int Wave() const { return wave_; }
-  int MapIndex() const { return map_index_; }
-
-  // ── AI interface ──────────────────────────────────────────────────────────
-  void EnterAIMode() {
-    ai_mode_ = true;
-    auto_waves_ = true;
-    intro_stage_ = IntroStage::Playing;
-    ai_enemies_killed_ = 0;
-    ai_lives_lost_ = 0;
-    ai_tower_type_counts_.fill(0);
-    ai_tower_upgrade_counts_.fill(0);
-    ai_map_tower_counts_.fill(0);
-    ai_damage_per_type_.fill(0);
-    ai_grace_decisions_ = 0;
-    ComputeAICandidates();
-    StartWave();
-  }
-
-  bool IsTerminal() const { return game_over_ || victory_; }
-
-  AIObservation Observe() const {
-    AIObservation obs;
-    auto &f = obs.features;
-
-    f[0] = std::min(static_cast<float>(kibbles_), 500.0f) / 500.0f;
-    f[1] = static_cast<float>(lives_) / static_cast<float>(kStartingLives);
-    f[2] = static_cast<float>(wave_) / 100.0f;
-    f[3] = static_cast<float>(map_index_) / 9.0f;
-    f[4] = wave_active_ ? 1.0f : 0.0f;
-    f[5] = static_cast<float>(wave_ % kWavesPerMap) /
-           static_cast<float>(kWavesPerMap);
-    f[6] =
-        wave_active_
-            ? static_cast<float>(spawn_remaining_) /
-                  static_cast<float>(std::max(1, SpawnCount(DifficultyLevel())))
-            : 0.0f;
-
-    // Precompute which path cells are already covered by existing towers
-    constexpr float kCoverageR2 = 3.5f * 3.5f;
-    std::vector<bool> path_covered(path_.size(), false);
-    for (const auto &tower : towers_) {
-      const float tr = GetDef(tower.type).range;
-      const float tr2 = tr * tr;
-      for (std::size_t pi = 0; pi < path_.size(); ++pi) {
-        const auto &p = path_[pi];
-        const float dx = static_cast<float>(tower.pos.x - p.x);
-        const float dy = static_cast<float>(tower.pos.y - p.y);
-        if (dx * dx + dy * dy <= tr2)
-          path_covered[pi] = true;
-      }
-    }
-
-    int base = kAIObsGlobal;
-    for (int i = 0; i < kAINumTowerTypes; ++i) {
-      const Tower::Type t = kAllTowerTypes[static_cast<std::size_t>(i)];
-      const TowerDef def = GetDef(t);
-      f[static_cast<std::size_t>(base) + static_cast<std::size_t>(i)] =
-          IsUnlocked(t) ? 1.0f : 0.0f;
-      f[static_cast<std::size_t>(base) +
-        static_cast<std::size_t>(kAINumTowerTypes) +
-        static_cast<std::size_t>(i)] = (kibbles_ >= def.cost) ? 1.0f : 0.0f;
-      f[static_cast<std::size_t>(base) +
-        static_cast<std::size_t>(kAINumTowerTypes * 2) +
-        static_cast<std::size_t>(i)] =
-          (!IsUnlocked(t) && kibbles_ >= def.cost * kUnlockCostMultiplier)
-              ? 1.0f
-              : 0.0f;
-    }
-
-    base = kAIObsGlobal + kAIObsTowerInfo;
-    for (int j = 0; j < kAINumCandidates; ++j) {
-      const Position &pos = ai_candidates_[static_cast<std::size_t>(j)];
-      const std::size_t off = static_cast<std::size_t>(base) +
-                              static_cast<std::size_t>(j) * kAICandidateFeats;
-      const auto tidx = TowerIndexAt(pos);
-
-      // off+0: buildable for 1×1 towers; off+1: buildable for 2×2 (Fat Cat)
-      f[off + 0] =
-          CanPlace(pos, 1, Tower::Type::Default, 3.2f, false) ? 1.0f : 0.0f;
-      f[off + 1] =
-          CanPlace(pos, 2, Tower::Type::Fat, 2.4f, false) ? 1.0f : 0.0f;
-
-      // off+5..7: incremental coverage (uncovered path cells) at three radii
-      constexpr float kSmallR2 = 2.5f * 2.5f;
-      constexpr float kLargeR2 = 5.0f * 5.0f;
-      float inc_small = 0.0f, inc_mid = 0.0f, inc_large = 0.0f;
-      if (!path_.empty()) {
-        int us = 0, um = 0, ul = 0;
-        for (std::size_t pi = 0; pi < path_.size(); ++pi) {
-          if (path_covered[pi])
-            continue;
-          const auto &p = path_[pi];
-          const float dx = static_cast<float>(pos.x - p.x);
-          const float dy = static_cast<float>(pos.y - p.y);
-          const float d2 = dx * dx + dy * dy;
-          if (d2 <= kSmallR2)
-            ++us;
-          if (d2 <= kCoverageR2)
-            ++um;
-          if (d2 <= kLargeR2)
-            ++ul;
+                // clang-format on
+                color(ftxui::Color::YellowLight) |
+                bgcolor(ftxui::Color::Blue3) | bold | ftxui::center;
+            auto subtitle = ftxui::text("don't let the vermin into your den!") |
+                            color(ftxui::Color::YellowLight) | ftxui::center;
+            auto overlay = ftxui::center(
+                ftxui::vbox({ftxui::filler(),
+                             title | border | bgcolor(ftxui::Color::Blue3),
+                             subtitle, ftxui::filler()}) |
+                ftxui::center | bgcolor(ftxui::Color::DarkBlue));
+            board = ftxui::dbox({board, overlay});
+        } else if (intro_stage_ == IntroStage::Instructions) {
+            auto card =
+                ftxui::vbox({
+                    text("how to play") | bold |
+                        color(ftxui::Color::YellowLight),
+                    separator(),
+                    text("Place cats with space/c. Start waves with n."),
+                    text("Earn kibbles, buy more cats, upgrade/sell."),
+                    text("Keep vermin from reaching your burrow."),
+                    text("Press h any time for the controls menu."),
+                    separator(),
+                    text("press any key to begin") |
+                        color(ftxui::Color::YellowLight) | bold,
+                }) |
+                bgcolor(ftxui::Color::DarkBlue) | border |
+                color(ftxui::Color::White) | ftxui::center;
+            auto overlay = ftxui::center(
+                ftxui::vbox({ftxui::filler(), card, ftxui::filler()}) |
+                ftxui::center);
+            board = ftxui::dbox({board, overlay});
         }
-        const float path_len = static_cast<float>(path_.size());
-        inc_small = static_cast<float>(us) / path_len;
-        inc_mid = static_cast<float>(um) / path_len;
-        inc_large = static_cast<float>(ul) / path_len;
-      }
-
-      if (tidx.has_value()) {
-        const Tower &t = towers_[*tidx];
-        int ti = 0;
-        for (int i = 0; i < kAINumTowerTypes; ++i)
-          if (kAllTowerTypes[static_cast<std::size_t>(i)] == t.type) {
-            ti = i;
-            break;
-          }
-        f[off + 2] = 1.0f;
-        f[off + 3] =
-            static_cast<float>(ti) / static_cast<float>(kAINumTowerTypes - 1);
-        f[off + 4] = t.upgraded ? 1.0f : 0.0f;
-        f[off + 5] = inc_small;
-        f[off + 6] = inc_mid;
-        f[off + 7] = inc_large;
-        f[off + 8] = std::min(t.cooldown / t.fire_rate, 1.0f);
-        f[off + 9] = (!t.upgraded &&
-                      kibbles_ >= GetDef(t.type).cost * kUpgradeCostMultiplier)
-                         ? 1.0f
-                         : 0.0f;
-        f[off + 10] = ai_candidate_path_pos_[static_cast<std::size_t>(j)];
-      } else {
-        f[off + 2] = 0.0f;
-        f[off + 3] = 0.0f;
-        f[off + 4] = 0.0f;
-        f[off + 5] = inc_small;
-        f[off + 6] = inc_mid;
-        f[off + 7] = inc_large;
-        f[off + 8] = 0.0f;
-        f[off + 9] = 0.0f;
-        f[off + 10] = ai_candidate_path_pos_[static_cast<std::size_t>(j)];
-      }
-
-      // off+11..17: neighbor presence per tower type within coverage radius
-      for (int k = 0; k < kAINumTowerTypes; ++k) {
-        const Tower::Type kt = kAllTowerTypes[static_cast<std::size_t>(k)];
-        bool found = false;
-        for (const auto &tower : towers_) {
-          if (tower.type != kt)
-            continue;
-          const float dx = static_cast<float>(tower.pos.x - pos.x);
-          const float dy = static_cast<float>(tower.pos.y - pos.y);
-          if (dx * dx + dy * dy <= kCoverageR2) {
-            found = true;
-            break;
-          }
-        }
-        f[off + 11 + static_cast<std::size_t>(k)] = found ? 1.0f : 0.0f;
-      }
-    }
-
-    base = kAIObsGlobal + kAIObsTowerInfo + kAIObsCandidates;
-    std::vector<const Enemy *> sorted;
-    sorted.reserve(enemies_.size());
-    for (const auto &e : enemies_)
-      sorted.push_back(&e);
-    std::stable_sort(
-        sorted.begin(),
-        sorted
-            .end(), // NOLINT(bugprone-nondeterministic-pointer-iteration-order)
-        [](const Enemy *a, const Enemy *b) {
-          return a->path_progress > b->path_progress;
+        auto stats = RenderStats();
+        return hbox({
+            board | border,
+            separator(),
+            stats | border,
         });
-    const float path_len =
-        static_cast<float>(std::max<std::size_t>(1, path_.size()));
-    for (int i = 0; i < kAINumEnemies; ++i) {
-      const std::size_t off =
-          static_cast<std::size_t>(base) + static_cast<std::size_t>(i) * 3;
-      if (i < static_cast<int>(sorted.size())) {
-        const Enemy *e = sorted[static_cast<std::size_t>(i)];
-        const int max_hp = EnemyMaxHP(e->type, DifficultyLevel());
-        f[off + 0] = e->path_progress / path_len;
-        f[off + 1] =
-            static_cast<float>(e->hp) / static_cast<float>(std::max(1, max_hp));
-        f[off + 2] = static_cast<float>(static_cast<int>(e->type)) / 3.0f;
-      } else {
-        f[off] = 0.0f;
-        f[off + 1] = 0.0f;
-        f[off + 2] = 0.0f;
-      }
     }
 
-    // Action mask
-    obs.valid.fill(false);
-    obs.valid[kAIActNoop] = true;
-    obs.valid[kAIActStartWave] = !wave_active_ && !game_over_ && !victory_;
-    for (int i = 0; i < kAINumTowerTypes; ++i) {
-      const Tower::Type t = kAllTowerTypes[static_cast<std::size_t>(i)];
-      const TowerDef def = GetDef(t);
-      obs.valid[static_cast<std::size_t>(kAIActUnlock) +
-                static_cast<std::size_t>(i)] =
-          !IsUnlocked(t) && kibbles_ >= def.cost * kUnlockCostMultiplier;
-      const bool under_cap = ai_map_tower_counts_[static_cast<std::size_t>(i)] <
-                             kAIMaxTowersPerType;
-      for (int j = 0; j < kAINumCandidates; ++j) {
-        obs.valid[static_cast<std::size_t>(kAIActPlace) +
-                  static_cast<std::size_t>(i) * kAINumCandidates +
-                  static_cast<std::size_t>(j)] =
-            under_cap && IsUnlocked(t) && kibbles_ >= def.cost &&
-            CanPlace(ai_candidates_[static_cast<std::size_t>(j)], def.size, t,
-                     def.range, false);
-      }
-    }
-    for (int j = 0; j < kAINumCandidates; ++j) {
-      const auto tidx =
-          TowerIndexAt(ai_candidates_[static_cast<std::size_t>(j)]);
-      if (tidx.has_value()) {
-        const Tower &t = towers_[*tidx];
-        const TowerDef def = GetDef(t.type);
-        obs.valid[static_cast<std::size_t>(kAIActUpgrade) +
-                  static_cast<std::size_t>(j)] =
-            !t.upgraded && kibbles_ >= def.cost * kUpgradeCostMultiplier;
-        obs.valid[static_cast<std::size_t>(kAIActSell) +
-                  static_cast<std::size_t>(j)] = true;
-      }
-    }
-    return obs;
-  }
+    bool GameOver() const { return game_over_; }
+    bool InIntro() const { return intro_stage_ != IntroStage::Playing; }
+    int Wave() const { return wave_; }
+    int MapIndex() const { return map_index_; }
 
-  bool ExecuteAICommand(AICommand cmd) {
-    // Burn down the post-map-transition grace period; auto-start wave when
-    // done.
-    if (ai_grace_decisions_ > 0) {
-      if (--ai_grace_decisions_ == 0)
+    // ── AI interface
+    // ──────────────────────────────────────────────────────────
+    void EnterAIMode() {
+        ai_mode_ = true;
+        auto_waves_ = true;
+        intro_stage_ = IntroStage::Playing;
+        ai_enemies_killed_ = 0;
+        ai_lives_lost_ = 0;
+        ai_tower_type_counts_.fill(0);
+        ai_tower_upgrade_counts_.fill(0);
+        ai_map_tower_counts_.fill(0);
+        ai_damage_per_type_.fill(0);
+        ai_grace_decisions_ = 0;
+        ComputeAICandidates();
         StartWave();
     }
 
-    const int a = cmd.action;
-    if (a == kAIActNoop)
-      return true;
+    bool IsTerminal() const { return game_over_ || victory_; }
 
-    if (a == kAIActStartWave) {
-      if (wave_active_ || game_over_ || victory_)
-        return false;
-      StartWave();
-      return true;
-    }
+    AIObservation Observe() const {
+        AIObservation obs;
+        auto &f = obs.features;
 
-    if (a >= kAIActUnlock && a < kAIActPlace) {
-      const int ti = a - kAIActUnlock;
-      if (ti >= kAINumTowerTypes)
-        return false;
-      const Tower::Type type = kAllTowerTypes[static_cast<std::size_t>(ti)];
-      const TowerDef def = GetDef(type);
-      if (IsUnlocked(type) || kibbles_ < def.cost * kUnlockCostMultiplier)
-        return false;
-      Unlock(type);
-      kibbles_ -= def.cost * kUnlockCostMultiplier;
-      Sfx("unlock");
-      return true;
-    }
+        f[0] = std::min(static_cast<float>(kibbles_), 500.0f) / 500.0f;
+        f[1] = static_cast<float>(lives_) / static_cast<float>(kStartingLives);
+        f[2] = static_cast<float>(wave_) / 100.0f;
+        f[3] = static_cast<float>(map_index_) / 9.0f;
+        f[4] = wave_active_ ? 1.0f : 0.0f;
+        f[5] = static_cast<float>(wave_ % kWavesPerMap) /
+               static_cast<float>(kWavesPerMap);
+        f[6] = wave_active_ ? static_cast<float>(spawn_remaining_) /
+                                  static_cast<float>(std::max(
+                                      1, SpawnCount(DifficultyLevel())))
+                            : 0.0f;
 
-    if (a >= kAIActPlace && a < kAIActUpgrade) {
-      const int ti = (a - kAIActPlace) / kAINumCandidates;
-      const int pi = (a - kAIActPlace) % kAINumCandidates;
-      if (ti >= kAINumTowerTypes || pi >= kAINumCandidates)
-        return false;
-      const Tower::Type type = kAllTowerTypes[static_cast<std::size_t>(ti)];
-      const TowerDef def = GetDef(type);
-      const Position &pos = ai_candidates_[static_cast<std::size_t>(pi)];
-      if (!IsUnlocked(type) || kibbles_ < def.cost)
-        return false;
-      if (!CanPlace(pos, def.size, type, def.range, false))
-        return false;
-      Tower t;
-      t.pos = pos;
-      t.home = pos;
-      t.damage = def.damage;
-      t.range = def.range;
-      t.fire_rate = def.fire_rate;
-      t.cooldown = Rand(0.05f, def.fire_rate);
-      t.type = type;
-      t.size = def.size;
-      towers_.push_back(t);
-      kibbles_ -= def.cost;
-      ai_tower_type_counts_[static_cast<std::size_t>(ti)]++;
-      ai_map_tower_counts_[static_cast<std::size_t>(ti)]++;
-      Sfx("place");
-      return true;
-    }
-
-    if (a >= kAIActUpgrade && a < kAIActSell) {
-      const int pi = a - kAIActUpgrade;
-      if (pi >= kAINumCandidates)
-        return false;
-      const auto tidx =
-          TowerIndexAt(ai_candidates_[static_cast<std::size_t>(pi)]);
-      if (!tidx.has_value())
-        return false;
-      Tower &t = towers_[*tidx];
-      if (t.upgraded)
-        return false;
-      const TowerDef def = GetDef(t.type);
-      if (kibbles_ < def.cost * kUpgradeCostMultiplier)
-        return false;
-      kibbles_ -= def.cost * kUpgradeCostMultiplier;
-      t.upgraded = true;
-      for (int i = 0; i < kAINumTowerTypes; ++i)
-        if (kAllTowerTypes[static_cast<std::size_t>(i)] == t.type) {
-          ai_tower_upgrade_counts_[static_cast<std::size_t>(i)]++;
-          break;
+        // Precompute which path cells are already covered by existing towers
+        constexpr float kCoverageR2 = 3.5f * 3.5f;
+        std::vector<bool> path_covered(path_.size(), false);
+        for (const auto &tower : towers_) {
+            const float tr = GetDef(tower.type).range;
+            const float tr2 = tr * tr;
+            for (std::size_t pi = 0; pi < path_.size(); ++pi) {
+                const auto &p = path_[pi];
+                const float dx = static_cast<float>(tower.pos.x - p.x);
+                const float dy = static_cast<float>(tower.pos.y - p.y);
+                if (dx * dx + dy * dy <= tr2)
+                    path_covered[pi] = true;
+            }
         }
-      if (t.type == Tower::Type::Fat)
-        t.range += 1.0f;
-      else if (t.type == Tower::Type::Default)
-        t.range += 2.0f;
-      Sfx("unlock");
-      return true;
-    }
 
-    if (a >= kAIActSell && a < kAINumActions) {
-      const int pi = a - kAIActSell;
-      if (pi >= kAINumCandidates)
-        return false;
-      const auto tidx =
-          TowerIndexAt(ai_candidates_[static_cast<std::size_t>(pi)]);
-      if (!tidx.has_value())
-        return false;
-      const Tower::Type sold_type = towers_[*tidx].type;
-      kibbles_ += SellRefund(GetDef(sold_type).cost);
-      towers_.erase(towers_.begin() + static_cast<long>(*tidx));
-      for (int i = 0; i < kAINumTowerTypes; ++i)
-        if (kAllTowerTypes[static_cast<std::size_t>(i)] == sold_type) {
-          if (ai_map_tower_counts_[static_cast<std::size_t>(i)] > 0)
-            ai_map_tower_counts_[static_cast<std::size_t>(i)]--;
-          break;
+        int base = kAIObsGlobal;
+        for (int i = 0; i < kAINumTowerTypes; ++i) {
+            const Tower::Type t = kAllTowerTypes[static_cast<std::size_t>(i)];
+            const TowerDef def = GetDef(t);
+            f[static_cast<std::size_t>(base) + static_cast<std::size_t>(i)] =
+                IsUnlocked(t) ? 1.0f : 0.0f;
+            f[static_cast<std::size_t>(base) +
+              static_cast<std::size_t>(kAINumTowerTypes) +
+              static_cast<std::size_t>(i)] =
+                (kibbles_ >= def.cost) ? 1.0f : 0.0f;
+            f[static_cast<std::size_t>(base) +
+              static_cast<std::size_t>(kAINumTowerTypes * 2) +
+              static_cast<std::size_t>(i)] =
+                (!IsUnlocked(t) && kibbles_ >= def.cost * kUnlockCostMultiplier)
+                    ? 1.0f
+                    : 0.0f;
         }
-      Sfx("sell");
-      return true;
+
+        base = kAIObsGlobal + kAIObsTowerInfo;
+        for (int j = 0; j < kAINumCandidates; ++j) {
+            const Position &pos = ai_candidates_[static_cast<std::size_t>(j)];
+            const std::size_t off =
+                static_cast<std::size_t>(base) +
+                static_cast<std::size_t>(j) * kAICandidateFeats;
+            const auto tidx = TowerIndexAt(pos);
+
+            // off+0: buildable for 1×1 towers; off+1: buildable for 2×2 (Fat
+            // Cat)
+            f[off + 0] = CanPlace(pos, 1, Tower::Type::Default, 3.2f, false)
+                             ? 1.0f
+                             : 0.0f;
+            f[off + 1] =
+                CanPlace(pos, 2, Tower::Type::Fat, 2.4f, false) ? 1.0f : 0.0f;
+
+            // off+5..7: incremental coverage (uncovered path cells) at three
+            // radii
+            constexpr float kSmallR2 = 2.5f * 2.5f;
+            constexpr float kLargeR2 = 5.0f * 5.0f;
+            float inc_small = 0.0f, inc_mid = 0.0f, inc_large = 0.0f;
+            if (!path_.empty()) {
+                int us = 0, um = 0, ul = 0;
+                for (std::size_t pi = 0; pi < path_.size(); ++pi) {
+                    if (path_covered[pi])
+                        continue;
+                    const auto &p = path_[pi];
+                    const float dx = static_cast<float>(pos.x - p.x);
+                    const float dy = static_cast<float>(pos.y - p.y);
+                    const float d2 = dx * dx + dy * dy;
+                    if (d2 <= kSmallR2)
+                        ++us;
+                    if (d2 <= kCoverageR2)
+                        ++um;
+                    if (d2 <= kLargeR2)
+                        ++ul;
+                }
+                const float path_len = static_cast<float>(path_.size());
+                inc_small = static_cast<float>(us) / path_len;
+                inc_mid = static_cast<float>(um) / path_len;
+                inc_large = static_cast<float>(ul) / path_len;
+            }
+
+            if (tidx.has_value()) {
+                const Tower &t = towers_[*tidx];
+                int ti = 0;
+                for (int i = 0; i < kAINumTowerTypes; ++i)
+                    if (kAllTowerTypes[static_cast<std::size_t>(i)] == t.type) {
+                        ti = i;
+                        break;
+                    }
+                f[off + 2] = 1.0f;
+                f[off + 3] = static_cast<float>(ti) /
+                             static_cast<float>(kAINumTowerTypes - 1);
+                f[off + 4] = t.upgraded ? 1.0f : 0.0f;
+                f[off + 5] = inc_small;
+                f[off + 6] = inc_mid;
+                f[off + 7] = inc_large;
+                f[off + 8] = std::min(t.cooldown / t.fire_rate, 1.0f);
+                f[off + 9] =
+                    (!t.upgraded &&
+                     kibbles_ >= GetDef(t.type).cost * kUpgradeCostMultiplier)
+                        ? 1.0f
+                        : 0.0f;
+                f[off + 10] =
+                    ai_candidate_path_pos_[static_cast<std::size_t>(j)];
+            } else {
+                f[off + 2] = 0.0f;
+                f[off + 3] = 0.0f;
+                f[off + 4] = 0.0f;
+                f[off + 5] = inc_small;
+                f[off + 6] = inc_mid;
+                f[off + 7] = inc_large;
+                f[off + 8] = 0.0f;
+                f[off + 9] = 0.0f;
+                f[off + 10] =
+                    ai_candidate_path_pos_[static_cast<std::size_t>(j)];
+            }
+
+            // off+11..17: neighbor presence per tower type within coverage
+            // radius
+            for (int k = 0; k < kAINumTowerTypes; ++k) {
+                const Tower::Type kt =
+                    kAllTowerTypes[static_cast<std::size_t>(k)];
+                bool found = false;
+                for (const auto &tower : towers_) {
+                    if (tower.type != kt)
+                        continue;
+                    const float dx = static_cast<float>(tower.pos.x - pos.x);
+                    const float dy = static_cast<float>(tower.pos.y - pos.y);
+                    if (dx * dx + dy * dy <= kCoverageR2) {
+                        found = true;
+                        break;
+                    }
+                }
+                f[off + 11 + static_cast<std::size_t>(k)] = found ? 1.0f : 0.0f;
+            }
+        }
+
+        base = kAIObsGlobal + kAIObsTowerInfo + kAIObsCandidates;
+        std::vector<const Enemy *> sorted;
+        sorted.reserve(enemies_.size());
+        for (const auto &e : enemies_)
+            sorted.push_back(&e);
+        std::
+            stable_sort( // NOLINT(bugprone-nondeterministic-pointer-iteration-order)
+                sorted.begin(), sorted.end(),
+                [](const Enemy *a, const Enemy *b) {
+                    return a->path_progress > b->path_progress;
+                });
+        const float path_len =
+            static_cast<float>(std::max<std::size_t>(1, path_.size()));
+        for (int i = 0; i < kAINumEnemies; ++i) {
+            const std::size_t off = static_cast<std::size_t>(base) +
+                                    static_cast<std::size_t>(i) * 3;
+            if (i < static_cast<int>(sorted.size())) {
+                const Enemy *e = sorted[static_cast<std::size_t>(i)];
+                const int max_hp = EnemyMaxHP(e->type, DifficultyLevel());
+                f[off + 0] = e->path_progress / path_len;
+                f[off + 1] = static_cast<float>(e->hp) /
+                             static_cast<float>(std::max(1, max_hp));
+                f[off + 2] =
+                    static_cast<float>(static_cast<int>(e->type)) / 3.0f;
+            } else {
+                f[off] = 0.0f;
+                f[off + 1] = 0.0f;
+                f[off + 2] = 0.0f;
+            }
+        }
+
+        // Action mask
+        obs.valid.fill(false);
+        obs.valid[kAIActNoop] = true;
+        obs.valid[kAIActStartWave] = !wave_active_ && !game_over_ && !victory_;
+        for (int i = 0; i < kAINumTowerTypes; ++i) {
+            const Tower::Type t = kAllTowerTypes[static_cast<std::size_t>(i)];
+            const TowerDef def = GetDef(t);
+            obs.valid[static_cast<std::size_t>(kAIActUnlock) +
+                      static_cast<std::size_t>(i)] =
+                !IsUnlocked(t) && kibbles_ >= def.cost * kUnlockCostMultiplier;
+            const bool under_cap =
+                ai_map_tower_counts_[static_cast<std::size_t>(i)] <
+                kAIMaxTowersPerType;
+            for (int j = 0; j < kAINumCandidates; ++j) {
+                obs.valid[static_cast<std::size_t>(kAIActPlace) +
+                          static_cast<std::size_t>(i) * kAINumCandidates +
+                          static_cast<std::size_t>(j)] =
+                    under_cap && IsUnlocked(t) && kibbles_ >= def.cost &&
+                    CanPlace(ai_candidates_[static_cast<std::size_t>(j)],
+                             def.size, t, def.range, false);
+            }
+        }
+        for (int j = 0; j < kAINumCandidates; ++j) {
+            const auto tidx =
+                TowerIndexAt(ai_candidates_[static_cast<std::size_t>(j)]);
+            if (tidx.has_value()) {
+                const Tower &t = towers_[*tidx];
+                const TowerDef def = GetDef(t.type);
+                obs.valid[static_cast<std::size_t>(kAIActUpgrade) +
+                          static_cast<std::size_t>(j)] =
+                    !t.upgraded &&
+                    kibbles_ >= def.cost * kUpgradeCostMultiplier;
+                obs.valid[static_cast<std::size_t>(kAIActSell) +
+                          static_cast<std::size_t>(j)] = true;
+            }
+        }
+        return obs;
     }
-    return false;
-  }
 
-  void AITrackDamage(Tower::Type type, int amount) {
-    if (!ai_mode_)
-      return;
-    for (int i = 0; i < kAINumTowerTypes; ++i)
-      if (kAllTowerTypes[static_cast<std::size_t>(i)] == type) {
-        ai_damage_per_type_[static_cast<std::size_t>(i)] += amount;
-        return;
-      }
-  }
+    bool ExecuteAICommand(AICommand cmd) {
+        // Burn down the post-map-transition grace period; auto-start wave when
+        // done.
+        if (ai_grace_decisions_ > 0) {
+            if (--ai_grace_decisions_ == 0)
+                StartWave();
+        }
 
-  AIEpisodeResult GetAIResult() const {
-    AIEpisodeResult r;
-    r.waves_cleared = map_index_ * kWavesPerMap + (wave_ % kWavesPerMap);
-    r.victory = victory_;
-    r.tower_type_counts = ai_tower_type_counts_;
-    r.tower_upgrade_counts = ai_tower_upgrade_counts_;
-    r.tower_damage_dealt = ai_damage_per_type_;
-    r.fitness = static_cast<float>(r.waves_cleared) * 10.0f +
-                (r.victory ? 200.0f : 0.0f);
-    return r;
-  }
+        const int a = cmd.action;
+        if (a == kAIActNoop)
+            return true;
 
-  void ToggleSfx() {
+        if (a == kAIActStartWave) {
+            if (wave_active_ || game_over_ || victory_)
+                return false;
+            StartWave();
+            return true;
+        }
+
+        if (a >= kAIActUnlock && a < kAIActPlace) {
+            const int ti = a - kAIActUnlock;
+            if (ti >= kAINumTowerTypes)
+                return false;
+            const Tower::Type type =
+                kAllTowerTypes[static_cast<std::size_t>(ti)];
+            const TowerDef def = GetDef(type);
+            if (IsUnlocked(type) || kibbles_ < def.cost * kUnlockCostMultiplier)
+                return false;
+            Unlock(type);
+            kibbles_ -= def.cost * kUnlockCostMultiplier;
+            Sfx("unlock");
+            return true;
+        }
+
+        if (a >= kAIActPlace && a < kAIActUpgrade) {
+            const int ti = (a - kAIActPlace) / kAINumCandidates;
+            const int pi = (a - kAIActPlace) % kAINumCandidates;
+            if (ti >= kAINumTowerTypes || pi >= kAINumCandidates)
+                return false;
+            const Tower::Type type =
+                kAllTowerTypes[static_cast<std::size_t>(ti)];
+            const TowerDef def = GetDef(type);
+            const Position &pos = ai_candidates_[static_cast<std::size_t>(pi)];
+            if (!IsUnlocked(type) || kibbles_ < def.cost)
+                return false;
+            if (!CanPlace(pos, def.size, type, def.range, false))
+                return false;
+            Tower t;
+            t.pos = pos;
+            t.home = pos;
+            t.damage = def.damage;
+            t.range = def.range;
+            t.fire_rate = def.fire_rate;
+            t.cooldown = Rand(0.05f, def.fire_rate);
+            t.type = type;
+            t.size = def.size;
+            towers_.push_back(t);
+            kibbles_ -= def.cost;
+            ai_tower_type_counts_[static_cast<std::size_t>(ti)]++;
+            ai_map_tower_counts_[static_cast<std::size_t>(ti)]++;
+            Sfx("place");
+            return true;
+        }
+
+        if (a >= kAIActUpgrade && a < kAIActSell) {
+            const int pi = a - kAIActUpgrade;
+            if (pi >= kAINumCandidates)
+                return false;
+            const auto tidx =
+                TowerIndexAt(ai_candidates_[static_cast<std::size_t>(pi)]);
+            if (!tidx.has_value())
+                return false;
+            Tower &t = towers_[*tidx];
+            if (t.upgraded)
+                return false;
+            const TowerDef def = GetDef(t.type);
+            if (kibbles_ < def.cost * kUpgradeCostMultiplier)
+                return false;
+            kibbles_ -= def.cost * kUpgradeCostMultiplier;
+            t.upgraded = true;
+            for (int i = 0; i < kAINumTowerTypes; ++i)
+                if (kAllTowerTypes[static_cast<std::size_t>(i)] == t.type) {
+                    ai_tower_upgrade_counts_[static_cast<std::size_t>(i)]++;
+                    break;
+                }
+            if (t.type == Tower::Type::Fat)
+                t.range += 1.0f;
+            else if (t.type == Tower::Type::Default)
+                t.range += 2.0f;
+            Sfx("unlock");
+            return true;
+        }
+
+        if (a >= kAIActSell && a < kAINumActions) {
+            const int pi = a - kAIActSell;
+            if (pi >= kAINumCandidates)
+                return false;
+            const auto tidx =
+                TowerIndexAt(ai_candidates_[static_cast<std::size_t>(pi)]);
+            if (!tidx.has_value())
+                return false;
+            const Tower::Type sold_type = towers_[*tidx].type;
+            kibbles_ += SellRefund(GetDef(sold_type).cost);
+            towers_.erase(towers_.begin() + static_cast<long>(*tidx));
+            for (int i = 0; i < kAINumTowerTypes; ++i)
+                if (kAllTowerTypes[static_cast<std::size_t>(i)] == sold_type) {
+                    if (ai_map_tower_counts_[static_cast<std::size_t>(i)] > 0)
+                        ai_map_tower_counts_[static_cast<std::size_t>(i)]--;
+                    break;
+                }
+            Sfx("sell");
+            return true;
+        }
+        return false;
+    }
+
+    void AITrackDamage(Tower::Type type, int amount) {
+        if (!ai_mode_)
+            return;
+        for (int i = 0; i < kAINumTowerTypes; ++i)
+            if (kAllTowerTypes[static_cast<std::size_t>(i)] == type) {
+                ai_damage_per_type_[static_cast<std::size_t>(i)] += amount;
+                return;
+            }
+    }
+
+    AIEpisodeResult GetAIResult() const {
+        AIEpisodeResult r;
+        r.waves_cleared = map_index_ * kWavesPerMap + (wave_ % kWavesPerMap);
+        r.victory = victory_;
+        r.tower_type_counts = ai_tower_type_counts_;
+        r.tower_upgrade_counts = ai_tower_upgrade_counts_;
+        r.tower_damage_dealt = ai_damage_per_type_;
+        r.fitness = static_cast<float>(r.waves_cleared) * 10.0f +
+                    (r.victory ? 200.0f : 0.0f);
+        return r;
+    }
+
+    void ToggleSfx() {
 #ifdef ENABLE_AUDIO
-    if (audio_) {
-      audio_->ToggleSfx();
-      SaveSettings();
-    }
+        if (audio_) {
+            audio_->ToggleSfx();
+            SaveSettings();
+        }
 #endif
-  }
+    }
 
-  void ToggleMusic() {
+    void ToggleMusic() {
 #ifdef ENABLE_AUDIO
-    if (audio_) {
-      audio_->ToggleMusic();
-      if (audio_->MusicEnabled())
-        audio_->SetMusicForMap(map_index_);
-      SaveSettings();
-    }
+        if (audio_) {
+            audio_->ToggleMusic();
+            if (audio_->MusicEnabled())
+                audio_->SetMusicForMap(map_index_);
+            SaveSettings();
+        }
 #endif
-  }
+    }
 
-  std::filesystem::path SettingsPath() const {
-    const char *home = std::getenv("HOME");
-    return std::filesystem::path(home ? home : ".") / ".config" / "catcat" /
-           "settings.dat";
-  }
+    std::filesystem::path SettingsPath() const {
+        const char *home = std::getenv("HOME");
+        return std::filesystem::path(home ? home : ".") / ".config" / "catcat" /
+               "settings.dat";
+    }
 
-  void SaveSettings() {
+    void SaveSettings() {
 #ifdef ENABLE_AUDIO
-    if (!audio_)
-      return;
-    try {
-      auto path = SettingsPath();
-      std::filesystem::create_directories(path.parent_path());
-      std::ofstream f(path, std::ios::binary);
-      if (!f)
-        return;
-      bool sfx_on = audio_->SfxEnabled();
-      bool music_on = audio_->MusicEnabled();
-      f.write(reinterpret_cast<const char *>(&sfx_on), sizeof(sfx_on));
-      f.write(reinterpret_cast<const char *>(&music_on), sizeof(music_on));
-    } catch (...) {
-    }
+        if (!audio_)
+            return;
+        try {
+            auto path = SettingsPath();
+            std::filesystem::create_directories(path.parent_path());
+            std::ofstream f(path, std::ios::binary);
+            if (!f)
+                return;
+            bool sfx_on = audio_->SfxEnabled();
+            bool music_on = audio_->MusicEnabled();
+            f.write(reinterpret_cast<const char *>(&sfx_on), sizeof(sfx_on));
+            f.write(reinterpret_cast<const char *>(&music_on),
+                    sizeof(music_on));
+        } catch (...) {
+        }
 #endif
-  }
+    }
 
-  void LoadSettings() {
+    void LoadSettings() {
 #ifdef ENABLE_AUDIO
-    if (!audio_)
-      return;
-    try {
-      std::ifstream f(SettingsPath(), std::ios::binary);
-      if (!f)
-        return;
-      bool sfx_on = true, music_on = true;
-      f.read(reinterpret_cast<char *>(&sfx_on), sizeof(sfx_on));
-      f.read(reinterpret_cast<char *>(&music_on), sizeof(music_on));
-      if (audio_->SfxEnabled() != sfx_on)
-        audio_->ToggleSfx();
-      if (audio_->MusicEnabled() != music_on)
-        audio_->ToggleMusic();
-    } catch (...) {
-    }
+        if (!audio_)
+            return;
+        try {
+            std::ifstream f(SettingsPath(), std::ios::binary);
+            if (!f)
+                return;
+            bool sfx_on = true, music_on = true;
+            f.read(reinterpret_cast<char *>(&sfx_on), sizeof(sfx_on));
+            f.read(reinterpret_cast<char *>(&music_on), sizeof(music_on));
+            if (audio_->SfxEnabled() != sfx_on)
+                audio_->ToggleSfx();
+            if (audio_->MusicEnabled() != music_on)
+                audio_->ToggleMusic();
+        } catch (...) {
+        }
 #endif
-  }
+    }
 
-private:
-  void BuildPath() {
-    const MapDef &map = CurrentMap();
-    path_.clear();
-    // Build center path.
-    for (size_t i = 1; i < map.anchors.size(); ++i) {
-      const auto &from = map.anchors[i - 1];
-      const auto &to = map.anchors[i];
-      if (from.x == to.x) {
-        const int dir = (to.y > from.y) ? 1 : -1;
-        for (int y = from.y; y != to.y + dir; y += dir) {
-          path_.push_back({from.x, y});
+  private:
+    void BuildPath() {
+        const MapDef &map = CurrentMap();
+        path_.clear();
+        // Build center path.
+        for (size_t i = 1; i < map.anchors.size(); ++i) {
+            const auto &from = map.anchors[i - 1];
+            const auto &to = map.anchors[i];
+            if (from.x == to.x) {
+                const int dir = (to.y > from.y) ? 1 : -1;
+                for (int y = from.y; y != to.y + dir; y += dir) {
+                    path_.push_back({from.x, y});
+                }
+            } else if (from.y == to.y) {
+                const int dir = (to.x > from.x) ? 1 : -1;
+                for (int x = from.x; x != to.x + dir; x += dir) {
+                    path_.push_back({x, from.y});
+                }
+            }
         }
-      } else if (from.y == to.y) {
-        const int dir = (to.x > from.x) ? 1 : -1;
-        for (int x = from.x; x != to.x + dir; x += dir) {
-          path_.push_back({x, from.y});
+
+        path_mask_.assign(kBoardHeight, std::vector<bool>(kBoardWidth, false));
+        for (const auto &p : path_) {
+            for (int dy = -map.path_width + 1; dy <= map.path_width - 1; ++dy) {
+                for (int dx = -map.path_width + 1; dx <= map.path_width - 1;
+                     ++dx) {
+                    const int cx = p.x + dx;
+                    const int cy = p.y + dy;
+                    if (cy >= 0 && cy < kBoardHeight && cx >= 0 &&
+                        cx < kBoardWidth) {
+                        const auto yi = static_cast<size_t>(cy);
+                        const auto xi = static_cast<size_t>(cx);
+                        path_mask_[yi][xi] = true;
+                    }
+                }
+            }
         }
-      }
-    }
-
-    path_mask_.assign(kBoardHeight, std::vector<bool>(kBoardWidth, false));
-    for (const auto &p : path_) {
-      for (int dy = -map.path_width + 1; dy <= map.path_width - 1; ++dy) {
-        for (int dx = -map.path_width + 1; dx <= map.path_width - 1; ++dx) {
-          const int cx = p.x + dx;
-          const int cy = p.y + dy;
-          if (cy >= 0 && cy < kBoardHeight && cx >= 0 && cx < kBoardWidth) {
-            const auto yi = static_cast<size_t>(cy);
-            const auto xi = static_cast<size_t>(cx);
-            path_mask_[yi][xi] = true;
-          }
-        }
-      }
-    }
-    if (ai_mode_)
-      ComputeAICandidates();
-  }
-
-  // Score non-path cells by path coverage and pick the top kAINumCandidates,
-  // spread out so they don't all cluster around the same bend.
-  void ComputeAICandidates() {
-    constexpr float kCoverageR2 = 3.5f * 3.5f;
-    constexpr float kMinDist2 = 2.0f * 2.0f;
-
-    struct Scored {
-      int x, y;
-      float score;
-      float mean_path_pos;
-    };
-    std::vector<Scored> cells;
-    cells.reserve(static_cast<std::size_t>(kBoardWidth) * kBoardHeight);
-
-    const float path_len =
-        static_cast<float>(std::max<std::size_t>(1, path_.size()));
-
-    for (int y = 0; y < kBoardHeight; ++y) {
-      for (int x = 0; x < kBoardWidth; ++x) {
-        if (path_mask_[static_cast<std::size_t>(y)]
-                      [static_cast<std::size_t>(x)])
-          continue;
-        float s = 0.0f;
-        float pos_sum = 0.0f;
-        for (int pi = 0; pi < static_cast<int>(path_.size()); ++pi) {
-          const auto &p = path_[static_cast<std::size_t>(pi)];
-          const float dx = static_cast<float>(x - p.x);
-          const float dy = static_cast<float>(y - p.y);
-          if (dx * dx + dy * dy <= kCoverageR2) {
-            s += 1.0f;
-            pos_sum += static_cast<float>(pi) / path_len;
-          }
-        }
-        if (s > 0.0f)
-          cells.push_back({x, y, s, pos_sum / s});
-      }
-    }
-    std::sort(cells.begin(), cells.end(), [](const Scored &a, const Scored &b) {
-      return a.score > b.score;
-    });
-
-    ai_candidates_.clear();
-    ai_candidate_coverage_.fill(0.0f);
-    ai_candidate_path_pos_.fill(0.0f);
-    const float max_cov = cells.empty() ? 1.0f : cells[0].score;
-
-    for (const auto &c : cells) {
-      if (static_cast<int>(ai_candidates_.size()) >= kAINumCandidates)
-        break;
-      bool too_close = false;
-      for (const auto &existing : ai_candidates_) {
-        const float dx = static_cast<float>(c.x - existing.x);
-        const float dy = static_cast<float>(c.y - existing.y);
-        if (dx * dx + dy * dy < kMinDist2) {
-          too_close = true;
-          break;
-        }
-      }
-      if (!too_close) {
-        const std::size_t idx = ai_candidates_.size();
-        ai_candidate_coverage_[idx] = c.score / max_cov;
-        ai_candidate_path_pos_[idx] = c.mean_path_pos;
-        ai_candidates_.push_back({c.x, c.y});
-      }
-    }
-    while (static_cast<int>(ai_candidates_.size()) < kAINumCandidates)
-      ai_candidates_.push_back({-1, -1});
-  }
-
-  void StartWave() {
-    if (wave_active_ || game_over_) {
-      return;
-    }
-    ++wave_;
-    spawn_remaining_ = 6 + DifficultyLevel();
-    spawn_cooldown_ms_ = 0;
-    wave_active_ = true;
-    Sfx("wave_start");
-  }
-
-  void SpawnTick() {
-    if (!wave_active_) {
-      return;
-    }
-
-    if (spawn_remaining_ <= 0 && enemies_.empty()) {
-      return;
-    }
-
-    spawn_cooldown_ms_ -= static_cast<int>(kTickMs * TimeScale());
-    if (spawn_cooldown_ms_ > 0 || spawn_remaining_ <= 0) {
-      return;
-    }
-
-    Enemy e;
-    e.path_progress = 0.0F;
-    const int diff = DifficultyLevel();
-    e.type = SelectEnemyType(diff);
-    ApplyEnemyStats(e, diff);
-    const int width = std::max(1, CurrentMap().path_width);
-    if (width > 1) {
-      std::uniform_int_distribution<int> dist(-(width - 1), width - 1);
-      e.lane_offset = dist(rng_);
-    }
-    enemies_.push_back(e);
-
-    --spawn_remaining_;
-    spawn_cooldown_ms_ = static_cast<int>(600.0F / kSpeedFactor);
-  }
-
-  void MoveEnemies() {
-#ifdef ENABLE_AUDIO
-    int lives_before = lives_;
-#endif
-    for (auto &e : enemies_) {
-      if (e.rewind_speed > 0.0F) {
-        e.path_progress -= e.rewind_speed * Dt();
-        if (e.path_progress <= 0.0F) {
-          e.path_progress = 0.0F;
-          e.rewind_speed = 0.0F;
-        }
-        continue;
-      }
-      if (e.sleep_timer > 0.0F) {
-        e.sleep_timer = std::max(0.0F, e.sleep_timer - Dt());
-        continue;
-      }
-      e.path_progress += e.speed * Dt();
-    }
-
-    for (auto &e : enemies_) {
-      const int end_index = static_cast<int>(path_.size() - 1);
-      if (static_cast<int>(std::floor(e.path_progress)) >= end_index) {
-        e.hp = 0;
-        lives_ = std::max(0, lives_ - 1);
         if (ai_mode_)
-          ++ai_lives_lost_;
-      }
-    }
-#ifdef ENABLE_AUDIO
-    if (lives_ < lives_before) {
-      Sfx("life_lost");
-    }
-#endif
-  }
-
-  std::optional<size_t> FindTargetAt(const Tower &t, const Vec2 &center) const {
-    std::optional<size_t> best;
-    float best_progress = -1.0F;
-    const float range2 = t.range * t.range;
-
-    for (size_t i = 0; i < enemies_.size(); ++i) {
-      if (enemies_[i].hp <= 0) {
-        continue;
-      }
-      const auto pos = EnemyCell(enemies_[i]);
-      if (t.type != Tower::Type::Thunder) {
-        const float d2 = DistanceSquared(center, pos);
-        if (d2 > range2) {
-          continue;
-        }
-      }
-      if (enemies_[i].path_progress > best_progress) {
-        best_progress = enemies_[i].path_progress;
-        best = i;
-      }
-    }
-    return best;
-  }
-
-  std::optional<size_t> FindTarget(const Tower &t) const {
-    return FindTargetAt(t, TowerCenter(t));
-  }
-
-  Position NearestOpenCell(const Position &desired,
-                           const std::vector<std::vector<bool>> &blocked,
-                           std::vector<std::vector<bool>> &reserved,
-                           const Position &fallback) {
-    std::vector<Position> best;
-    float best_d2 = std::numeric_limits<float>::max();
-    const Vec2 desired_center = TowerCenterAt(desired, 1);
-    for (int y = 0; y < kBoardHeight; ++y) {
-      for (int x = 0; x < kBoardWidth; ++x) {
-        Position p{x, y};
-        if (p.x < 0 || p.y < 0 || p.x >= kBoardWidth || p.y >= kBoardHeight) {
-          continue;
-        }
-        if (path_mask_[static_cast<size_t>(p.y)][static_cast<size_t>(p.x)]) {
-          continue;
-        }
-        if (blocked[static_cast<size_t>(p.y)][static_cast<size_t>(p.x)]) {
-          continue;
-        }
-        if (reserved[static_cast<size_t>(p.y)][static_cast<size_t>(p.x)]) {
-          continue;
-        }
-        const float d2 = DistanceSquared(desired_center, p);
-        if (d2 + 1e-4F < best_d2) {
-          best_d2 = d2;
-          best.clear();
-          best.push_back(p);
-        } else if (std::abs(d2 - best_d2) < 1e-4F) {
-          best.push_back(p);
-        }
-      }
+            ComputeAICandidates();
     }
 
-    if (best.empty()) {
-      if (fallback.x >= 0 && fallback.y >= 0 && fallback.x < kBoardWidth &&
-          fallback.y < kBoardHeight) {
-        reserved[static_cast<size_t>(fallback.y)]
-                [static_cast<size_t>(fallback.x)] = true;
-      }
-      return fallback;
-    }
-    std::shuffle(best.begin(), best.end(), rng_);
-    const auto chosen = best.front();
-    reserved[static_cast<size_t>(chosen.y)][static_cast<size_t>(chosen.x)] =
-        true;
-    return chosen;
-  }
+    // Score non-path cells by path coverage and pick the top kAINumCandidates,
+    // spread out so they don't all cluster around the same bend.
+    void ComputeAICandidates() {
+        constexpr float kCoverageR2 = 3.5f * 3.5f;
+        constexpr float kMinDist2 = 2.0f * 2.0f;
 
-  void TowersAct() {
-    for (auto &t : towers_) {
-      t.cooldown -= Dt();
-    }
-
-    for (size_t i = 0; i < towers_.size(); ++i) {
-      Tower &t = towers_[i];
-      if (t.type == Tower::Type::Kitty || t.cooldown > 0.0F) {
-        continue;
-      }
-
-      const auto target_index = FindTarget(t);
-      if (!target_index.has_value()) {
-        continue;
-      }
-
-      switch (t.type) {
-      case Tower::Type::Default: {
-        const auto c = TowerCenter(t);
-        int projectiles_fired = 0;
-        auto add_projectile = [&](const Enemy &target) {
-          Projectile p;
-          p.x = static_cast<float>(c.x);
-          p.y = static_cast<float>(c.y);
-          p.target = EnemyCell(target);
-          p.speed = 17.0F;
-          p.damage = t.damage;
-          projectiles_.push_back(p);
-          ++projectiles_fired;
+        struct Scored {
+            int x, y;
+            float score;
+            float mean_path_pos;
         };
-        if (t.upgraded) {
-          std::vector<std::pair<float, size_t>> sorted;
-          const float range2 = t.range * t.range;
-          for (size_t j = 0; j < enemies_.size(); ++j) {
-            if (enemies_[j].hp <= 0)
-              continue;
-            const auto pos = EnemyCell(enemies_[j]);
-            if (DistanceSquared(c, pos) > range2)
-              continue;
-            sorted.push_back({enemies_[j].path_progress, j});
-          }
-          if (!sorted.empty()) {
-            std::sort(sorted.begin(), sorted.end(),
-                      [](auto &a, auto &b) { return a.first > b.first; });
-            size_t front_idx = sorted.front().second;
-            size_t back_idx = sorted.back().second;
-            size_t mid_idx = sorted[sorted.size() / 2].second;
-            add_projectile(enemies_[front_idx]);
-            if (mid_idx != front_idx)
-              add_projectile(enemies_[mid_idx]);
-            if (back_idx != front_idx && back_idx != mid_idx)
-              add_projectile(enemies_[back_idx]);
-          }
-        } else {
-          auto &target = enemies_[*target_index];
-          add_projectile(target);
-        }
-        AITrackDamage(Tower::Type::Default, t.damage * projectiles_fired);
-        Sfx("tower_default_shoot");
-        break;
-      }
-      case Tower::Type::Thunder: {
-        const auto targets = ThunderTargets(t);
-        if (targets.empty()) {
-          continue;
-        }
-        for (size_t idx : targets) {
-          FireLaser(t, enemies_[idx]);
-        }
-        Sfx("tower_thunder_shoot");
-        break;
-      }
-      case Tower::Type::Fat: {
-        FireShockwave(t);
-        Sfx("tower_fat_shoot");
-        break;
-      }
-      case Tower::Type::Catatonic: {
-        FireCatatonic(t);
-        Sfx("tower_catatonic_shoot");
-        break;
-      }
-      case Tower::Type::Galactic: {
-        FireGalactic(t, enemies_[*target_index]);
-        Sfx("tower_galactic_shoot");
-        break;
-      }
-      case Tower::Type::Catastrophe: {
-        FireCatastrophe(t, enemies_[*target_index]);
-        Sfx("tower_catastrophe_shoot");
-        break;
-      }
-      case Tower::Type::Kitty:
-        break; // handled separately
-      }
-      t.cooldown = NextCooldown(t.fire_rate);
-    }
+        std::vector<Scored> cells;
+        cells.reserve(static_cast<std::size_t>(kBoardWidth) * kBoardHeight);
 
-    HandleKittyAttacks();
-  }
+        const float path_len =
+            static_cast<float>(std::max<std::size_t>(1, path_.size()));
 
-  void MoveProjectiles() {
-    for (auto &p : projectiles_) {
-      const float dx = static_cast<float>(p.target.x) - p.x;
-      const float dy = static_cast<float>(p.target.y) - p.y;
-      const float dist = std::sqrt(dx * dx + dy * dy);
-      const float step = p.speed * Dt();
-      if (dist <= step || dist < 1e-3F) {
-        p.x = static_cast<float>(p.target.x);
-        p.y = static_cast<float>(p.target.y);
-        continue;
-      }
-      const float norm = step / dist;
-      p.x += dx * norm;
-      p.y += dy * norm;
-    }
-  }
-
-  void ResolveProjectiles() {
-    std::vector<Projectile> survivors;
-    survivors.reserve(projectiles_.size());
-    for (auto &p : projectiles_) {
-      const float dx = static_cast<float>(p.target.x) - p.x;
-      const float dy = static_cast<float>(p.target.y) - p.y;
-      const float dist2 = dx * dx + dy * dy;
-      if (dist2 > 0.05F) { // not arrived yet
-        survivors.push_back(p);
-        continue;
-      }
-
-      // Find nearest enemy to impact point.
-      std::optional<size_t> hit_index;
-      float best_d2 = 1.0F;
-      for (size_t i = 0; i < enemies_.size(); ++i) {
-        const auto pos = EnemyCell(enemies_[i]);
-        const float ddx = static_cast<float>(pos.x) - p.x;
-        const float ddy = static_cast<float>(pos.y) - p.y;
-        const float d2 = ddx * ddx + ddy * ddy;
-        if (d2 < best_d2) {
-          best_d2 = d2;
-          hit_index = i;
-        }
-      }
-
-      if (hit_index.has_value()) {
-        auto &target = enemies_[*hit_index];
-        target.hp -= p.damage;
-        if (target.hp <= 0) {
-          AwardBounty(target.type);
-          PlayDeathSfx(target.type);
-        } else {
-          hit_splats_.push_back({EnemyCell(target), 0.28F});
-        }
-      }
-    }
-    projectiles_ = std::move(survivors);
-  }
-
-  void Cleanup() {
-    enemies_.erase(std::remove_if(enemies_.begin(), enemies_.end(),
-                                  [](const Enemy &e) { return e.hp <= 0; }),
-                   enemies_.end());
-  }
-
-  EnemyType SelectEnemyType([[maybe_unused]] int diff) {
-    return EnemyTypeForRoll(map_index_, wave_, Rand(0.0F, 1.0F));
-  }
-
-  void ApplyEnemyStats(Enemy &e, const int diff) {
-    const float fDiff = static_cast<float>(diff);
-    e.max_hp = EnemyMaxHP(e.type, diff);
-    switch (e.type) {
-    case EnemyType::Mouse:
-      e.speed = (0.95F + fDiff * 0.05F) * kSpeedFactor;
-      break;
-    case EnemyType::Rat:
-      e.speed = (0.65F + fDiff * 0.065F) * kSpeedFactor;
-      break;
-    case EnemyType::BigRat:
-      e.speed = (0.55F + fDiff * 0.045F) * kSpeedFactor;
-      break;
-    case EnemyType::Dog:
-      e.speed = (0.9F + fDiff * 0.055F) * kSpeedFactor;
-      break;
-    }
-    e.hp = e.max_hp;
-  }
-
-  void UpdateHitSplats() {
-    for (auto &hs : hit_splats_) {
-      hs.time_left -= Dt();
-    }
-    hit_splats_.erase(
-        std::remove_if(hit_splats_.begin(), hit_splats_.end(),
-                       [](const HitSplat &hs) { return hs.time_left <= 0.0F; }),
-        hit_splats_.end());
-  }
-
-  void CheckWaveCompletion() {
-    if (!wave_active_) {
-      return;
-    }
-    if (spawn_remaining_ > 0 || !enemies_.empty()) {
-      return;
-    }
-
-    wave_active_ = false;
-    ReturnKittiesHome();
-    kibbles_ += WaveCompletionBonus(wave_);
-
-    if (wave_ % kWavesPerMap == 0) {
-      const bool last_map = map_index_ == static_cast<int>(maps_.size()) - 1;
-      if (last_map) {
-        victory_ = true;
-        auto_waves_ = false;
-        wave_active_ = false;
-        SetMusic(-1);
-        return;
-      }
-      AdvanceMap();
-      if (ai_mode_) {
-        ai_grace_decisions_ = kAIMapGraceDecisions;
-        return; // wave will auto-start after grace period expires
-      }
-    }
-
-    if (auto_waves_ && !game_over_) {
-      StartWave();
-    }
-  }
-
-  void AdvanceMap(bool dev_skip = false) {
-    map_index_ = (map_index_ + 1) % static_cast<int>(maps_.size());
-    wave_active_ = false;
-    spawn_remaining_ = 0;
-    enemies_.clear();
-    for (const auto &t : towers_) {
-      const auto def = GetDef(t.type);
-      kibbles_ += SellRefund(def.cost);
-    }
-    towers_.clear();
-    held_tower_.reset();
-    // Preserve kibbles across maps to let players invest between stages.
-    lives_ = kStartingLives;
-    auto_waves_ = ai_mode_;
-    if (ai_mode_)
-      ai_map_tower_counts_.fill(0);
-    BuildPath();
-    if (dev_skip) {
-      wave_ = map_index_ * kWavesPerMap;
-    }
-    SetMusic(map_index_);
-    Sfx("map_change");
-  }
-
-  void PlaceTower() {
-    if (!overlay_enabled_) {
-      return;
-    }
-    if (held_tower_.has_value()) {
-      TryPlaceHeld();
-      return;
-    }
-
-    const TowerDef def = GetDef(selected_type_);
-    if (!IsUnlocked(def.type)) {
-      return;
-    }
-    if (kibbles_ < def.cost) {
-      return;
-    }
-    if (def.type == Tower::Type::Catatonic &&
-        CatatonicConflict(cursor_, def.size, def.type, def.range, false)) {
-      ShowWarning("Can't place two sleeping cats within range of each "
-                  "other.\nThey might wake each other up!",
-                  4.0F);
-      return;
-    }
-    if (!CanPlace(cursor_, def.size, def.type, def.range, false)) {
-      return;
-    }
-
-    Tower t;
-    t.pos = cursor_;
-    t.damage = def.damage;
-    t.range = def.range;
-    t.fire_rate = def.fire_rate;
-    t.cooldown = Rand(0.05F, t.fire_rate); // offset starts for async cadence
-    t.type = def.type;
-    t.size = def.size;
-    t.home = t.pos;
-    towers_.push_back(t);
-    kibbles_ -= def.cost;
-    Sfx("place");
-  }
-
-  Position EnemyCell(const Enemy &e) const {
-    const int idx =
-        static_cast<int>(std::clamp(std::floor(e.path_progress), 0.0F,
-                                    static_cast<float>(path_.size() - 1)));
-    const size_t i = static_cast<size_t>(idx);
-    Position base = path_[i];
-    int dx = 0;
-    int dy = 0;
-    if (i + 1 < path_.size()) {
-      dx = path_[i + 1].x - base.x;
-      dy = path_[i + 1].y - base.y;
-    } else if (i > 0) {
-      dx = base.x - path_[i - 1].x;
-      dy = base.y - path_[i - 1].y;
-    }
-    dx = (dx > 0) - (dx < 0);
-    dy = (dy > 0) - (dy < 0);
-    Position perp{-dy, dx};
-    base.x = std::clamp(base.x + perp.x * e.lane_offset, 0, kBoardWidth - 1);
-    base.y = std::clamp(base.y + perp.y * e.lane_offset, 0, kBoardHeight - 1);
-    return base;
-  }
-
-  ftxui::Color EnemyColor(const Enemy &e) const {
-    const float ratio =
-        static_cast<float>(e.hp) / static_cast<float>(std::max(1, e.max_hp));
-    if (ratio > 0.75F) {
-      return ftxui::Color::RedLight;
-    }
-    if (ratio > 0.5F) {
-      return ftxui::Color::Orange1;
-    }
-    if (ratio > 0.25F) {
-      return ftxui::Color::Yellow1;
-    }
-    return ftxui::Color::GrayLight;
-  }
-
-  bool InRange(const Vec2 &center, const Position &cell, float range) const {
-    return DistanceSquared(center, cell) <= range * range;
-  }
-
-  float Rand(float min, float max) {
-    std::uniform_real_distribution<float> dist(min, max);
-    return dist(rng_);
-  }
-
-  int Bounty(const EnemyType type) const { return EnemyBounty(type); }
-
-  float TimeScale() const {
-    return fast_forward_ ? kFastForwardMultiplier : 1.0F;
-  }
-  float Dt() const { return kTickSeconds * TimeScale(); }
-
-  void ShowWarning(const std::string &msg, float duration = 3.0F) {
-    warning_text_ = msg;
-    warning_timer_ = duration;
-  }
-
-  float NextCooldown(float base_rate) {
-    const float scaled = base_rate / kSpeedFactor;
-    return std::max(0.06F, scaled + Rand(-0.14F, 0.14F));
-  }
-
-  int DifficultyLevel() const { return ::DifficultyLevel(wave_, map_index_); }
-
-  const MapDef &CurrentMap() const {
-    return maps_[static_cast<size_t>(map_index_)];
-  }
-
-  void Sfx(const std::string &name) {
-#ifdef ENABLE_AUDIO
-    if (audio_)
-      audio_->PlayEvent(name);
-#endif
-  }
-
-  void AwardBounty(EnemyType type) {
-    kibbles_ += Bounty(type);
-    if (ai_mode_)
-      ++ai_enemies_killed_;
-  }
-
-  void PlayDeathSfx(EnemyType type) {
-    switch (type) {
-    case EnemyType::Mouse:
-      Sfx("mouse_die");
-      break;
-    case EnemyType::Rat:
-      Sfx("rat_die");
-      break;
-    case EnemyType::BigRat:
-      Sfx("bigrat_die");
-      break;
-    case EnemyType::Dog:
-      Sfx("dog_die");
-      break;
-    }
-  }
-
-  void SetMusic(int map_idx) {
-#ifdef ENABLE_AUDIO
-    if (audio_)
-      audio_->SetMusicForMap(map_idx);
-#endif
-  }
-
-  Vec2 TowerCenterAt(const Position &p, int size) const {
-    const float cx =
-        static_cast<float>(p.x) + (static_cast<float>(size) - 1.0F) / 2.0F;
-    const float cy =
-        static_cast<float>(p.y) + (static_cast<float>(size) - 1.0F) / 2.0F;
-    return {cx, cy};
-  }
-
-  Vec2 TowerCenter(const Tower &t) const {
-    return TowerCenterAt(t.pos, t.size);
-  }
-
-  std::string PadRight(const std::string &s, size_t w) const {
-    if (s.size() >= w)
-      return s;
-    return s + std::string(w - s.size(), ' ');
-  }
-
-  // Key number (1-based) for a tower type, derived from its cost-sorted
-  // position.
-  int TypeKey(Tower::Type t) const {
-    const auto defs = SortedDefs();
-    for (size_t i = 0; i < defs.size(); ++i) {
-      if (defs[i].type == t)
-        return static_cast<int>(i + 1);
-    }
-    return 0;
-  }
-
-  // All tower definitions sorted by cost (then name). This is the canonical
-  // display and key-binding order — do not hardcode it elsewhere.
-  std::vector<TowerDef> SortedDefs() const {
-    std::vector<TowerDef> defs;
-    defs.reserve(kAllTowerTypes.size());
-    for (auto t : kAllTowerTypes)
-      defs.push_back(GetDef(t));
-    std::sort(defs.begin(), defs.end(),
-              [](const TowerDef &a, const TowerDef &b) {
-                if (a.cost == b.cost)
-                  return a.name < b.name;
-                return a.cost < b.cost;
-              });
-    return defs;
-  }
-
-  bool IsUnlocked(Tower::Type type) const {
-    return unlocked_types_.count(type) > 0;
-  }
-
-  void Unlock(Tower::Type type) { unlocked_types_.insert(type); }
-
-  void TryUnlockOrSelect(Tower::Type type) {
-    if (IsUnlocked(type)) {
-      selected_type_ = type;
-      return;
-    }
-    const auto def = GetDef(type);
-    const int unlock_cost = def.cost * kUnlockCostMultiplier;
-    if (kibbles_ >= unlock_cost) {
-      kibbles_ -= unlock_cost;
-      Unlock(type);
-      selected_type_ = type;
-      Sfx("unlock");
-    }
-  }
-
-  bool OverlapsTower(const Position &p, int size) const {
-    for (const auto &t : towers_) {
-      const int tx1 = t.pos.x;
-      const int ty1 = t.pos.y;
-      const int tx2 = tx1 + t.size - 1;
-      const int ty2 = ty1 + t.size - 1;
-      const int px2 = p.x + size - 1;
-      const int py2 = p.y + size - 1;
-      const bool overlap = !(p.x > tx2 || px2 < tx1 || p.y > ty2 || py2 < ty1);
-      if (overlap) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  bool OccupiesPath(const Position &p, int size) const {
-    for (int dy = 0; dy < size; ++dy) {
-      for (int dx = 0; dx < size; ++dx) {
-        const int cx = p.x + dx;
-        const int cy = p.y + dy;
-        if (cx < 0 || cy < 0 || cx >= kBoardWidth || cy >= kBoardHeight) {
-          return true;
-        }
-        if (path_mask_[static_cast<size_t>(cy)][static_cast<size_t>(cx)]) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  bool CatatonicConflict(const Position &p, int size, Tower::Type type,
-                         float range, bool upgraded) const {
-    if (type != Tower::Type::Catatonic) {
-      return false;
-    }
-    const float candidate_range = range + (upgraded ? 0.8F : 0.0F);
-    const Vec2 center = {
-        static_cast<float>(p.x) + (static_cast<float>(size) - 1.0F) / 2.0F,
-        static_cast<float>(p.y) + (static_cast<float>(size) - 1.0F) / 2.0F};
-    for (const auto &t : towers_) {
-      if (t.type != Tower::Type::Catatonic) {
-        continue;
-      }
-      const Vec2 other = TowerCenter(t);
-      const float dx = center.x - other.x;
-      const float dy = center.y - other.y;
-      const float dist2 = dx * dx + dy * dy;
-      const float max_r =
-          candidate_range + t.range + (t.upgraded ? 0.8F : 0.0F);
-      if (dist2 <= max_r * max_r) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  bool CanPlace(const Position &p, int size, Tower::Type type, float range,
-                bool upgraded) const {
-    if (p.x < 0 || p.y < 0 || p.x + size - 1 >= kBoardWidth ||
-        p.y + size - 1 >= kBoardHeight) {
-      return false;
-    }
-    if (OccupiesPath(p, size)) {
-      return false;
-    }
-    if (OverlapsTower(p, size)) {
-      return false;
-    }
-    if (CatatonicConflict(p, size, type, range, upgraded)) {
-      return false;
-    }
-    return true;
-  }
-
-  std::optional<size_t> TowerIndexAt(const Position &p) const {
-    for (size_t i = 0; i < towers_.size(); ++i) {
-      const auto &t = towers_[i];
-      const int tx2 = t.pos.x + t.size - 1;
-      const int ty2 = t.pos.y + t.size - 1;
-      if (p.x >= t.pos.x && p.x <= tx2 && p.y >= t.pos.y && p.y <= ty2) {
-        return i;
-      }
-    }
-    return std::nullopt;
-  }
-
-  void PickUpTower() {
-    if (held_tower_.has_value()) {
-      return;
-    }
-    const auto idx = TowerIndexAt(cursor_);
-    if (!idx.has_value()) {
-      return;
-    }
-    HeldTower hold;
-    hold.tower = towers_[*idx];
-    hold.original = towers_[*idx].pos;
-    held_tower_ = hold;
-    towers_.erase(towers_.begin() + static_cast<long>(*idx));
-    overlay_enabled_ = true;
-  }
-
-  void TryPlaceHeld() {
-    if (!held_tower_.has_value()) {
-      return;
-    }
-    auto t = held_tower_->tower;
-    if (t.type == Tower::Type::Catatonic &&
-        CatatonicConflict(cursor_, t.size, t.type, t.range, t.upgraded)) {
-      ShowWarning("Can't place two sleeping cats within range of each "
-                  "other.\nThey might wake each other up!",
-                  4.0F);
-      return;
-    }
-    if (!CanPlace(cursor_, t.size, t.type, t.range, t.upgraded)) {
-      return;
-    }
-    t.pos = cursor_;
-    t.home = t.pos;
-    t.cooldown = Rand(0.05F, t.fire_rate);
-    towers_.push_back(t);
-    held_tower_.reset();
-    overlay_enabled_ = false;
-  }
-
-  void CancelHold() {
-    if (!held_tower_.has_value()) {
-      return;
-    }
-    auto t = held_tower_->tower;
-    t.pos = held_tower_->original;
-    towers_.push_back(t);
-    held_tower_.reset();
-    overlay_enabled_ = false;
-  }
-
-  void SellTowerAtCursor() {
-    if (held_tower_.has_value()) {
-      return;
-    }
-    const auto idx = TowerIndexAt(cursor_);
-    if (!idx.has_value()) {
-      return;
-    }
-    const Tower &t = towers_[*idx];
-    const auto def = GetDef(t.type);
-    const int refund = SellRefund(def.cost);
-    kibbles_ += refund;
-    towers_.erase(towers_.begin() + static_cast<long>(*idx));
-    Sfx("sell");
-  }
-
-  void UpgradeTowerAtCursor() {
-    if (held_tower_.has_value()) {
-      return;
-    }
-    const auto idx = TowerIndexAt(cursor_);
-    if (!idx.has_value()) {
-      return;
-    }
-    Tower &t = towers_[*idx];
-    if (t.upgraded) {
-      return;
-    }
-    const auto def = GetDef(t.type);
-    const int cost = def.cost * kUpgradeCostMultiplier;
-    if (kibbles_ < cost) {
-      return;
-    }
-    kibbles_ -= cost;
-    t.upgraded = true;
-    if (t.type == Tower::Type::Fat) {
-      t.range += 1.0F;
-    } else if (t.type == Tower::Type::Default) {
-      t.range += 2.0F;
-    }
-    Sfx("unlock");
-  }
-
-  void FireLaser(const Tower &t, Enemy &target) {
-    const auto center = TowerCenter(t);
-    const auto target_cell = EnemyCell(target);
-    const float dx = static_cast<float>(target_cell.x) - center.x;
-    const float dy = static_cast<float>(target_cell.y) - center.y;
-    const float len = std::max(0.001F, std::sqrt(dx * dx + dy * dy));
-    const float ndx = dx / len;
-    const float ndy = dy / len;
-
-    // Apply damage to enemies near the line in front of the cat.
-    for (auto &e : enemies_) {
-      const auto pos = EnemyCell(e);
-      const float vx = static_cast<float>(pos.x) - center.x;
-      const float vy = static_cast<float>(pos.y) - center.y;
-      const float dot = vx * ndx + vy * ndy;
-      if (dot < -0.2F) {
-        continue;
-      }
-      const float cross = std::abs(vx * ndy - vy * ndx);
-      if (cross <= 0.35F) {
-        e.hp -= t.damage;
-        AITrackDamage(t.type, t.damage);
-        if (e.hp <= 0) {
-          AwardBounty(e.type);
-          PlayDeathSfx(e.type);
-        } else {
-          hit_splats_.push_back({EnemyCell(e), 0.18F});
-        }
-      }
-    }
-
-    // Build beam cells for rendering until board edge.
-    Beam b;
-    float bx = static_cast<float>(center.x);
-    float by = static_cast<float>(center.y);
-    for (int i = 0; i < 120; ++i) { // generous to cross the board
-      const int cx = static_cast<int>(std::round(bx));
-      const int cy = static_cast<int>(std::round(by));
-      if (cx < 0 || cy < 0 || cx >= kBoardWidth || cy >= kBoardHeight) {
-        break;
-      }
-      b.cells.push_back({cx, cy});
-      bx += ndx * 0.5F;
-      by += ndy * 0.5F;
-    }
-    beams_.push_back(std::move(b));
-  }
-
-  std::vector<size_t> ThunderTargets(const Tower &t) const {
-    std::vector<std::pair<float, size_t>> sorted;
-    for (size_t i = 0; i < enemies_.size(); ++i) {
-      if (enemies_[i].hp <= 0) {
-        continue;
-      }
-      sorted.push_back({enemies_[i].path_progress, i});
-    }
-    if (sorted.empty()) {
-      return {};
-    }
-    std::sort(sorted.begin(), sorted.end(),
-              [](auto &a, auto &b) { return a.first > b.first; });
-    std::vector<size_t> picks;
-    auto add_unique = [&](size_t idx) {
-      if (std::find(picks.begin(), picks.end(), idx) == picks.end()) {
-        picks.push_back(idx);
-      }
-    };
-    add_unique(sorted.front().second);
-    if (!t.upgraded) {
-      return picks;
-    }
-    add_unique(sorted[sorted.size() / 2].second);
-    add_unique(sorted.back().second);
-    return picks;
-  }
-
-  void FireShockwave(const Tower &t) {
-    Shockwave sw;
-    sw.center = TowerCenter(t);
-    sw.radius = 0.0F;
-    sw.max_radius = t.range;
-    sw.speed = 10.0F;
-    sw.time_left = 0.45F;
-    shockwaves_.push_back(sw);
-
-    for (auto &e : enemies_) {
-      const auto pos = EnemyCell(e);
-      if (InRange(sw.center, pos, t.range)) {
-        e.hp -= t.damage;
-        AITrackDamage(t.type, t.damage);
-        if (e.hp <= 0) {
-          AwardBounty(e.type);
-          PlayDeathSfx(e.type);
-        } else {
-          hit_splats_.push_back({pos, 0.22F});
-        }
-      }
-    }
-  }
-
-  void FireKitty(const Tower &t, Enemy &target) {
-    const auto center = TowerCenter(t);
-    const auto target_cell = EnemyCell(target);
-    const auto area_cells = KittyAttackArea(center, target_cell);
-
-    for (auto &e : enemies_) {
-      const auto pos = EnemyCell(e);
-      const bool hit = std::any_of(
-          area_cells.begin(), area_cells.end(),
-          [&](const Position &c) { return c.x == pos.x && c.y == pos.y; });
-      if (!hit) {
-        continue;
-      }
-      e.hp -= t.damage;
-      AITrackDamage(t.type, t.damage);
-      if (e.hp <= 0) {
-        AwardBounty(e.type);
-        PlayDeathSfx(e.type);
-      } else {
-        hit_splats_.push_back({pos, 0.18F});
-      }
-    }
-
-    if (!area_cells.empty()) {
-      area_highlights_.push_back({area_cells, 0.22F});
-    }
-  }
-
-  void FireCatatonic(const Tower &t) {
-    const float radius = t.upgraded ? t.range + 0.8F : t.range;
-    const float sleep_dur = std::clamp(
-        t.upgraded ? kCatSleepUpgrade : kCatSleepBase, 0.0F, kCatSleepCap);
-    std::vector<Position> cells;
-    for (auto &e : enemies_) {
-      const auto pos = EnemyCell(e);
-      if (InRange(TowerCenter(t), pos, radius)) {
-        e.sleep_timer =
-            std::min(kCatSleepCap, std::max(e.sleep_timer, sleep_dur));
-        cells.push_back(pos);
-      }
-    }
-    if (!cells.empty()) {
-      area_highlights_.push_back({cells, 0.6F, ftxui::Color::Purple, '~'});
-    }
-  }
-
-  void FireGalactic(const Tower &t, Enemy &target) {
-    const auto center = TowerCenter(t);
-    const auto target_cell = EnemyCell(target);
-    const float dx = static_cast<float>(target_cell.x) - center.x;
-    const float dy = static_cast<float>(target_cell.y) - center.y;
-    const float len = std::max(0.001F, std::sqrt(dx * dx + dy * dy));
-    const float ndx = dx / len;
-    const float ndy = dy / len;
-    const float range = t.range;
-    const float cone_cos = std::cos(0.6F); // ~60 deg cone
-
-    std::vector<Position> cells;
-    for (int y = 0; y < kBoardHeight; ++y) {
-      for (int x = 0; x < kBoardWidth; ++x) {
-        const float vx = static_cast<float>(x) - center.x;
-        const float vy = static_cast<float>(y) - center.y;
-        const float dist2 = vx * vx + vy * vy;
-        if (dist2 > range * range)
-          continue;
-        const float dist = std::sqrt(dist2);
-        if (dist < 0.1F)
-          continue;
-        const float dot = (vx / dist) * ndx + (vy / dist) * ndy;
-        if (dot >= cone_cos) {
-          cells.push_back({x, y});
-        }
-      }
-    }
-
-    const float reset_chance =
-        t.upgraded ? kGalacticResetChance * 3.0F : kGalacticResetChance;
-    bool any_rewind = false;
-    for (auto &e : enemies_) {
-      const auto pos = EnemyCell(e);
-      const bool hit =
-          std::any_of(cells.begin(), cells.end(), [&](const Position &c) {
-            return c.x == pos.x && c.y == pos.y;
-          });
-      if (!hit)
-        continue;
-      if (Rand(0.0F, 1.0F) < reset_chance) {
-        e.rewind_speed = kGalacticRewindSpeed;
-        any_rewind = true;
-      }
-      e.hp -= t.damage;
-      AITrackDamage(t.type, t.damage);
-      if (e.hp <= 0) {
-        AwardBounty(e.type);
-        PlayDeathSfx(e.type);
-      } else {
-        hit_splats_.push_back({pos, 0.2F});
-      }
-    }
-
-    if (!cells.empty()) {
-      area_highlights_.push_back(
-          {cells, any_rewind ? 0.35F : 0.3F,
-           any_rewind ? ftxui::Color::DarkViolet : ftxui::Color::LightSteelBlue,
-           any_rewind ? '~' : '*'});
-    }
-  }
-
-  // --- Catastrophe ---
-
-  void FireCatastrophe(Tower &t, const Enemy &target) {
-    const auto center = TowerCenter(t);
-    const auto target_cell = EnemyCell(target);
-
-    ArcProjectile ap;
-    ap.start = center;
-    ap.ground = center;
-    ap.target = target_cell;
-    ap.total_time = kCatastropheTravelTime;
-    ap.arc_height = kCatastropheArcHeight;
-    ap.damage = t.damage;
-    ap.splash_radius = kCatastropheSplashRadius;
-    ap.upgraded = t.upgraded;
-    arc_projectiles_.push_back(ap);
-  }
-
-  // Phase 1 — called when the arc projectile lands: apply damage, play the
-  // bright explosion animation, and queue the crater to form after a delay.
-  void ExplodeCatastrophe(const ArcProjectile &ap) {
-    const int cx = ap.target.x;
-    const int cy = ap.target.y;
-    constexpr int kCraterRadius = 2;
-
-    for (auto &e : enemies_) {
-      const auto pos = EnemyCell(e);
-      if (std::max(std::abs(pos.x - cx), std::abs(pos.y - cy)) > kCraterRadius)
-        continue;
-      e.hp -= ap.damage;
-      AITrackDamage(Tower::Type::Catastrophe, ap.damage);
-      if (e.hp <= 0) {
-        AwardBounty(e.type);
-        PlayDeathSfx(e.type);
-      } else {
-        hit_splats_.push_back({pos, 0.25F});
-      }
-    }
-
-    std::vector<Position> ring0, ring1, ring2;
-    for (int y = cy - kCraterRadius; y <= cy + kCraterRadius; ++y) {
-      for (int x = cx - kCraterRadius; x <= cx + kCraterRadius; ++x) {
-        if (x < 0 || x >= kBoardWidth || y < 0 || y >= kBoardHeight)
-          continue;
-        const int ring = std::max(std::abs(x - cx), std::abs(y - cy));
-        if (ring == 0)
-          ring0.push_back({x, y});
-        else if (ring == 1)
-          ring1.push_back({x, y});
-        else
-          ring2.push_back({x, y});
-      }
-    }
-
-    // Expanding shockwave from impact point.
-    Shockwave sw;
-    sw.center = {static_cast<float>(cx), static_cast<float>(cy)};
-    sw.radius = 0.0F;
-    sw.max_radius = static_cast<float>(kCraterRadius) + 0.8F;
-    sw.speed = 7.0F;
-    sw.time_left = 0.45F;
-    sw.max_time = 0.45F;
-    shockwaves_.push_back(sw);
-
-    // Bright explosion flash: white core → yellow mid-ring → orange outer.
-    if (!ring0.empty())
-      area_highlights_.push_back({ring0, 0.45F, ftxui::Color::White, '*'});
-    if (!ring1.empty())
-      area_highlights_.push_back({ring1, 0.38F, ftxui::Color::Yellow1, '*'});
-    if (!ring2.empty())
-      area_highlights_.push_back({ring2, 0.30F, ftxui::Color::Orange1, '*'});
-
-    Sfx("tower_catastrophe_detonation");
-
-    pending_catastrophes_.push_back({ap.target, ap.upgraded});
-  }
-
-  // Phase 2 — called after the explosion settles: show the crater gradient and
-  // create the lingering toxic zone.
-  void FormCrater(const PendingCatastrophe &pc) {
-    const int cx = pc.target.x;
-    const int cy = pc.target.y;
-    constexpr int kCraterRadius = 2;
-
-    std::vector<Position> ring0, ring1, ring2, splash_cells;
-    for (int y = cy - kCraterRadius; y <= cy + kCraterRadius; ++y) {
-      for (int x = cx - kCraterRadius; x <= cx + kCraterRadius; ++x) {
-        if (x < 0 || x >= kBoardWidth || y < 0 || y >= kBoardHeight)
-          continue;
-        const int ring = std::max(std::abs(x - cx), std::abs(y - cy));
-        splash_cells.push_back({x, y});
-        if (ring == 0)
-          ring0.push_back({x, y});
-        else if (ring == 1)
-          ring1.push_back({x, y});
-        else
-          ring2.push_back({x, y});
-      }
-    }
-
-    if (!ring0.empty())
-      area_highlights_.push_back({ring0, 0.4F, ftxui::Color::White, '!'});
-    if (!ring1.empty())
-      area_highlights_.push_back({ring1, 0.4F, ftxui::Color::OrangeRed1, ':'});
-    if (!ring2.empty())
-      area_highlights_.push_back({ring2, 0.4F, ftxui::Color::DarkKhaki, '.'});
-
-    ToxicZone zone;
-    zone.cells = splash_cells;
-    zone.center = {static_cast<float>(cx), static_cast<float>(cy)};
-    zone.explode_on_expire = pc.upgraded;
-    toxic_zones_.push_back(std::move(zone));
-  }
-
-  void UpdatePendingCatastrophes() {
-    std::vector<PendingCatastrophe> survivors;
-    for (auto &pc : pending_catastrophes_) {
-      pc.timer -= Dt();
-      if (pc.timer <= 0.0F) {
-        FormCrater(pc);
-      } else {
-        survivors.push_back(pc);
-      }
-    }
-    pending_catastrophes_ = std::move(survivors);
-  }
-
-  void UpdateArcProjectiles() {
-    std::vector<ArcProjectile> survivors;
-    for (auto &ap : arc_projectiles_) {
-      ap.progress += Dt() / ap.total_time;
-      const float t = std::min(ap.progress, 1.0F);
-      ap.ground.x =
-          ap.start.x + t * (static_cast<float>(ap.target.x) - ap.start.x);
-      ap.ground.y =
-          ap.start.y + t * (static_cast<float>(ap.target.y) - ap.start.y);
-      if (ap.progress >= 1.0F) {
-        ExplodeCatastrophe(ap);
-      } else {
-        survivors.push_back(ap);
-      }
-    }
-    arc_projectiles_ = std::move(survivors);
-  }
-
-  void UpdateToxicZones() {
-    std::vector<ToxicZone> survivors;
-    for (auto &zone : toxic_zones_) {
-      zone.time_left -= Dt();
-      zone.tick_timer -= Dt();
-
-      if (zone.tick_timer <= 0.0F) {
-        zone.tick_timer += zone.tick_interval;
-        for (auto &e : enemies_) {
-          const auto pos = EnemyCell(e);
-          const bool in_zone = std::any_of(
-              zone.cells.begin(), zone.cells.end(),
-              [&](const Position &c) { return c.x == pos.x && c.y == pos.y; });
-          if (!in_zone)
-            continue;
-          e.hp -= zone.damage_per_tick;
-          AITrackDamage(Tower::Type::Catastrophe, zone.damage_per_tick);
-          if (e.hp <= 0) {
-            AwardBounty(e.type);
-            PlayDeathSfx(e.type);
-          } else {
-            hit_splats_.push_back({pos, 0.15F, 0});
-          }
-        }
-      }
-
-      if (zone.time_left <= 0.0F) {
-        if (zone.explode_on_expire) {
-          Sfx("tower_catastrophe_explosion");
-          Shockwave sw;
-          sw.center = zone.center;
-          sw.max_radius = kCatastropheExplosionRadius;
-          sw.speed = 10.0F;
-          sw.time_left = 0.4F;
-          sw.max_time = 0.4F;
-          shockwaves_.push_back(sw);
-          for (auto &e : enemies_) {
-            if (!InRange(zone.center, EnemyCell(e),
-                         kCatastropheExplosionRadius))
-              continue;
-            e.hp -= kCatastropheExplosionDamage;
-            AITrackDamage(Tower::Type::Catastrophe,
-                          kCatastropheExplosionDamage);
-            if (e.hp <= 0) {
-              AwardBounty(e.type);
-              PlayDeathSfx(e.type);
-            }
-          }
-        }
-      } else {
-        survivors.push_back(std::move(zone));
-      }
-    }
-    toxic_zones_ = std::move(survivors);
-  }
-
-  void UpdateShockwaves() {
-    for (auto &sw : shockwaves_) {
-      sw.radius += sw.speed * Dt();
-      sw.time_left -= Dt();
-    }
-    shockwaves_.erase(std::remove_if(shockwaves_.begin(), shockwaves_.end(),
-                                     [](const Shockwave &sw) {
-                                       return sw.time_left <= 0.0F ||
-                                              sw.radius > sw.max_radius;
-                                     }),
-                      shockwaves_.end());
-  }
-
-  void UpdateBeams() {
-    for (auto &b : beams_) {
-      b.time_left -= Dt();
-    }
-    beams_.erase(
-        std::remove_if(beams_.begin(), beams_.end(),
-                       [](const Beam &b) { return b.time_left <= 0.0F; }),
-        beams_.end());
-  }
-
-  void UpdateAreas() {
-    for (auto &a : area_highlights_) {
-      a.time_left -= Dt();
-    }
-    area_highlights_.erase(std::remove_if(area_highlights_.begin(),
-                                          area_highlights_.end(),
-                                          [](const AreaHighlight &a) {
-                                            return a.time_left <= 0.0F;
-                                          }),
-                           area_highlights_.end());
-  }
-
-  void BuildMaps() {
-    maps_.clear();
-    maps_.push_back(MapDef{{{0, kBoardHeight / 2},
-                            {12, kBoardHeight / 2},
-                            {12, 4},
-                            {30, 4},
-                            {30, kBoardHeight - 5},
-                            {kBoardWidth - 1, kBoardHeight - 5}},
-                           1,
-                           ftxui::Color::DarkGreen,
-                           ftxui::Color::DarkGoldenrod});
-    maps_.push_back(MapDef{{{0, 3},
-                            {10, 3},
-                            {10, 12},
-                            {25, 12},
-                            {25, kBoardHeight - 6},
-                            {kBoardWidth - 1, kBoardHeight - 6}},
-                           2,
-                           ftxui::Color::DarkSlateGray3,
-                           ftxui::Color::DarkTurquoise});
-    maps_.push_back(MapDef{{{0, kBoardHeight - 4},
-                            {15, kBoardHeight - 4},
-                            {15, 6},
-                            {32, 6},
-                            {32, kBoardHeight / 2},
-                            {kBoardWidth - 1, kBoardHeight / 2}},
-                           1,
-                           ftxui::Color::DarkOliveGreen3,
-                           ftxui::Color::Gold3});
-    maps_.push_back(MapDef{{{0, kBoardHeight / 2},
-                            {8, kBoardHeight / 2},
-                            {8, 6},
-                            {20, 6},
-                            {20, kBoardHeight - 8},
-                            {35, kBoardHeight - 8},
-                            {35, 5},
-                            {kBoardWidth - 1, 5}},
-                           3,
-                           ftxui::Color::DarkBlue,
-                           ftxui::Color::CornflowerBlue});
-    maps_.push_back(MapDef{{{0, 8},
-                            {14, 8},
-                            {14, kBoardHeight - 6},
-                            {28, kBoardHeight - 6},
-                            {28, 6},
-                            {kBoardWidth - 1, 6}},
-                           2,
-                           ftxui::Color::DarkKhaki,
-                           ftxui::Color::DarkOrange});
-    maps_.push_back(MapDef{{{0, kBoardHeight / 2},
-                            {10, kBoardHeight / 2},
-                            {10, 3},
-                            {20, 3},
-                            {20, kBoardHeight - 4},
-                            {40, kBoardHeight - 4},
-                            {40, 8},
-                            {kBoardWidth - 1, 8}},
-                           2,
-                           ftxui::Color::DarkSlateGray1,
-                           ftxui::Color::LightSkyBlue1});
-    maps_.push_back(MapDef{{{0, kBoardHeight - 5},
-                            {18, kBoardHeight - 5},
-                            {18, 5},
-                            {kBoardWidth - 2, 5},
-                            {kBoardWidth - 2, kBoardHeight / 2}},
-                           1,
-                           ftxui::Color::DarkOliveGreen3,
-                           ftxui::Color::GreenYellow});
-    maps_.push_back(MapDef{{{0, 4},
-                            {8, 4},
-                            {8, kBoardHeight - 4},
-                            {24, kBoardHeight - 4},
-                            {24, 4},
-                            {kBoardWidth - 1, 4}},
-                           2,
-                           ftxui::Color::DarkMagenta,
-                           ftxui::Color::DeepPink3});
-    maps_.push_back(MapDef{{{0, kBoardHeight / 2},
-                            {12, kBoardHeight / 2},
-                            {12, 6},
-                            {22, 6},
-                            {22, kBoardHeight - 7},
-                            {34, kBoardHeight - 7},
-                            {34, 5},
-                            {kBoardWidth - 1, 5}},
-                           2,
-                           ftxui::Color::DarkSeaGreen3,
-                           ftxui::Color::Chartreuse1});
-    maps_.push_back(MapDef{{{0, 2},
-                            {16, 2},
-                            {16, kBoardHeight - 3},
-                            {30, kBoardHeight - 3},
-                            {30, 7},
-                            {kBoardWidth - 1, 7}},
-                           3,
-                           ftxui::Color::DarkRed,
-                           ftxui::Color::OrangeRed1});
-  }
-
-  static ftxui::Color TowerBgColor(Tower::Type t) {
-    switch (t) {
-    case Tower::Type::Thunder:
-      return ftxui::Color::Blue1;
-    case Tower::Type::Fat:
-      return ftxui::Color::DarkOliveGreen3;
-    case Tower::Type::Kitty:
-      return ftxui::Color::Pink1;
-    case Tower::Type::Catatonic:
-      return ftxui::Color::Purple;
-    case Tower::Type::Galactic:
-      return ftxui::Color::LightSteelBlue;
-    case Tower::Type::Catastrophe:
-      return ftxui::Color::DarkKhaki;
-    default:
-      return ftxui::Color::Gold1;
-    }
-  }
-
-  static char TowerBaseGlyph(Tower::Type t) {
-    switch (t) {
-    case Tower::Type::Thunder:
-      return 't';
-    case Tower::Type::Fat:
-      return 'f';
-    case Tower::Type::Kitty:
-      return 'k';
-    case Tower::Type::Catatonic:
-      return 'c';
-    case Tower::Type::Galactic:
-      return 'g';
-    case Tower::Type::Catastrophe:
-      return 'z';
-    default:
-      return 'd';
-    }
-  }
-
-  static char TowerGlyph(Tower::Type t, bool upgraded) {
-    const char base = TowerBaseGlyph(t);
-    return upgraded ? static_cast<char>(
-                          std::toupper(static_cast<unsigned char>(base)))
-                    : base;
-  }
-
-  ftxui::Element RenderBoard() const {
-    std::vector<std::vector<char>> glyphs(kBoardHeight,
-                                          std::vector<char>(kBoardWidth, ' '));
-    const auto &map = CurrentMap();
-    std::vector<std::vector<ftxui::Color>> backgrounds(
-        kBoardHeight, std::vector<ftxui::Color>(kBoardWidth, map.background));
-    std::vector<std::vector<ftxui::Color>> foregrounds(
-        kBoardHeight,
-        std::vector<ftxui::Color>(kBoardWidth, ftxui::Color::White));
-    std::vector<std::vector<bool>> highlight(
-        kBoardHeight, std::vector<bool>(kBoardWidth, false));
-    std::vector<std::vector<bool>> enemy_mask(
-        kBoardHeight, std::vector<bool>(kBoardWidth, false));
-
-    const bool show_overlay = overlay_enabled_ || held_tower_.has_value();
-    std::vector<std::vector<bool>> range_hint_base(
-        kBoardHeight, std::vector<bool>(kBoardWidth, false));
-    std::vector<std::vector<bool>> range_hint_preview(
-        kBoardHeight, std::vector<bool>(kBoardWidth, false));
-    auto display_range = [&](const Tower &t) {
-      if (t.type == Tower::Type::Kitty && t.upgraded) {
-        return t.range + kKittyJumpBonusRange;
-      }
-      return t.range;
-    };
-    if (show_overlay) {
-      for (const auto &t : towers_) {
-        const auto def = GetDef(t.type);
-        if (!def.show_range) {
-          continue;
-        }
-        const auto center = TowerCenter(t);
-        if (t.type == Tower::Type::Kitty && !t.upgraded) {
-          const auto cells = KittyOverlayCells(center);
-          for (const auto &cell : cells) {
-            if (cell.x < 0 || cell.y < 0 || cell.x >= kBoardWidth ||
-                cell.y >= kBoardHeight) {
-              continue;
-            }
-            range_hint_base[static_cast<size_t>(cell.y)]
-                           [static_cast<size_t>(cell.x)] = true;
-          }
-          continue;
-        }
         for (int y = 0; y < kBoardHeight; ++y) {
-          for (int x = 0; x < kBoardWidth; ++x) {
-            Position cell{x, y};
-            if (InRange(center, cell, display_range(t))) {
-              range_hint_base[static_cast<size_t>(y)][static_cast<size_t>(x)] =
-                  true;
-            }
-          }
-        }
-      }
-      const TowerDef preview_def = GetDef(selected_type_);
-      if (preview_def.show_range) {
-        const Vec2 center{
-            static_cast<float>(cursor_.x) +
-                (static_cast<float>(preview_def.size) - 1.0F) / 2.0F,
-            static_cast<float>(cursor_.y) +
-                (static_cast<float>(preview_def.size) - 1.0F) / 2.0F};
-        if (preview_def.type == Tower::Type::Kitty) {
-          const auto cells = KittyOverlayCells(center);
-          for (const auto &cell : cells) {
-            if (cell.x < 0 || cell.y < 0 || cell.x >= kBoardWidth ||
-                cell.y >= kBoardHeight) {
-              continue;
-            }
-            range_hint_preview[static_cast<size_t>(cell.y)]
-                              [static_cast<size_t>(cell.x)] = true;
-          }
-        } else {
-          for (int y = 0; y < kBoardHeight; ++y) {
             for (int x = 0; x < kBoardWidth; ++x) {
-              Position cell{x, y};
-              if (InRange(center, cell, preview_def.range)) {
-                range_hint_preview[static_cast<size_t>(y)]
-                                  [static_cast<size_t>(x)] = true;
-              }
+                if (path_mask_[static_cast<std::size_t>(y)]
+                              [static_cast<std::size_t>(x)])
+                    continue;
+                float s = 0.0f;
+                float pos_sum = 0.0f;
+                for (int pi = 0; pi < static_cast<int>(path_.size()); ++pi) {
+                    const auto &p = path_[static_cast<std::size_t>(pi)];
+                    const float dx = static_cast<float>(x - p.x);
+                    const float dy = static_cast<float>(y - p.y);
+                    if (dx * dx + dy * dy <= kCoverageR2) {
+                        s += 1.0f;
+                        pos_sum += static_cast<float>(pi) / path_len;
+                    }
+                }
+                if (s > 0.0f)
+                    cells.push_back({x, y, s, pos_sum / s});
             }
-          }
         }
-      }
-    }
+        std::sort(
+            cells.begin(), cells.end(),
+            [](const Scored &a, const Scored &b) { return a.score > b.score; });
 
-    for (int y = 0; y < kBoardHeight; ++y) {
-      const auto yi = static_cast<size_t>(y);
-      for (int x = 0; x < kBoardWidth; ++x) {
-        const auto xi = static_cast<size_t>(x);
-        if (path_mask_[yi][xi]) {
-          backgrounds[yi][xi] = map.path_color;
-          glyphs[yi][xi] = '.';
-          foregrounds[yi][xi] = ftxui::Color::Black;
+        ai_candidates_.clear();
+        ai_candidate_coverage_.fill(0.0f);
+        ai_candidate_path_pos_.fill(0.0f);
+        const float max_cov = cells.empty() ? 1.0f : cells[0].score;
+
+        for (const auto &c : cells) {
+            if (static_cast<int>(ai_candidates_.size()) >= kAINumCandidates)
+                break;
+            bool too_close = false;
+            for (const auto &existing : ai_candidates_) {
+                const float dx = static_cast<float>(c.x - existing.x);
+                const float dy = static_cast<float>(c.y - existing.y);
+                if (dx * dx + dy * dy < kMinDist2) {
+                    too_close = true;
+                    break;
+                }
+            }
+            if (!too_close) {
+                const std::size_t idx = ai_candidates_.size();
+                ai_candidate_coverage_[idx] = c.score / max_cov;
+                ai_candidate_path_pos_[idx] = c.mean_path_pos;
+                ai_candidates_.push_back({c.x, c.y});
+            }
         }
-      }
+        while (static_cast<int>(ai_candidates_.size()) < kAINumCandidates)
+            ai_candidates_.push_back({-1, -1});
     }
 
-    for (const auto &t : towers_) {
-      const char glyph = TowerGlyph(t.type, t.upgraded);
-      const ftxui::Color bg = TowerBgColor(t.type);
-      for (int dy = 0; dy < t.size; ++dy) {
-        for (int dx = 0; dx < t.size; ++dx) {
-          const int gx = t.pos.x + dx;
-          const int gy = t.pos.y + dy;
-          if (gx < 0 || gy < 0 || gx >= kBoardWidth || gy >= kBoardHeight) {
-            continue;
-          }
-          const auto yi = static_cast<size_t>(gy);
-          const auto xi = static_cast<size_t>(gx);
-          glyphs[yi][xi] = glyph;
-          backgrounds[yi][xi] = bg;
-          foregrounds[yi][xi] = ftxui::Color::Black;
-          highlight[yi][xi] = true;
+    void StartWave() {
+        if (wave_active_ || game_over_) {
+            return;
         }
-      }
+        ++wave_;
+        spawn_remaining_ = 6 + DifficultyLevel();
+        spawn_cooldown_ms_ = 0;
+        wave_active_ = true;
+        Sfx("wave_start");
     }
 
-    for (const auto &e : enemies_) {
-      const auto pos = EnemyCell(e);
-      const auto yi = static_cast<size_t>(pos.y);
-      const auto xi = static_cast<size_t>(pos.x);
-      char g = 'r';
-      ftxui::Color fg = EnemyColor(e);
-      std::optional<ftxui::Color> bg_override;
-      switch (e.type) {
-      case EnemyType::Mouse:
-        g = 'm';
-        fg = ftxui::Color::Grey70;
-        bg_override = std::nullopt; // keep path background
-        break;
-      case EnemyType::Rat:
-        g = 'r';
-        fg = EnemyColor(e);
-        bg_override = ftxui::Color::Grey23;
-        break;
-      case EnemyType::BigRat:
-        g = 'R';
-        fg = ftxui::Color::RedLight;
-        bg_override = ftxui::Color::Grey35;
-        break;
-      case EnemyType::Dog:
-        g = 'D';
-        fg = ftxui::Color::White;
-        bg_override = ftxui::Color::DarkRed;
-        break;
-      }
-      glyphs[yi][xi] = g;
-      if (e.rewind_speed > 0.0F) {
-        backgrounds[yi][xi] = ftxui::Color::DarkViolet;
-        foregrounds[yi][xi] = ftxui::Color::White;
-      } else {
-        if (bg_override.has_value())
-          backgrounds[yi][xi] = *bg_override;
-        foregrounds[yi][xi] = fg;
-      }
-      enemy_mask[yi][xi] = true;
-    }
-
-    for (const auto &p : projectiles_) {
-      const int px = static_cast<int>(std::round(p.x));
-      const int py = static_cast<int>(std::round(p.y));
-      if (py < 0 || py >= kBoardHeight || px < 0 || px >= kBoardWidth) {
-        continue;
-      }
-      const auto yi = static_cast<size_t>(py);
-      const auto xi = static_cast<size_t>(px);
-      glyphs[yi][xi] = '*';
-      foregrounds[yi][xi] = ftxui::Color::SkyBlue1;
-    }
-
-    for (const auto &b : beams_) {
-      for (const auto &cell : b.cells) {
-        if (cell.y < 0 || cell.y >= kBoardHeight || cell.x < 0 ||
-            cell.x >= kBoardWidth) {
-          continue;
+    void SpawnTick() {
+        if (!wave_active_) {
+            return;
         }
-        const auto yi = static_cast<size_t>(cell.y);
-        const auto xi = static_cast<size_t>(cell.x);
-        glyphs[yi][xi] = '-';
-        foregrounds[yi][xi] = ftxui::Color::CyanLight;
-      }
-    }
 
-    // Toxic zones — 5×5 crater with 3 concentric square rings.
-    for (const auto &zone : toxic_zones_) {
-      const int cx = static_cast<int>(zone.center.x);
-      const int cy = static_cast<int>(zone.center.y);
-      for (const auto &cell : zone.cells) {
-        if (cell.y < 0 || cell.y >= kBoardHeight || cell.x < 0 ||
-            cell.x >= kBoardWidth)
-          continue;
-        const auto yi = static_cast<size_t>(cell.y);
-        const auto xi = static_cast<size_t>(cell.x);
-        const int ring = std::max(std::abs(cell.x - cx), std::abs(cell.y - cy));
-        if (ring == 0) {
-          backgrounds[yi][xi] = ftxui::Color::Black;
-          if (zone.explode_on_expire) {
-            glyphs[yi][xi] = '!';
-            foregrounds[yi][xi] = ftxui::Color::Red1;
-          } else {
-            glyphs[yi][xi] = ' ';
-          }
-        } else if (ring == 1) {
-          glyphs[yi][xi] = ':';
-          foregrounds[yi][xi] = ftxui::Color::Grey35;
-          backgrounds[yi][xi] =
-              BlendColor(backgrounds[yi][xi], ftxui::Color::Black, 0.60F);
-        } else {
-          glyphs[yi][xi] = '.';
-          foregrounds[yi][xi] = ftxui::Color::Grey50;
-          backgrounds[yi][xi] =
-              BlendColor(backgrounds[yi][xi], ftxui::Color::Black, 0.30F);
+        if (spawn_remaining_ <= 0 && enemies_.empty()) {
+            return;
         }
-      }
-    }
 
-    for (const auto &ah : area_highlights_) {
-      for (const auto &cell : ah.cells) {
-        if (cell.y < 0 || cell.y >= kBoardHeight || cell.x < 0 ||
-            cell.x >= kBoardWidth) {
-          continue;
+        spawn_cooldown_ms_ -= static_cast<int>(kTickMs * TimeScale());
+        if (spawn_cooldown_ms_ > 0 || spawn_remaining_ <= 0) {
+            return;
         }
-        const auto yi = static_cast<size_t>(cell.y);
-        const auto xi = static_cast<size_t>(cell.x);
-        glyphs[yi][xi] = ah.glyph;
-        foregrounds[yi][xi] = ah.color;
-        backgrounds[yi][xi] = BlendColor(backgrounds[yi][xi], ah.color, 0.08F);
-      }
+
+        Enemy e;
+        e.path_progress = 0.0F;
+        const int diff = DifficultyLevel();
+        e.type = SelectEnemyType(diff);
+        ApplyEnemyStats(e, diff);
+        const int width = std::max(1, CurrentMap().path_width);
+        if (width > 1) {
+            std::uniform_int_distribution<int> dist(-(width - 1), width - 1);
+            e.lane_offset = dist(rng_);
+        }
+        enemies_.push_back(e);
+
+        --spawn_remaining_;
+        spawn_cooldown_ms_ = static_cast<int>(600.0F / kSpeedFactor);
     }
 
-    // Arc projectiles: shadow at ground position + projectile offset upward.
-    for (const auto &ap : arc_projectiles_) {
-      const int sx = static_cast<int>(std::round(ap.ground.x));
-      const int sy = static_cast<int>(std::round(ap.ground.y));
-      if (sy >= 0 && sy < kBoardHeight && sx >= 0 && sx < kBoardWidth) {
-        const auto yi = static_cast<size_t>(sy);
-        const auto xi = static_cast<size_t>(sx);
-        glyphs[yi][xi] = ',';
-        foregrounds[yi][xi] = ftxui::Color::DarkKhaki;
-      }
-      const float visual_height =
-          ap.arc_height * 4.0F * ap.progress * (1.0F - ap.progress);
-      const int py = sy - static_cast<int>(std::round(visual_height));
-      if (py >= 0 && py < kBoardHeight && sx >= 0 && sx < kBoardWidth) {
-        const auto yi = static_cast<size_t>(py);
-        const auto xi = static_cast<size_t>(sx);
-        glyphs[yi][xi] = 'o';
-        foregrounds[yi][xi] = ftxui::Color::Orange1;
-      }
+    void MoveEnemies() {
+#ifdef ENABLE_AUDIO
+        int lives_before = lives_;
+#endif
+        for (auto &e : enemies_) {
+            if (e.rewind_speed > 0.0F) {
+                e.path_progress -= e.rewind_speed * Dt();
+                if (e.path_progress <= 0.0F) {
+                    e.path_progress = 0.0F;
+                    e.rewind_speed = 0.0F;
+                }
+                continue;
+            }
+            if (e.sleep_timer > 0.0F) {
+                e.sleep_timer = std::max(0.0F, e.sleep_timer - Dt());
+                continue;
+            }
+            e.path_progress += e.speed * Dt();
+        }
+
+        for (auto &e : enemies_) {
+            const int end_index = static_cast<int>(path_.size() - 1);
+            if (static_cast<int>(std::floor(e.path_progress)) >= end_index) {
+                e.hp = 0;
+                lives_ = std::max(0, lives_ - 1);
+                if (ai_mode_)
+                    ++ai_lives_lost_;
+            }
+        }
+#ifdef ENABLE_AUDIO
+        if (lives_ < lives_before) {
+            Sfx("life_lost");
+        }
+#endif
     }
 
-    for (const auto &sw : shockwaves_) {
-      for (int y = 0; y < kBoardHeight; ++y) {
-        for (int x = 0; x < kBoardWidth; ++x) {
-          Position cell{x, y};
-          const float dist = std::sqrt(DistanceSquared(sw.center, cell));
-          if (std::abs(dist - sw.radius) < 0.6F) {
+    std::optional<size_t> FindTargetAt(const Tower &t,
+                                       const Vec2 &center) const {
+        std::optional<size_t> best;
+        float best_progress = -1.0F;
+        const float range2 = t.range * t.range;
+
+        for (size_t i = 0; i < enemies_.size(); ++i) {
+            if (enemies_[i].hp <= 0) {
+                continue;
+            }
+            const auto pos = EnemyCell(enemies_[i]);
+            if (t.type != Tower::Type::Thunder) {
+                const float d2 = DistanceSquared(center, pos);
+                if (d2 > range2) {
+                    continue;
+                }
+            }
+            if (enemies_[i].path_progress > best_progress) {
+                best_progress = enemies_[i].path_progress;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    std::optional<size_t> FindTarget(const Tower &t) const {
+        return FindTargetAt(t, TowerCenter(t));
+    }
+
+    Position NearestOpenCell(const Position &desired,
+                             const std::vector<std::vector<bool>> &blocked,
+                             std::vector<std::vector<bool>> &reserved,
+                             const Position &fallback) {
+        std::vector<Position> best;
+        float best_d2 = std::numeric_limits<float>::max();
+        const Vec2 desired_center = TowerCenterAt(desired, 1);
+        for (int y = 0; y < kBoardHeight; ++y) {
+            for (int x = 0; x < kBoardWidth; ++x) {
+                Position p{x, y};
+                if (p.x < 0 || p.y < 0 || p.x >= kBoardWidth ||
+                    p.y >= kBoardHeight) {
+                    continue;
+                }
+                if (path_mask_[static_cast<size_t>(p.y)]
+                              [static_cast<size_t>(p.x)]) {
+                    continue;
+                }
+                if (blocked[static_cast<size_t>(p.y)]
+                           [static_cast<size_t>(p.x)]) {
+                    continue;
+                }
+                if (reserved[static_cast<size_t>(p.y)]
+                            [static_cast<size_t>(p.x)]) {
+                    continue;
+                }
+                const float d2 = DistanceSquared(desired_center, p);
+                if (d2 + 1e-4F < best_d2) {
+                    best_d2 = d2;
+                    best.clear();
+                    best.push_back(p);
+                } else if (std::abs(d2 - best_d2) < 1e-4F) {
+                    best.push_back(p);
+                }
+            }
+        }
+
+        if (best.empty()) {
+            if (fallback.x >= 0 && fallback.y >= 0 &&
+                fallback.x < kBoardWidth && fallback.y < kBoardHeight) {
+                reserved[static_cast<size_t>(fallback.y)]
+                        [static_cast<size_t>(fallback.x)] = true;
+            }
+            return fallback;
+        }
+        std::shuffle(best.begin(), best.end(), rng_);
+        const auto chosen = best.front();
+        reserved[static_cast<size_t>(chosen.y)][static_cast<size_t>(chosen.x)] =
+            true;
+        return chosen;
+    }
+
+    void TowersAct() {
+        for (auto &t : towers_) {
+            t.cooldown -= Dt();
+        }
+
+        for (size_t i = 0; i < towers_.size(); ++i) {
+            Tower &t = towers_[i];
+            if (t.type == Tower::Type::Kitty || t.cooldown > 0.0F) {
+                continue;
+            }
+
+            const auto target_index = FindTarget(t);
+            if (!target_index.has_value()) {
+                continue;
+            }
+
+            switch (t.type) {
+            case Tower::Type::Default: {
+                const auto c = TowerCenter(t);
+                int projectiles_fired = 0;
+                auto add_projectile = [&](const Enemy &target) {
+                    Projectile p;
+                    p.x = static_cast<float>(c.x);
+                    p.y = static_cast<float>(c.y);
+                    p.target = EnemyCell(target);
+                    p.speed = 17.0F;
+                    p.damage = t.damage;
+                    projectiles_.push_back(p);
+                    ++projectiles_fired;
+                };
+                if (t.upgraded) {
+                    std::vector<std::pair<float, size_t>> sorted;
+                    const float range2 = t.range * t.range;
+                    for (size_t j = 0; j < enemies_.size(); ++j) {
+                        if (enemies_[j].hp <= 0)
+                            continue;
+                        const auto pos = EnemyCell(enemies_[j]);
+                        if (DistanceSquared(c, pos) > range2)
+                            continue;
+                        sorted.push_back({enemies_[j].path_progress, j});
+                    }
+                    if (!sorted.empty()) {
+                        std::sort(
+                            sorted.begin(), sorted.end(),
+                            [](auto &a, auto &b) { return a.first > b.first; });
+                        size_t front_idx = sorted.front().second;
+                        size_t back_idx = sorted.back().second;
+                        size_t mid_idx = sorted[sorted.size() / 2].second;
+                        add_projectile(enemies_[front_idx]);
+                        if (mid_idx != front_idx)
+                            add_projectile(enemies_[mid_idx]);
+                        if (back_idx != front_idx && back_idx != mid_idx)
+                            add_projectile(enemies_[back_idx]);
+                    }
+                } else {
+                    auto &target = enemies_[*target_index];
+                    add_projectile(target);
+                }
+                AITrackDamage(Tower::Type::Default,
+                              t.damage * projectiles_fired);
+                Sfx("tower_default_shoot");
+                break;
+            }
+            case Tower::Type::Thunder: {
+                const auto targets = ThunderTargets(t);
+                if (targets.empty()) {
+                    continue;
+                }
+                for (size_t idx : targets) {
+                    FireLaser(t, enemies_[idx]);
+                }
+                Sfx("tower_thunder_shoot");
+                break;
+            }
+            case Tower::Type::Fat: {
+                FireShockwave(t);
+                Sfx("tower_fat_shoot");
+                break;
+            }
+            case Tower::Type::Catatonic: {
+                FireCatatonic(t);
+                Sfx("tower_catatonic_shoot");
+                break;
+            }
+            case Tower::Type::Galactic: {
+                FireGalactic(t, enemies_[*target_index]);
+                Sfx("tower_galactic_shoot");
+                break;
+            }
+            case Tower::Type::Catastrophe: {
+                FireCatastrophe(t, enemies_[*target_index]);
+                Sfx("tower_catastrophe_shoot");
+                break;
+            }
+            case Tower::Type::Kitty:
+                break; // handled separately
+            }
+            t.cooldown = NextCooldown(t.fire_rate);
+        }
+
+        HandleKittyAttacks();
+    }
+
+    void MoveProjectiles() {
+        for (auto &p : projectiles_) {
+            const float dx = static_cast<float>(p.target.x) - p.x;
+            const float dy = static_cast<float>(p.target.y) - p.y;
+            const float dist = std::sqrt(dx * dx + dy * dy);
+            const float step = p.speed * Dt();
+            if (dist <= step || dist < 1e-3F) {
+                p.x = static_cast<float>(p.target.x);
+                p.y = static_cast<float>(p.target.y);
+                continue;
+            }
+            const float norm = step / dist;
+            p.x += dx * norm;
+            p.y += dy * norm;
+        }
+    }
+
+    void ResolveProjectiles() {
+        std::vector<Projectile> survivors;
+        survivors.reserve(projectiles_.size());
+        for (auto &p : projectiles_) {
+            const float dx = static_cast<float>(p.target.x) - p.x;
+            const float dy = static_cast<float>(p.target.y) - p.y;
+            const float dist2 = dx * dx + dy * dy;
+            if (dist2 > 0.05F) { // not arrived yet
+                survivors.push_back(p);
+                continue;
+            }
+
+            // Find nearest enemy to impact point.
+            std::optional<size_t> hit_index;
+            float best_d2 = 1.0F;
+            for (size_t i = 0; i < enemies_.size(); ++i) {
+                const auto pos = EnemyCell(enemies_[i]);
+                const float ddx = static_cast<float>(pos.x) - p.x;
+                const float ddy = static_cast<float>(pos.y) - p.y;
+                const float d2 = ddx * ddx + ddy * ddy;
+                if (d2 < best_d2) {
+                    best_d2 = d2;
+                    hit_index = i;
+                }
+            }
+
+            if (hit_index.has_value()) {
+                auto &target = enemies_[*hit_index];
+                target.hp -= p.damage;
+                if (target.hp <= 0) {
+                    AwardBounty(target.type);
+                    PlayDeathSfx(target.type);
+                } else {
+                    hit_splats_.push_back({EnemyCell(target), 0.28F});
+                }
+            }
+        }
+        projectiles_ = std::move(survivors);
+    }
+
+    void Cleanup() {
+        enemies_.erase(std::remove_if(enemies_.begin(), enemies_.end(),
+                                      [](const Enemy &e) { return e.hp <= 0; }),
+                       enemies_.end());
+    }
+
+    EnemyType SelectEnemyType([[maybe_unused]] int diff) {
+        return EnemyTypeForRoll(map_index_, wave_, Rand(0.0F, 1.0F));
+    }
+
+    void ApplyEnemyStats(Enemy &e, const int diff) {
+        const float fDiff = static_cast<float>(diff);
+        e.max_hp = EnemyMaxHP(e.type, diff);
+        switch (e.type) {
+        case EnemyType::Mouse:
+            e.speed = (0.95F + fDiff * 0.05F) * kSpeedFactor;
+            break;
+        case EnemyType::Rat:
+            e.speed = (0.65F + fDiff * 0.065F) * kSpeedFactor;
+            break;
+        case EnemyType::BigRat:
+            e.speed = (0.55F + fDiff * 0.045F) * kSpeedFactor;
+            break;
+        case EnemyType::Dog:
+            e.speed = (0.9F + fDiff * 0.055F) * kSpeedFactor;
+            break;
+        }
+        e.hp = e.max_hp;
+    }
+
+    void UpdateHitSplats() {
+        for (auto &hs : hit_splats_) {
+            hs.time_left -= Dt();
+        }
+        hit_splats_.erase(std::remove_if(hit_splats_.begin(), hit_splats_.end(),
+                                         [](const HitSplat &hs) {
+                                             return hs.time_left <= 0.0F;
+                                         }),
+                          hit_splats_.end());
+    }
+
+    void CheckWaveCompletion() {
+        if (!wave_active_) {
+            return;
+        }
+        if (spawn_remaining_ > 0 || !enemies_.empty()) {
+            return;
+        }
+
+        wave_active_ = false;
+        ReturnKittiesHome();
+        kibbles_ += WaveCompletionBonus(wave_);
+
+        if (wave_ % kWavesPerMap == 0) {
+            const bool last_map =
+                map_index_ == static_cast<int>(maps_.size()) - 1;
+            if (last_map) {
+                victory_ = true;
+                auto_waves_ = false;
+                wave_active_ = false;
+                SetMusic(-1);
+                return;
+            }
+            AdvanceMap();
+            if (ai_mode_) {
+                ai_grace_decisions_ = kAIMapGraceDecisions;
+                return; // wave will auto-start after grace period expires
+            }
+        }
+
+        if (auto_waves_ && !game_over_) {
+            StartWave();
+        }
+    }
+
+    void AdvanceMap(bool dev_skip = false) {
+        map_index_ = (map_index_ + 1) % static_cast<int>(maps_.size());
+        wave_active_ = false;
+        spawn_remaining_ = 0;
+        enemies_.clear();
+        for (const auto &t : towers_) {
+            const auto def = GetDef(t.type);
+            kibbles_ += SellRefund(def.cost);
+        }
+        towers_.clear();
+        held_tower_.reset();
+        // Preserve kibbles across maps to let players invest between stages.
+        lives_ = kStartingLives;
+        auto_waves_ = ai_mode_;
+        if (ai_mode_)
+            ai_map_tower_counts_.fill(0);
+        BuildPath();
+        if (dev_skip) {
+            wave_ = map_index_ * kWavesPerMap;
+        }
+        SetMusic(map_index_);
+        Sfx("map_change");
+    }
+
+    void PlaceTower() {
+        if (!overlay_enabled_) {
+            return;
+        }
+        if (held_tower_.has_value()) {
+            TryPlaceHeld();
+            return;
+        }
+
+        const TowerDef def = GetDef(selected_type_);
+        if (!IsUnlocked(def.type)) {
+            return;
+        }
+        if (kibbles_ < def.cost) {
+            return;
+        }
+        if (def.type == Tower::Type::Catatonic &&
+            CatatonicConflict(cursor_, def.size, def.type, def.range, false)) {
+            ShowWarning("Can't place two sleeping cats within range of each "
+                        "other.\nThey might wake each other up!",
+                        4.0F);
+            return;
+        }
+        if (!CanPlace(cursor_, def.size, def.type, def.range, false)) {
+            return;
+        }
+
+        Tower t;
+        t.pos = cursor_;
+        t.damage = def.damage;
+        t.range = def.range;
+        t.fire_rate = def.fire_rate;
+        t.cooldown =
+            Rand(0.05F, t.fire_rate); // offset starts for async cadence
+        t.type = def.type;
+        t.size = def.size;
+        t.home = t.pos;
+        towers_.push_back(t);
+        kibbles_ -= def.cost;
+        Sfx("place");
+    }
+
+    Position EnemyCell(const Enemy &e) const {
+        const int idx =
+            static_cast<int>(std::clamp(std::floor(e.path_progress), 0.0F,
+                                        static_cast<float>(path_.size() - 1)));
+        const size_t i = static_cast<size_t>(idx);
+        Position base = path_[i];
+        int dx = 0;
+        int dy = 0;
+        if (i + 1 < path_.size()) {
+            dx = path_[i + 1].x - base.x;
+            dy = path_[i + 1].y - base.y;
+        } else if (i > 0) {
+            dx = base.x - path_[i - 1].x;
+            dy = base.y - path_[i - 1].y;
+        }
+        dx = (dx > 0) - (dx < 0);
+        dy = (dy > 0) - (dy < 0);
+        Position perp{-dy, dx};
+        base.x =
+            std::clamp(base.x + perp.x * e.lane_offset, 0, kBoardWidth - 1);
+        base.y =
+            std::clamp(base.y + perp.y * e.lane_offset, 0, kBoardHeight - 1);
+        return base;
+    }
+
+    ftxui::Color EnemyColor(const Enemy &e) const {
+        const float ratio = static_cast<float>(e.hp) /
+                            static_cast<float>(std::max(1, e.max_hp));
+        if (ratio > 0.75F) {
+            return ftxui::Color::RedLight;
+        }
+        if (ratio > 0.5F) {
+            return ftxui::Color::Orange1;
+        }
+        if (ratio > 0.25F) {
+            return ftxui::Color::Yellow1;
+        }
+        return ftxui::Color::GrayLight;
+    }
+
+    bool InRange(const Vec2 &center, const Position &cell, float range) const {
+        return DistanceSquared(center, cell) <= range * range;
+    }
+
+    float Rand(float min, float max) {
+        std::uniform_real_distribution<float> dist(min, max);
+        return dist(rng_);
+    }
+
+    int Bounty(const EnemyType type) const { return EnemyBounty(type); }
+
+    float TimeScale() const {
+        return fast_forward_ ? kFastForwardMultiplier : 1.0F;
+    }
+    float Dt() const { return kTickSeconds * TimeScale(); }
+
+    void ShowWarning(const std::string &msg, float duration = 3.0F) {
+        warning_text_ = msg;
+        warning_timer_ = duration;
+    }
+
+    float NextCooldown(float base_rate) {
+        const float scaled = base_rate / kSpeedFactor;
+        return std::max(0.06F, scaled + Rand(-0.14F, 0.14F));
+    }
+
+    int DifficultyLevel() const { return ::DifficultyLevel(wave_, map_index_); }
+
+    const MapDef &CurrentMap() const {
+        return maps_[static_cast<size_t>(map_index_)];
+    }
+
+    void Sfx(const std::string &name) {
+#ifdef ENABLE_AUDIO
+        if (audio_)
+            audio_->PlayEvent(name);
+#endif
+    }
+
+    void AwardBounty(EnemyType type) {
+        kibbles_ += Bounty(type);
+        if (ai_mode_)
+            ++ai_enemies_killed_;
+    }
+
+    void PlayDeathSfx(EnemyType type) {
+        switch (type) {
+        case EnemyType::Mouse:
+            Sfx("mouse_die");
+            break;
+        case EnemyType::Rat:
+            Sfx("rat_die");
+            break;
+        case EnemyType::BigRat:
+            Sfx("bigrat_die");
+            break;
+        case EnemyType::Dog:
+            Sfx("dog_die");
+            break;
+        }
+    }
+
+    void SetMusic(int map_idx) {
+#ifdef ENABLE_AUDIO
+        if (audio_)
+            audio_->SetMusicForMap(map_idx);
+#endif
+    }
+
+    Vec2 TowerCenterAt(const Position &p, int size) const {
+        const float cx =
+            static_cast<float>(p.x) + (static_cast<float>(size) - 1.0F) / 2.0F;
+        const float cy =
+            static_cast<float>(p.y) + (static_cast<float>(size) - 1.0F) / 2.0F;
+        return {cx, cy};
+    }
+
+    Vec2 TowerCenter(const Tower &t) const {
+        return TowerCenterAt(t.pos, t.size);
+    }
+
+    std::string PadRight(const std::string &s, size_t w) const {
+        if (s.size() >= w)
+            return s;
+        return s + std::string(w - s.size(), ' ');
+    }
+
+    // Key number (1-based) for a tower type, derived from its cost-sorted
+    // position.
+    int TypeKey(Tower::Type t) const {
+        const auto defs = SortedDefs();
+        for (size_t i = 0; i < defs.size(); ++i) {
+            if (defs[i].type == t)
+                return static_cast<int>(i + 1);
+        }
+        return 0;
+    }
+
+    // All tower definitions sorted by cost (then name). This is the canonical
+    // display and key-binding order — do not hardcode it elsewhere.
+    std::vector<TowerDef> SortedDefs() const {
+        std::vector<TowerDef> defs;
+        defs.reserve(kAllTowerTypes.size());
+        for (auto t : kAllTowerTypes)
+            defs.push_back(GetDef(t));
+        std::sort(defs.begin(), defs.end(),
+                  [](const TowerDef &a, const TowerDef &b) {
+                      if (a.cost == b.cost)
+                          return a.name < b.name;
+                      return a.cost < b.cost;
+                  });
+        return defs;
+    }
+
+    bool IsUnlocked(Tower::Type type) const {
+        return unlocked_types_.count(type) > 0;
+    }
+
+    void Unlock(Tower::Type type) { unlocked_types_.insert(type); }
+
+    void TryUnlockOrSelect(Tower::Type type) {
+        if (IsUnlocked(type)) {
+            selected_type_ = type;
+            return;
+        }
+        const auto def = GetDef(type);
+        const int unlock_cost = def.cost * kUnlockCostMultiplier;
+        if (kibbles_ >= unlock_cost) {
+            kibbles_ -= unlock_cost;
+            Unlock(type);
+            selected_type_ = type;
+            Sfx("unlock");
+        }
+    }
+
+    bool OverlapsTower(const Position &p, int size) const {
+        for (const auto &t : towers_) {
+            const int tx1 = t.pos.x;
+            const int ty1 = t.pos.y;
+            const int tx2 = tx1 + t.size - 1;
+            const int ty2 = ty1 + t.size - 1;
+            const int px2 = p.x + size - 1;
+            const int py2 = p.y + size - 1;
+            const bool overlap =
+                !(p.x > tx2 || px2 < tx1 || p.y > ty2 || py2 < ty1);
+            if (overlap) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool OccupiesPath(const Position &p, int size) const {
+        for (int dy = 0; dy < size; ++dy) {
+            for (int dx = 0; dx < size; ++dx) {
+                const int cx = p.x + dx;
+                const int cy = p.y + dy;
+                if (cx < 0 || cy < 0 || cx >= kBoardWidth ||
+                    cy >= kBoardHeight) {
+                    return true;
+                }
+                if (path_mask_[static_cast<size_t>(cy)]
+                              [static_cast<size_t>(cx)]) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    bool CatatonicConflict(const Position &p, int size, Tower::Type type,
+                           float range, bool upgraded) const {
+        if (type != Tower::Type::Catatonic) {
+            return false;
+        }
+        const float candidate_range = range + (upgraded ? 0.8F : 0.0F);
+        const Vec2 center = {
+            static_cast<float>(p.x) + (static_cast<float>(size) - 1.0F) / 2.0F,
+            static_cast<float>(p.y) + (static_cast<float>(size) - 1.0F) / 2.0F};
+        for (const auto &t : towers_) {
+            if (t.type != Tower::Type::Catatonic) {
+                continue;
+            }
+            const Vec2 other = TowerCenter(t);
+            const float dx = center.x - other.x;
+            const float dy = center.y - other.y;
+            const float dist2 = dx * dx + dy * dy;
+            const float max_r =
+                candidate_range + t.range + (t.upgraded ? 0.8F : 0.0F);
+            if (dist2 <= max_r * max_r) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool CanPlace(const Position &p, int size, Tower::Type type, float range,
+                  bool upgraded) const {
+        if (p.x < 0 || p.y < 0 || p.x + size - 1 >= kBoardWidth ||
+            p.y + size - 1 >= kBoardHeight) {
+            return false;
+        }
+        if (OccupiesPath(p, size)) {
+            return false;
+        }
+        if (OverlapsTower(p, size)) {
+            return false;
+        }
+        if (CatatonicConflict(p, size, type, range, upgraded)) {
+            return false;
+        }
+        return true;
+    }
+
+    std::optional<size_t> TowerIndexAt(const Position &p) const {
+        for (size_t i = 0; i < towers_.size(); ++i) {
+            const auto &t = towers_[i];
+            const int tx2 = t.pos.x + t.size - 1;
+            const int ty2 = t.pos.y + t.size - 1;
+            if (p.x >= t.pos.x && p.x <= tx2 && p.y >= t.pos.y && p.y <= ty2) {
+                return i;
+            }
+        }
+        return std::nullopt;
+    }
+
+    void PickUpTower() {
+        if (held_tower_.has_value()) {
+            return;
+        }
+        const auto idx = TowerIndexAt(cursor_);
+        if (!idx.has_value()) {
+            return;
+        }
+        HeldTower hold;
+        hold.tower = towers_[*idx];
+        hold.original = towers_[*idx].pos;
+        held_tower_ = hold;
+        towers_.erase(towers_.begin() + static_cast<long>(*idx));
+        overlay_enabled_ = true;
+    }
+
+    void TryPlaceHeld() {
+        if (!held_tower_.has_value()) {
+            return;
+        }
+        auto t = held_tower_->tower;
+        if (t.type == Tower::Type::Catatonic &&
+            CatatonicConflict(cursor_, t.size, t.type, t.range, t.upgraded)) {
+            ShowWarning("Can't place two sleeping cats within range of each "
+                        "other.\nThey might wake each other up!",
+                        4.0F);
+            return;
+        }
+        if (!CanPlace(cursor_, t.size, t.type, t.range, t.upgraded)) {
+            return;
+        }
+        t.pos = cursor_;
+        t.home = t.pos;
+        t.cooldown = Rand(0.05F, t.fire_rate);
+        towers_.push_back(t);
+        held_tower_.reset();
+        overlay_enabled_ = false;
+    }
+
+    void CancelHold() {
+        if (!held_tower_.has_value()) {
+            return;
+        }
+        auto t = held_tower_->tower;
+        t.pos = held_tower_->original;
+        towers_.push_back(t);
+        held_tower_.reset();
+        overlay_enabled_ = false;
+    }
+
+    void SellTowerAtCursor() {
+        if (held_tower_.has_value()) {
+            return;
+        }
+        const auto idx = TowerIndexAt(cursor_);
+        if (!idx.has_value()) {
+            return;
+        }
+        const Tower &t = towers_[*idx];
+        const auto def = GetDef(t.type);
+        const int refund = SellRefund(def.cost);
+        kibbles_ += refund;
+        towers_.erase(towers_.begin() + static_cast<long>(*idx));
+        Sfx("sell");
+    }
+
+    void UpgradeTowerAtCursor() {
+        if (held_tower_.has_value()) {
+            return;
+        }
+        const auto idx = TowerIndexAt(cursor_);
+        if (!idx.has_value()) {
+            return;
+        }
+        Tower &t = towers_[*idx];
+        if (t.upgraded) {
+            return;
+        }
+        const auto def = GetDef(t.type);
+        const int cost = def.cost * kUpgradeCostMultiplier;
+        if (kibbles_ < cost) {
+            return;
+        }
+        kibbles_ -= cost;
+        t.upgraded = true;
+        if (t.type == Tower::Type::Fat) {
+            t.range += 1.0F;
+        } else if (t.type == Tower::Type::Default) {
+            t.range += 2.0F;
+        }
+        Sfx("unlock");
+    }
+
+    void FireLaser(const Tower &t, Enemy &target) {
+        const auto center = TowerCenter(t);
+        const auto target_cell = EnemyCell(target);
+        const float dx = static_cast<float>(target_cell.x) - center.x;
+        const float dy = static_cast<float>(target_cell.y) - center.y;
+        const float len = std::max(0.001F, std::sqrt(dx * dx + dy * dy));
+        const float ndx = dx / len;
+        const float ndy = dy / len;
+
+        // Apply damage to enemies near the line in front of the cat.
+        for (auto &e : enemies_) {
+            const auto pos = EnemyCell(e);
+            const float vx = static_cast<float>(pos.x) - center.x;
+            const float vy = static_cast<float>(pos.y) - center.y;
+            const float dot = vx * ndx + vy * ndy;
+            if (dot < -0.2F) {
+                continue;
+            }
+            const float cross = std::abs(vx * ndy - vy * ndx);
+            if (cross <= 0.35F) {
+                e.hp -= t.damage;
+                AITrackDamage(t.type, t.damage);
+                if (e.hp <= 0) {
+                    AwardBounty(e.type);
+                    PlayDeathSfx(e.type);
+                } else {
+                    hit_splats_.push_back({EnemyCell(e), 0.18F});
+                }
+            }
+        }
+
+        // Build beam cells for rendering until board edge.
+        Beam b;
+        float bx = static_cast<float>(center.x);
+        float by = static_cast<float>(center.y);
+        for (int i = 0; i < 120; ++i) { // generous to cross the board
+            const int cx = static_cast<int>(std::round(bx));
+            const int cy = static_cast<int>(std::round(by));
+            if (cx < 0 || cy < 0 || cx >= kBoardWidth || cy >= kBoardHeight) {
+                break;
+            }
+            b.cells.push_back({cx, cy});
+            bx += ndx * 0.5F;
+            by += ndy * 0.5F;
+        }
+        beams_.push_back(std::move(b));
+    }
+
+    std::vector<size_t> ThunderTargets(const Tower &t) const {
+        std::vector<std::pair<float, size_t>> sorted;
+        for (size_t i = 0; i < enemies_.size(); ++i) {
+            if (enemies_[i].hp <= 0) {
+                continue;
+            }
+            sorted.push_back({enemies_[i].path_progress, i});
+        }
+        if (sorted.empty()) {
+            return {};
+        }
+        std::sort(sorted.begin(), sorted.end(),
+                  [](auto &a, auto &b) { return a.first > b.first; });
+        std::vector<size_t> picks;
+        auto add_unique = [&](size_t idx) {
+            if (std::find(picks.begin(), picks.end(), idx) == picks.end()) {
+                picks.push_back(idx);
+            }
+        };
+        add_unique(sorted.front().second);
+        if (!t.upgraded) {
+            return picks;
+        }
+        add_unique(sorted[sorted.size() / 2].second);
+        add_unique(sorted.back().second);
+        return picks;
+    }
+
+    void FireShockwave(const Tower &t) {
+        Shockwave sw;
+        sw.center = TowerCenter(t);
+        sw.radius = 0.0F;
+        sw.max_radius = t.range;
+        sw.speed = 10.0F;
+        sw.time_left = 0.45F;
+        shockwaves_.push_back(sw);
+
+        for (auto &e : enemies_) {
+            const auto pos = EnemyCell(e);
+            if (InRange(sw.center, pos, t.range)) {
+                e.hp -= t.damage;
+                AITrackDamage(t.type, t.damage);
+                if (e.hp <= 0) {
+                    AwardBounty(e.type);
+                    PlayDeathSfx(e.type);
+                } else {
+                    hit_splats_.push_back({pos, 0.22F});
+                }
+            }
+        }
+    }
+
+    void FireKitty(const Tower &t, Enemy &target) {
+        const auto center = TowerCenter(t);
+        const auto target_cell = EnemyCell(target);
+        const auto area_cells = KittyAttackArea(center, target_cell);
+
+        for (auto &e : enemies_) {
+            const auto pos = EnemyCell(e);
+            const bool hit = std::any_of(
+                area_cells.begin(), area_cells.end(), [&](const Position &c) {
+                    return c.x == pos.x && c.y == pos.y;
+                });
+            if (!hit) {
+                continue;
+            }
+            e.hp -= t.damage;
+            AITrackDamage(t.type, t.damage);
+            if (e.hp <= 0) {
+                AwardBounty(e.type);
+                PlayDeathSfx(e.type);
+            } else {
+                hit_splats_.push_back({pos, 0.18F});
+            }
+        }
+
+        if (!area_cells.empty()) {
+            area_highlights_.push_back({area_cells, 0.22F});
+        }
+    }
+
+    void FireCatatonic(const Tower &t) {
+        const float radius = t.upgraded ? t.range + 0.8F : t.range;
+        const float sleep_dur = std::clamp(
+            t.upgraded ? kCatSleepUpgrade : kCatSleepBase, 0.0F, kCatSleepCap);
+        std::vector<Position> cells;
+        for (auto &e : enemies_) {
+            const auto pos = EnemyCell(e);
+            if (InRange(TowerCenter(t), pos, radius)) {
+                e.sleep_timer =
+                    std::min(kCatSleepCap, std::max(e.sleep_timer, sleep_dur));
+                cells.push_back(pos);
+            }
+        }
+        if (!cells.empty()) {
+            area_highlights_.push_back(
+                {cells, 0.6F, ftxui::Color::Purple, '~'});
+        }
+    }
+
+    void FireGalactic(const Tower &t, Enemy &target) {
+        const auto center = TowerCenter(t);
+        const auto target_cell = EnemyCell(target);
+        const float dx = static_cast<float>(target_cell.x) - center.x;
+        const float dy = static_cast<float>(target_cell.y) - center.y;
+        const float len = std::max(0.001F, std::sqrt(dx * dx + dy * dy));
+        const float ndx = dx / len;
+        const float ndy = dy / len;
+        const float range = t.range;
+        const float cone_cos = std::cos(0.6F); // ~60 deg cone
+
+        std::vector<Position> cells;
+        for (int y = 0; y < kBoardHeight; ++y) {
+            for (int x = 0; x < kBoardWidth; ++x) {
+                const float vx = static_cast<float>(x) - center.x;
+                const float vy = static_cast<float>(y) - center.y;
+                const float dist2 = vx * vx + vy * vy;
+                if (dist2 > range * range)
+                    continue;
+                const float dist = std::sqrt(dist2);
+                if (dist < 0.1F)
+                    continue;
+                const float dot = (vx / dist) * ndx + (vy / dist) * ndy;
+                if (dot >= cone_cos) {
+                    cells.push_back({x, y});
+                }
+            }
+        }
+
+        const float reset_chance =
+            t.upgraded ? kGalacticResetChance * 3.0F : kGalacticResetChance;
+        bool any_rewind = false;
+        for (auto &e : enemies_) {
+            const auto pos = EnemyCell(e);
+            const bool hit =
+                std::any_of(cells.begin(), cells.end(), [&](const Position &c) {
+                    return c.x == pos.x && c.y == pos.y;
+                });
+            if (!hit)
+                continue;
+            if (Rand(0.0F, 1.0F) < reset_chance) {
+                e.rewind_speed = kGalacticRewindSpeed;
+                any_rewind = true;
+            }
+            e.hp -= t.damage;
+            AITrackDamage(t.type, t.damage);
+            if (e.hp <= 0) {
+                AwardBounty(e.type);
+                PlayDeathSfx(e.type);
+            } else {
+                hit_splats_.push_back({pos, 0.2F});
+            }
+        }
+
+        if (!cells.empty()) {
+            area_highlights_.push_back({cells, any_rewind ? 0.35F : 0.3F,
+                                        any_rewind
+                                            ? ftxui::Color::DarkViolet
+                                            : ftxui::Color::LightSteelBlue,
+                                        any_rewind ? '~' : '*'});
+        }
+    }
+
+    // --- Catastrophe ---
+
+    void FireCatastrophe(Tower &t, const Enemy &target) {
+        const auto center = TowerCenter(t);
+        const auto target_cell = EnemyCell(target);
+
+        ArcProjectile ap;
+        ap.start = center;
+        ap.ground = center;
+        ap.target = target_cell;
+        ap.total_time = kCatastropheTravelTime;
+        ap.arc_height = kCatastropheArcHeight;
+        ap.damage = t.damage;
+        ap.splash_radius = kCatastropheSplashRadius;
+        ap.upgraded = t.upgraded;
+        arc_projectiles_.push_back(ap);
+    }
+
+    // Phase 1 — called when the arc projectile lands: apply damage, play the
+    // bright explosion animation, and queue the crater to form after a delay.
+    void ExplodeCatastrophe(const ArcProjectile &ap) {
+        const int cx = ap.target.x;
+        const int cy = ap.target.y;
+        constexpr int kCraterRadius = 2;
+
+        for (auto &e : enemies_) {
+            const auto pos = EnemyCell(e);
+            if (std::max(std::abs(pos.x - cx), std::abs(pos.y - cy)) >
+                kCraterRadius)
+                continue;
+            e.hp -= ap.damage;
+            AITrackDamage(Tower::Type::Catastrophe, ap.damage);
+            if (e.hp <= 0) {
+                AwardBounty(e.type);
+                PlayDeathSfx(e.type);
+            } else {
+                hit_splats_.push_back({pos, 0.25F});
+            }
+        }
+
+        std::vector<Position> ring0, ring1, ring2;
+        for (int y = cy - kCraterRadius; y <= cy + kCraterRadius; ++y) {
+            for (int x = cx - kCraterRadius; x <= cx + kCraterRadius; ++x) {
+                if (x < 0 || x >= kBoardWidth || y < 0 || y >= kBoardHeight)
+                    continue;
+                const int ring = std::max(std::abs(x - cx), std::abs(y - cy));
+                if (ring == 0)
+                    ring0.push_back({x, y});
+                else if (ring == 1)
+                    ring1.push_back({x, y});
+                else
+                    ring2.push_back({x, y});
+            }
+        }
+
+        // Expanding shockwave from impact point.
+        Shockwave sw;
+        sw.center = {static_cast<float>(cx), static_cast<float>(cy)};
+        sw.radius = 0.0F;
+        sw.max_radius = static_cast<float>(kCraterRadius) + 0.8F;
+        sw.speed = 7.0F;
+        sw.time_left = 0.45F;
+        sw.max_time = 0.45F;
+        shockwaves_.push_back(sw);
+
+        // Bright explosion flash: white core → yellow mid-ring → orange outer.
+        if (!ring0.empty())
+            area_highlights_.push_back(
+                {ring0, 0.45F, ftxui::Color::White, '*'});
+        if (!ring1.empty())
+            area_highlights_.push_back(
+                {ring1, 0.38F, ftxui::Color::Yellow1, '*'});
+        if (!ring2.empty())
+            area_highlights_.push_back(
+                {ring2, 0.30F, ftxui::Color::Orange1, '*'});
+
+        Sfx("tower_catastrophe_detonation");
+
+        pending_catastrophes_.push_back({ap.target, ap.upgraded});
+    }
+
+    // Phase 2 — called after the explosion settles: show the crater gradient
+    // and create the lingering toxic zone.
+    void FormCrater(const PendingCatastrophe &pc) {
+        const int cx = pc.target.x;
+        const int cy = pc.target.y;
+        constexpr int kCraterRadius = 2;
+
+        std::vector<Position> ring0, ring1, ring2, splash_cells;
+        for (int y = cy - kCraterRadius; y <= cy + kCraterRadius; ++y) {
+            for (int x = cx - kCraterRadius; x <= cx + kCraterRadius; ++x) {
+                if (x < 0 || x >= kBoardWidth || y < 0 || y >= kBoardHeight)
+                    continue;
+                const int ring = std::max(std::abs(x - cx), std::abs(y - cy));
+                splash_cells.push_back({x, y});
+                if (ring == 0)
+                    ring0.push_back({x, y});
+                else if (ring == 1)
+                    ring1.push_back({x, y});
+                else
+                    ring2.push_back({x, y});
+            }
+        }
+
+        if (!ring0.empty())
+            area_highlights_.push_back({ring0, 0.4F, ftxui::Color::White, '!'});
+        if (!ring1.empty())
+            area_highlights_.push_back(
+                {ring1, 0.4F, ftxui::Color::OrangeRed1, ':'});
+        if (!ring2.empty())
+            area_highlights_.push_back(
+                {ring2, 0.4F, ftxui::Color::DarkKhaki, '.'});
+
+        ToxicZone zone;
+        zone.cells = splash_cells;
+        zone.center = {static_cast<float>(cx), static_cast<float>(cy)};
+        zone.explode_on_expire = pc.upgraded;
+        toxic_zones_.push_back(std::move(zone));
+    }
+
+    void UpdatePendingCatastrophes() {
+        std::vector<PendingCatastrophe> survivors;
+        for (auto &pc : pending_catastrophes_) {
+            pc.timer -= Dt();
+            if (pc.timer <= 0.0F) {
+                FormCrater(pc);
+            } else {
+                survivors.push_back(pc);
+            }
+        }
+        pending_catastrophes_ = std::move(survivors);
+    }
+
+    void UpdateArcProjectiles() {
+        std::vector<ArcProjectile> survivors;
+        for (auto &ap : arc_projectiles_) {
+            ap.progress += Dt() / ap.total_time;
+            const float t = std::min(ap.progress, 1.0F);
+            ap.ground.x =
+                ap.start.x + t * (static_cast<float>(ap.target.x) - ap.start.x);
+            ap.ground.y =
+                ap.start.y + t * (static_cast<float>(ap.target.y) - ap.start.y);
+            if (ap.progress >= 1.0F) {
+                ExplodeCatastrophe(ap);
+            } else {
+                survivors.push_back(ap);
+            }
+        }
+        arc_projectiles_ = std::move(survivors);
+    }
+
+    void UpdateToxicZones() {
+        std::vector<ToxicZone> survivors;
+        for (auto &zone : toxic_zones_) {
+            zone.time_left -= Dt();
+            zone.tick_timer -= Dt();
+
+            if (zone.tick_timer <= 0.0F) {
+                zone.tick_timer += zone.tick_interval;
+                for (auto &e : enemies_) {
+                    const auto pos = EnemyCell(e);
+                    const bool in_zone =
+                        std::any_of(zone.cells.begin(), zone.cells.end(),
+                                    [&](const Position &c) {
+                                        return c.x == pos.x && c.y == pos.y;
+                                    });
+                    if (!in_zone)
+                        continue;
+                    e.hp -= zone.damage_per_tick;
+                    AITrackDamage(Tower::Type::Catastrophe,
+                                  zone.damage_per_tick);
+                    if (e.hp <= 0) {
+                        AwardBounty(e.type);
+                        PlayDeathSfx(e.type);
+                    } else {
+                        hit_splats_.push_back({pos, 0.15F, 0});
+                    }
+                }
+            }
+
+            if (zone.time_left <= 0.0F) {
+                if (zone.explode_on_expire) {
+                    Sfx("tower_catastrophe_explosion");
+                    Shockwave sw;
+                    sw.center = zone.center;
+                    sw.max_radius = kCatastropheExplosionRadius;
+                    sw.speed = 10.0F;
+                    sw.time_left = 0.4F;
+                    sw.max_time = 0.4F;
+                    shockwaves_.push_back(sw);
+                    for (auto &e : enemies_) {
+                        if (!InRange(zone.center, EnemyCell(e),
+                                     kCatastropheExplosionRadius))
+                            continue;
+                        e.hp -= kCatastropheExplosionDamage;
+                        AITrackDamage(Tower::Type::Catastrophe,
+                                      kCatastropheExplosionDamage);
+                        if (e.hp <= 0) {
+                            AwardBounty(e.type);
+                            PlayDeathSfx(e.type);
+                        }
+                    }
+                }
+            } else {
+                survivors.push_back(std::move(zone));
+            }
+        }
+        toxic_zones_ = std::move(survivors);
+    }
+
+    void UpdateShockwaves() {
+        for (auto &sw : shockwaves_) {
+            sw.radius += sw.speed * Dt();
+            sw.time_left -= Dt();
+        }
+        shockwaves_.erase(std::remove_if(shockwaves_.begin(), shockwaves_.end(),
+                                         [](const Shockwave &sw) {
+                                             return sw.time_left <= 0.0F ||
+                                                    sw.radius > sw.max_radius;
+                                         }),
+                          shockwaves_.end());
+    }
+
+    void UpdateBeams() {
+        for (auto &b : beams_) {
+            b.time_left -= Dt();
+        }
+        beams_.erase(
+            std::remove_if(beams_.begin(), beams_.end(),
+                           [](const Beam &b) { return b.time_left <= 0.0F; }),
+            beams_.end());
+    }
+
+    void UpdateAreas() {
+        for (auto &a : area_highlights_) {
+            a.time_left -= Dt();
+        }
+        area_highlights_.erase(std::remove_if(area_highlights_.begin(),
+                                              area_highlights_.end(),
+                                              [](const AreaHighlight &a) {
+                                                  return a.time_left <= 0.0F;
+                                              }),
+                               area_highlights_.end());
+    }
+
+    void BuildMaps() {
+        maps_.clear();
+        maps_.push_back(MapDef{{{0, kBoardHeight / 2},
+                                {12, kBoardHeight / 2},
+                                {12, 4},
+                                {30, 4},
+                                {30, kBoardHeight - 5},
+                                {kBoardWidth - 1, kBoardHeight - 5}},
+                               1,
+                               ftxui::Color::DarkGreen,
+                               ftxui::Color::DarkGoldenrod});
+        maps_.push_back(MapDef{{{0, 3},
+                                {10, 3},
+                                {10, 12},
+                                {25, 12},
+                                {25, kBoardHeight - 6},
+                                {kBoardWidth - 1, kBoardHeight - 6}},
+                               2,
+                               ftxui::Color::DarkSlateGray3,
+                               ftxui::Color::DarkTurquoise});
+        maps_.push_back(MapDef{{{0, kBoardHeight - 4},
+                                {15, kBoardHeight - 4},
+                                {15, 6},
+                                {32, 6},
+                                {32, kBoardHeight / 2},
+                                {kBoardWidth - 1, kBoardHeight / 2}},
+                               1,
+                               ftxui::Color::DarkOliveGreen3,
+                               ftxui::Color::Gold3});
+        maps_.push_back(MapDef{{{0, kBoardHeight / 2},
+                                {8, kBoardHeight / 2},
+                                {8, 6},
+                                {20, 6},
+                                {20, kBoardHeight - 8},
+                                {35, kBoardHeight - 8},
+                                {35, 5},
+                                {kBoardWidth - 1, 5}},
+                               3,
+                               ftxui::Color::DarkBlue,
+                               ftxui::Color::CornflowerBlue});
+        maps_.push_back(MapDef{{{0, 8},
+                                {14, 8},
+                                {14, kBoardHeight - 6},
+                                {28, kBoardHeight - 6},
+                                {28, 6},
+                                {kBoardWidth - 1, 6}},
+                               2,
+                               ftxui::Color::DarkKhaki,
+                               ftxui::Color::DarkOrange});
+        maps_.push_back(MapDef{{{0, kBoardHeight / 2},
+                                {10, kBoardHeight / 2},
+                                {10, 3},
+                                {20, 3},
+                                {20, kBoardHeight - 4},
+                                {40, kBoardHeight - 4},
+                                {40, 8},
+                                {kBoardWidth - 1, 8}},
+                               2,
+                               ftxui::Color::DarkSlateGray1,
+                               ftxui::Color::LightSkyBlue1});
+        maps_.push_back(MapDef{{{0, kBoardHeight - 5},
+                                {18, kBoardHeight - 5},
+                                {18, 5},
+                                {kBoardWidth - 2, 5},
+                                {kBoardWidth - 2, kBoardHeight / 2}},
+                               1,
+                               ftxui::Color::DarkOliveGreen3,
+                               ftxui::Color::GreenYellow});
+        maps_.push_back(MapDef{{{0, 4},
+                                {8, 4},
+                                {8, kBoardHeight - 4},
+                                {24, kBoardHeight - 4},
+                                {24, 4},
+                                {kBoardWidth - 1, 4}},
+                               2,
+                               ftxui::Color::DarkMagenta,
+                               ftxui::Color::DeepPink3});
+        maps_.push_back(MapDef{{{0, kBoardHeight / 2},
+                                {12, kBoardHeight / 2},
+                                {12, 6},
+                                {22, 6},
+                                {22, kBoardHeight - 7},
+                                {34, kBoardHeight - 7},
+                                {34, 5},
+                                {kBoardWidth - 1, 5}},
+                               2,
+                               ftxui::Color::DarkSeaGreen3,
+                               ftxui::Color::Chartreuse1});
+        maps_.push_back(MapDef{{{0, 2},
+                                {16, 2},
+                                {16, kBoardHeight - 3},
+                                {30, kBoardHeight - 3},
+                                {30, 7},
+                                {kBoardWidth - 1, 7}},
+                               3,
+                               ftxui::Color::DarkRed,
+                               ftxui::Color::OrangeRed1});
+    }
+
+    static ftxui::Color TowerBgColor(Tower::Type t) {
+        switch (t) {
+        case Tower::Type::Thunder:
+            return ftxui::Color::Blue1;
+        case Tower::Type::Fat:
+            return ftxui::Color::DarkOliveGreen3;
+        case Tower::Type::Kitty:
+            return ftxui::Color::Pink1;
+        case Tower::Type::Catatonic:
+            return ftxui::Color::Purple;
+        case Tower::Type::Galactic:
+            return ftxui::Color::LightSteelBlue;
+        case Tower::Type::Catastrophe:
+            return ftxui::Color::DarkKhaki;
+        default:
+            return ftxui::Color::Gold1;
+        }
+    }
+
+    static char TowerBaseGlyph(Tower::Type t) {
+        switch (t) {
+        case Tower::Type::Thunder:
+            return 't';
+        case Tower::Type::Fat:
+            return 'f';
+        case Tower::Type::Kitty:
+            return 'k';
+        case Tower::Type::Catatonic:
+            return 'c';
+        case Tower::Type::Galactic:
+            return 'g';
+        case Tower::Type::Catastrophe:
+            return 'z';
+        default:
+            return 'd';
+        }
+    }
+
+    static char TowerGlyph(Tower::Type t, bool upgraded) {
+        const char base = TowerBaseGlyph(t);
+        return upgraded ? static_cast<char>(
+                              std::toupper(static_cast<unsigned char>(base)))
+                        : base;
+    }
+
+    ftxui::Element RenderBoard() const {
+        std::vector<std::vector<char>> glyphs(
+            kBoardHeight, std::vector<char>(kBoardWidth, ' '));
+        const auto &map = CurrentMap();
+        std::vector<std::vector<ftxui::Color>> backgrounds(
+            kBoardHeight,
+            std::vector<ftxui::Color>(kBoardWidth, map.background));
+        std::vector<std::vector<ftxui::Color>> foregrounds(
+            kBoardHeight,
+            std::vector<ftxui::Color>(kBoardWidth, ftxui::Color::White));
+        std::vector<std::vector<bool>> highlight(
+            kBoardHeight, std::vector<bool>(kBoardWidth, false));
+        std::vector<std::vector<bool>> enemy_mask(
+            kBoardHeight, std::vector<bool>(kBoardWidth, false));
+
+        const bool show_overlay = overlay_enabled_ || held_tower_.has_value();
+        std::vector<std::vector<bool>> range_hint_base(
+            kBoardHeight, std::vector<bool>(kBoardWidth, false));
+        std::vector<std::vector<bool>> range_hint_preview(
+            kBoardHeight, std::vector<bool>(kBoardWidth, false));
+        auto display_range = [&](const Tower &t) {
+            if (t.type == Tower::Type::Kitty && t.upgraded) {
+                return t.range + kKittyJumpBonusRange;
+            }
+            return t.range;
+        };
+        if (show_overlay) {
+            for (const auto &t : towers_) {
+                const auto def = GetDef(t.type);
+                if (!def.show_range) {
+                    continue;
+                }
+                const auto center = TowerCenter(t);
+                if (t.type == Tower::Type::Kitty && !t.upgraded) {
+                    const auto cells = KittyOverlayCells(center);
+                    for (const auto &cell : cells) {
+                        if (cell.x < 0 || cell.y < 0 || cell.x >= kBoardWidth ||
+                            cell.y >= kBoardHeight) {
+                            continue;
+                        }
+                        range_hint_base[static_cast<size_t>(cell.y)]
+                                       [static_cast<size_t>(cell.x)] = true;
+                    }
+                    continue;
+                }
+                for (int y = 0; y < kBoardHeight; ++y) {
+                    for (int x = 0; x < kBoardWidth; ++x) {
+                        Position cell{x, y};
+                        if (InRange(center, cell, display_range(t))) {
+                            range_hint_base[static_cast<size_t>(y)]
+                                           [static_cast<size_t>(x)] = true;
+                        }
+                    }
+                }
+            }
+            const TowerDef preview_def = GetDef(selected_type_);
+            if (preview_def.show_range) {
+                const Vec2 center{
+                    static_cast<float>(cursor_.x) +
+                        (static_cast<float>(preview_def.size) - 1.0F) / 2.0F,
+                    static_cast<float>(cursor_.y) +
+                        (static_cast<float>(preview_def.size) - 1.0F) / 2.0F};
+                if (preview_def.type == Tower::Type::Kitty) {
+                    const auto cells = KittyOverlayCells(center);
+                    for (const auto &cell : cells) {
+                        if (cell.x < 0 || cell.y < 0 || cell.x >= kBoardWidth ||
+                            cell.y >= kBoardHeight) {
+                            continue;
+                        }
+                        range_hint_preview[static_cast<size_t>(cell.y)]
+                                          [static_cast<size_t>(cell.x)] = true;
+                    }
+                } else {
+                    for (int y = 0; y < kBoardHeight; ++y) {
+                        for (int x = 0; x < kBoardWidth; ++x) {
+                            Position cell{x, y};
+                            if (InRange(center, cell, preview_def.range)) {
+                                range_hint_preview[static_cast<size_t>(y)]
+                                                  [static_cast<size_t>(x)] =
+                                                      true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        for (int y = 0; y < kBoardHeight; ++y) {
             const auto yi = static_cast<size_t>(y);
-            const auto xi = static_cast<size_t>(x);
-            glyphs[yi][xi] = 'o';
-            foregrounds[yi][xi] = ftxui::Color::YellowLight;
-          }
+            for (int x = 0; x < kBoardWidth; ++x) {
+                const auto xi = static_cast<size_t>(x);
+                if (path_mask_[yi][xi]) {
+                    backgrounds[yi][xi] = map.path_color;
+                    glyphs[yi][xi] = '.';
+                    foregrounds[yi][xi] = ftxui::Color::Black;
+                }
+            }
         }
-      }
-    }
 
-    for (const auto &hs : hit_splats_) {
-      for (int dy = -hs.radius; dy <= hs.radius; ++dy) {
-        for (int dx = -hs.radius; dx <= hs.radius; ++dx) {
-          if (std::abs(dx) + std::abs(dy) > hs.radius)
-            continue; // diamond shape
-          const int cx = hs.pos.x + dx;
-          const int cy = hs.pos.y + dy;
-          if (cy < 0 || cy >= kBoardHeight || cx < 0 || cx >= kBoardWidth)
-            continue;
-          const auto yi = static_cast<size_t>(cy);
-          const auto xi = static_cast<size_t>(cx);
-          glyphs[yi][xi] = 'x';
-          backgrounds[yi][xi] = ftxui::Color::White;
-          foregrounds[yi][xi] = ftxui::Color::Red3;
+        for (const auto &t : towers_) {
+            const char glyph = TowerGlyph(t.type, t.upgraded);
+            const ftxui::Color bg = TowerBgColor(t.type);
+            for (int dy = 0; dy < t.size; ++dy) {
+                for (int dx = 0; dx < t.size; ++dx) {
+                    const int gx = t.pos.x + dx;
+                    const int gy = t.pos.y + dy;
+                    if (gx < 0 || gy < 0 || gx >= kBoardWidth ||
+                        gy >= kBoardHeight) {
+                        continue;
+                    }
+                    const auto yi = static_cast<size_t>(gy);
+                    const auto xi = static_cast<size_t>(gx);
+                    glyphs[yi][xi] = glyph;
+                    backgrounds[yi][xi] = bg;
+                    foregrounds[yi][xi] = ftxui::Color::Black;
+                    highlight[yi][xi] = true;
+                }
+            }
         }
-      }
-    }
 
-    const auto apply_tint = [&](size_t yi, size_t xi, const ftxui::Color &tint,
-                                float alpha) {
-      backgrounds[yi][xi] = BlendColor(backgrounds[yi][xi], tint, alpha);
-    };
-
-    for (int y = 0; y < kBoardHeight; ++y) {
-      const auto yi = static_cast<size_t>(y);
-      for (int x = 0; x < kBoardWidth; ++x) {
-        const auto xi = static_cast<size_t>(x);
-        if (!enemy_mask[yi][xi]) {
-          if (range_hint_base[yi][xi]) {
-            apply_tint(yi, xi, ftxui::Color::DarkSeaGreen, 0.25F);
-          }
-          if (range_hint_preview[yi][xi]) {
-            apply_tint(yi, xi, ftxui::Color::LightSkyBlue1, 0.45F);
-          }
+        for (const auto &e : enemies_) {
+            const auto pos = EnemyCell(e);
+            const auto yi = static_cast<size_t>(pos.y);
+            const auto xi = static_cast<size_t>(pos.x);
+            char g = 'r';
+            ftxui::Color fg = EnemyColor(e);
+            std::optional<ftxui::Color> bg_override;
+            switch (e.type) {
+            case EnemyType::Mouse:
+                g = 'm';
+                fg = ftxui::Color::Grey70;
+                bg_override = std::nullopt; // keep path background
+                break;
+            case EnemyType::Rat:
+                g = 'r';
+                fg = EnemyColor(e);
+                bg_override = ftxui::Color::Grey23;
+                break;
+            case EnemyType::BigRat:
+                g = 'R';
+                fg = ftxui::Color::RedLight;
+                bg_override = ftxui::Color::Grey35;
+                break;
+            case EnemyType::Dog:
+                g = 'D';
+                fg = ftxui::Color::White;
+                bg_override = ftxui::Color::DarkRed;
+                break;
+            }
+            glyphs[yi][xi] = g;
+            if (e.rewind_speed > 0.0F) {
+                backgrounds[yi][xi] = ftxui::Color::DarkViolet;
+                foregrounds[yi][xi] = ftxui::Color::White;
+            } else {
+                if (bg_override.has_value())
+                    backgrounds[yi][xi] = *bg_override;
+                foregrounds[yi][xi] = fg;
+            }
+            enemy_mask[yi][xi] = true;
         }
-      }
-    }
 
-    if (show_overlay) {
-      const TowerDef preview_def_place = GetDef(
-          held_tower_.has_value() ? held_tower_->tower.type : selected_type_);
-      const bool preview_is_kitty =
-          preview_def_place.type == Tower::Type::Kitty;
-      const bool can_place_preview =
-          cursor_.x >= 0 && cursor_.y >= 0 &&
-          cursor_.x + preview_def_place.size - 1 < kBoardWidth &&
-          cursor_.y + preview_def_place.size - 1 < kBoardHeight &&
-          !OccupiesPath(cursor_, preview_def_place.size) &&
-          !OverlapsTower(cursor_, preview_def_place.size);
-      if (preview_is_kitty) {
-        const Vec2 center{
-            static_cast<float>(cursor_.x) +
-                (static_cast<float>(preview_def_place.size) - 1.0F) / 2.0F,
-            static_cast<float>(cursor_.y) +
-                (static_cast<float>(preview_def_place.size) - 1.0F) / 2.0F};
-        const auto cells = KittyOverlayCells(center);
-        for (const auto &cell : cells) {
-          if (cell.x < 0 || cell.y < 0 || cell.x >= kBoardWidth ||
-              cell.y >= kBoardHeight) {
-            continue;
-          }
-          range_hint_preview[static_cast<size_t>(cell.y)]
-                            [static_cast<size_t>(cell.x)] = true;
+        for (const auto &p : projectiles_) {
+            const int px = static_cast<int>(std::round(p.x));
+            const int py = static_cast<int>(std::round(p.y));
+            if (py < 0 || py >= kBoardHeight || px < 0 || px >= kBoardWidth) {
+                continue;
+            }
+            const auto yi = static_cast<size_t>(py);
+            const auto xi = static_cast<size_t>(px);
+            glyphs[yi][xi] = '*';
+            foregrounds[yi][xi] = ftxui::Color::SkyBlue1;
         }
-      }
-      for (int dy = 0; dy < preview_def_place.size; ++dy) {
-        for (int dx = 0; dx < preview_def_place.size; ++dx) {
-          const int gx = cursor_.x + dx;
-          const int gy = cursor_.y + dy;
-          if (gx < 0 || gy < 0 || gx >= kBoardWidth || gy >= kBoardHeight) {
-            continue;
-          }
-          const auto yi = static_cast<size_t>(gy);
-          const auto xi = static_cast<size_t>(gx);
-          glyphs[yi][xi] = can_place_preview ? '+' : 'X';
-          foregrounds[yi][xi] = can_place_preview
-                                    ? ftxui::Color(ftxui::Color::LightSkyBlue1)
-                                    : ftxui::Color(ftxui::Color::RedLight);
+
+        for (const auto &b : beams_) {
+            for (const auto &cell : b.cells) {
+                if (cell.y < 0 || cell.y >= kBoardHeight || cell.x < 0 ||
+                    cell.x >= kBoardWidth) {
+                    continue;
+                }
+                const auto yi = static_cast<size_t>(cell.y);
+                const auto xi = static_cast<size_t>(cell.x);
+                glyphs[yi][xi] = '-';
+                foregrounds[yi][xi] = ftxui::Color::CyanLight;
+            }
         }
-      }
-    }
 
-    if (game_over_) {
-      for (int y = 0; y < kBoardHeight; ++y) {
-        const auto yi = static_cast<size_t>(y);
-        for (int x = 0; x < kBoardWidth; ++x) {
-          const auto xi = static_cast<size_t>(x);
-          backgrounds[yi][xi] = ftxui::Color::Grey23;
-          foregrounds[yi][xi] = ftxui::Color::Grey70;
+        // Toxic zones — 5×5 crater with 3 concentric square rings.
+        for (const auto &zone : toxic_zones_) {
+            const int cx = static_cast<int>(zone.center.x);
+            const int cy = static_cast<int>(zone.center.y);
+            for (const auto &cell : zone.cells) {
+                if (cell.y < 0 || cell.y >= kBoardHeight || cell.x < 0 ||
+                    cell.x >= kBoardWidth)
+                    continue;
+                const auto yi = static_cast<size_t>(cell.y);
+                const auto xi = static_cast<size_t>(cell.x);
+                const int ring =
+                    std::max(std::abs(cell.x - cx), std::abs(cell.y - cy));
+                if (ring == 0) {
+                    backgrounds[yi][xi] = ftxui::Color::Black;
+                    if (zone.explode_on_expire) {
+                        glyphs[yi][xi] = '!';
+                        foregrounds[yi][xi] = ftxui::Color::Red1;
+                    } else {
+                        glyphs[yi][xi] = ' ';
+                    }
+                } else if (ring == 1) {
+                    glyphs[yi][xi] = ':';
+                    foregrounds[yi][xi] = ftxui::Color::Grey35;
+                    backgrounds[yi][xi] = BlendColor(
+                        backgrounds[yi][xi], ftxui::Color::Black, 0.60F);
+                } else {
+                    glyphs[yi][xi] = '.';
+                    foregrounds[yi][xi] = ftxui::Color::Grey50;
+                    backgrounds[yi][xi] = BlendColor(
+                        backgrounds[yi][xi], ftxui::Color::Black, 0.30F);
+                }
+            }
         }
-      }
-    }
 
-    std::vector<ftxui::Element> rows;
-    for (int y = 0; y < kBoardHeight; ++y) {
-      const auto yi = static_cast<size_t>(y);
-      std::vector<ftxui::Element> cells;
-      cells.reserve(kBoardWidth);
-      for (int x = 0; x < kBoardWidth; ++x) {
-        const auto xi = static_cast<size_t>(x);
-        auto cell = text(std::string(1, glyphs[yi][xi]) + " ") |
-                    bgcolor(backgrounds[yi][xi]) | color(foregrounds[yi][xi]);
-        if (highlight[yi][xi]) {
-          cell = cell | bold;
+        for (const auto &ah : area_highlights_) {
+            for (const auto &cell : ah.cells) {
+                if (cell.y < 0 || cell.y >= kBoardHeight || cell.x < 0 ||
+                    cell.x >= kBoardWidth) {
+                    continue;
+                }
+                const auto yi = static_cast<size_t>(cell.y);
+                const auto xi = static_cast<size_t>(cell.x);
+                glyphs[yi][xi] = ah.glyph;
+                foregrounds[yi][xi] = ah.color;
+                backgrounds[yi][xi] =
+                    BlendColor(backgrounds[yi][xi], ah.color, 0.08F);
+            }
         }
-        if (!ai_mode_ && cursor_.x == x && cursor_.y == y) {
-          cell = cell | inverted;
+
+        // Arc projectiles: shadow at ground position + projectile offset
+        // upward.
+        for (const auto &ap : arc_projectiles_) {
+            const int sx = static_cast<int>(std::round(ap.ground.x));
+            const int sy = static_cast<int>(std::round(ap.ground.y));
+            if (sy >= 0 && sy < kBoardHeight && sx >= 0 && sx < kBoardWidth) {
+                const auto yi = static_cast<size_t>(sy);
+                const auto xi = static_cast<size_t>(sx);
+                glyphs[yi][xi] = ',';
+                foregrounds[yi][xi] = ftxui::Color::DarkKhaki;
+            }
+            const float visual_height =
+                ap.arc_height * 4.0F * ap.progress * (1.0F - ap.progress);
+            const int py = sy - static_cast<int>(std::round(visual_height));
+            if (py >= 0 && py < kBoardHeight && sx >= 0 && sx < kBoardWidth) {
+                const auto yi = static_cast<size_t>(py);
+                const auto xi = static_cast<size_t>(sx);
+                glyphs[yi][xi] = 'o';
+                foregrounds[yi][xi] = ftxui::Color::Orange1;
+            }
         }
-        cells.push_back(std::move(cell));
-      }
-      rows.push_back(hbox(std::move(cells)));
+
+        for (const auto &sw : shockwaves_) {
+            for (int y = 0; y < kBoardHeight; ++y) {
+                for (int x = 0; x < kBoardWidth; ++x) {
+                    Position cell{x, y};
+                    const float dist =
+                        std::sqrt(DistanceSquared(sw.center, cell));
+                    if (std::abs(dist - sw.radius) < 0.6F) {
+                        const auto yi = static_cast<size_t>(y);
+                        const auto xi = static_cast<size_t>(x);
+                        glyphs[yi][xi] = 'o';
+                        foregrounds[yi][xi] = ftxui::Color::YellowLight;
+                    }
+                }
+            }
+        }
+
+        for (const auto &hs : hit_splats_) {
+            for (int dy = -hs.radius; dy <= hs.radius; ++dy) {
+                for (int dx = -hs.radius; dx <= hs.radius; ++dx) {
+                    if (std::abs(dx) + std::abs(dy) > hs.radius)
+                        continue; // diamond shape
+                    const int cx = hs.pos.x + dx;
+                    const int cy = hs.pos.y + dy;
+                    if (cy < 0 || cy >= kBoardHeight || cx < 0 ||
+                        cx >= kBoardWidth)
+                        continue;
+                    const auto yi = static_cast<size_t>(cy);
+                    const auto xi = static_cast<size_t>(cx);
+                    glyphs[yi][xi] = 'x';
+                    backgrounds[yi][xi] = ftxui::Color::White;
+                    foregrounds[yi][xi] = ftxui::Color::Red3;
+                }
+            }
+        }
+
+        const auto apply_tint = [&](size_t yi, size_t xi,
+                                    const ftxui::Color &tint, float alpha) {
+            backgrounds[yi][xi] = BlendColor(backgrounds[yi][xi], tint, alpha);
+        };
+
+        for (int y = 0; y < kBoardHeight; ++y) {
+            const auto yi = static_cast<size_t>(y);
+            for (int x = 0; x < kBoardWidth; ++x) {
+                const auto xi = static_cast<size_t>(x);
+                if (!enemy_mask[yi][xi]) {
+                    if (range_hint_base[yi][xi]) {
+                        apply_tint(yi, xi, ftxui::Color::DarkSeaGreen, 0.25F);
+                    }
+                    if (range_hint_preview[yi][xi]) {
+                        apply_tint(yi, xi, ftxui::Color::LightSkyBlue1, 0.45F);
+                    }
+                }
+            }
+        }
+
+        if (show_overlay) {
+            const TowerDef preview_def_place =
+                GetDef(held_tower_.has_value() ? held_tower_->tower.type
+                                               : selected_type_);
+            const bool preview_is_kitty =
+                preview_def_place.type == Tower::Type::Kitty;
+            const bool can_place_preview =
+                cursor_.x >= 0 && cursor_.y >= 0 &&
+                cursor_.x + preview_def_place.size - 1 < kBoardWidth &&
+                cursor_.y + preview_def_place.size - 1 < kBoardHeight &&
+                !OccupiesPath(cursor_, preview_def_place.size) &&
+                !OverlapsTower(cursor_, preview_def_place.size);
+            if (preview_is_kitty) {
+                const Vec2 center{
+                    static_cast<float>(cursor_.x) +
+                        (static_cast<float>(preview_def_place.size) - 1.0F) /
+                            2.0F,
+                    static_cast<float>(cursor_.y) +
+                        (static_cast<float>(preview_def_place.size) - 1.0F) /
+                            2.0F};
+                const auto cells = KittyOverlayCells(center);
+                for (const auto &cell : cells) {
+                    if (cell.x < 0 || cell.y < 0 || cell.x >= kBoardWidth ||
+                        cell.y >= kBoardHeight) {
+                        continue;
+                    }
+                    range_hint_preview[static_cast<size_t>(cell.y)]
+                                      [static_cast<size_t>(cell.x)] = true;
+                }
+            }
+            for (int dy = 0; dy < preview_def_place.size; ++dy) {
+                for (int dx = 0; dx < preview_def_place.size; ++dx) {
+                    const int gx = cursor_.x + dx;
+                    const int gy = cursor_.y + dy;
+                    if (gx < 0 || gy < 0 || gx >= kBoardWidth ||
+                        gy >= kBoardHeight) {
+                        continue;
+                    }
+                    const auto yi = static_cast<size_t>(gy);
+                    const auto xi = static_cast<size_t>(gx);
+                    glyphs[yi][xi] = can_place_preview ? '+' : 'X';
+                    foregrounds[yi][xi] =
+                        can_place_preview
+                            ? ftxui::Color(ftxui::Color::LightSkyBlue1)
+                            : ftxui::Color(ftxui::Color::RedLight);
+                }
+            }
+        }
+
+        if (game_over_) {
+            for (int y = 0; y < kBoardHeight; ++y) {
+                const auto yi = static_cast<size_t>(y);
+                for (int x = 0; x < kBoardWidth; ++x) {
+                    const auto xi = static_cast<size_t>(x);
+                    backgrounds[yi][xi] = ftxui::Color::Grey23;
+                    foregrounds[yi][xi] = ftxui::Color::Grey70;
+                }
+            }
+        }
+
+        std::vector<ftxui::Element> rows;
+        for (int y = 0; y < kBoardHeight; ++y) {
+            const auto yi = static_cast<size_t>(y);
+            std::vector<ftxui::Element> cells;
+            cells.reserve(kBoardWidth);
+            for (int x = 0; x < kBoardWidth; ++x) {
+                const auto xi = static_cast<size_t>(x);
+                auto cell = text(std::string(1, glyphs[yi][xi]) + " ") |
+                            bgcolor(backgrounds[yi][xi]) |
+                            color(foregrounds[yi][xi]);
+                if (highlight[yi][xi]) {
+                    cell = cell | bold;
+                }
+                if (!ai_mode_ && cursor_.x == x && cursor_.y == y) {
+                    cell = cell | inverted;
+                }
+                cells.push_back(std::move(cell));
+            }
+            rows.push_back(hbox(std::move(cells)));
+        }
+
+        auto board_elem = vbox(std::move(rows));
+        if (game_over_) {
+            board_elem = board_elem | bgcolor(ftxui::Color::Black) |
+                         color(ftxui::Color::Grey70) | bold;
+        }
+        return board_elem;
     }
 
-    auto board_elem = vbox(std::move(rows));
-    if (game_over_) {
-      board_elem = board_elem | bgcolor(ftxui::Color::Black) |
-                   color(ftxui::Color::Grey70) | bold;
-    }
-    return board_elem;
-  }
-
-  ftxui::Element BlankBoard() const {
-    std::vector<ftxui::Element> rows;
-    rows.reserve(kBoardHeight);
-    const std::string empty_row(static_cast<size_t>(kBoardWidth) * 2, ' ');
-    for (int y = 0; y < kBoardHeight; ++y) {
-      rows.push_back(text(empty_row) | bgcolor(ftxui::Color::Black) |
-                     color(ftxui::Color::Black));
-    }
-    return vbox(std::move(rows));
-  }
-
-  ftxui::Element RenderStats() const {
-    std::string wave_text =
-        wave_active_ ? "Wave " + std::to_string(wave_)
-                     : "Wave " + std::to_string(wave_ + 1) + " ready";
-    if (auto_waves_) {
-      wave_text += " (auto)";
+    ftxui::Element BlankBoard() const {
+        std::vector<ftxui::Element> rows;
+        rows.reserve(kBoardHeight);
+        const std::string empty_row(static_cast<size_t>(kBoardWidth) * 2, ' ');
+        for (int y = 0; y < kBoardHeight; ++y) {
+            rows.push_back(text(empty_row) | bgcolor(ftxui::Color::Black) |
+                           color(ftxui::Color::Black));
+        }
+        return vbox(std::move(rows));
     }
 
-    std::vector<ftxui::Element> lines;
+    ftxui::Element RenderStats() const {
+        std::string wave_text =
+            wave_active_ ? "Wave " + std::to_string(wave_)
+                         : "Wave " + std::to_string(wave_ + 1) + " ready";
+        if (auto_waves_) {
+            wave_text += " (auto)";
+        }
 
-    // --- Header ---
-    lines.push_back(text("cat cat") | bold | color(ftxui::Color::YellowLight));
-    if (dev_mode_) {
-      lines.push_back(text("DEV MODE") | bold | color(ftxui::Color::RedLight));
-    }
+        std::vector<ftxui::Element> lines;
 
-    // --- Game state ---
-    ftxui::Color wave_color = ftxui::Color::GrayLight;
-    if (wave_active_) {
-      wave_color = ftxui::Color::Orange1;
-    }
-    lines.push_back(text("Status:  " + wave_text) | color(wave_color));
-    lines.push_back(text("Map:     " + std::to_string(map_index_ + 1) + "/10"));
-    ftxui::Color speed_color = ftxui::Color::GrayLight;
-    if (fast_forward_) {
-      speed_color = ftxui::Color::YellowLight;
-    }
-    lines.push_back(
-        text(fast_forward_ ? "Speed:   FAST x5 (f)" : "Speed:   Normal  (f)") |
-        color(speed_color));
+        // --- Header ---
+        lines.push_back(text("cat cat") | bold |
+                        color(ftxui::Color::YellowLight));
+        if (dev_mode_) {
+            lines.push_back(text("DEV MODE") | bold |
+                            color(ftxui::Color::RedLight));
+        }
+
+        // --- Game state ---
+        ftxui::Color wave_color = ftxui::Color::GrayLight;
+        if (wave_active_) {
+            wave_color = ftxui::Color::Orange1;
+        }
+        lines.push_back(text("Status:  " + wave_text) | color(wave_color));
+        lines.push_back(
+            text("Map:     " + std::to_string(map_index_ + 1) + "/10"));
+        ftxui::Color speed_color = ftxui::Color::GrayLight;
+        if (fast_forward_) {
+            speed_color = ftxui::Color::YellowLight;
+        }
+        lines.push_back(text(fast_forward_ ? "Speed:   FAST x5 (f)"
+                                           : "Speed:   Normal  (f)") |
+                        color(speed_color));
 
 #ifdef ENABLE_AUDIO
-    if (audio_) {
-      const bool sfx_on = audio_->SfxEnabled();
-      const bool music_on = audio_->MusicEnabled();
-      lines.push_back(hbox({
-          text("SFX:     ") | color(ftxui::Color::GrayLight),
-          text(sfx_on ? "on " : "off") |
-              color(sfx_on ? ftxui::Color::GreenLight : ftxui::Color::GrayDark),
-          text("  (t)") | color(ftxui::Color::GrayDark),
-      }));
-      lines.push_back(hbox({
-          text("Music:   ") | color(ftxui::Color::GrayLight),
-          text(music_on ? "on " : "off") |
-              color(music_on ? ftxui::Color::GreenLight
-                             : ftxui::Color::GrayDark),
-          text("  (y)") | color(ftxui::Color::GrayDark),
-      }));
-    }
+        if (audio_) {
+            const bool sfx_on = audio_->SfxEnabled();
+            const bool music_on = audio_->MusicEnabled();
+            lines.push_back(hbox({
+                text("SFX:     ") | color(ftxui::Color::GrayLight),
+                text(sfx_on ? "on " : "off") |
+                    color(sfx_on ? ftxui::Color::GreenLight
+                                 : ftxui::Color::GrayDark),
+                text("  (t)") | color(ftxui::Color::GrayDark),
+            }));
+            lines.push_back(hbox({
+                text("Music:   ") | color(ftxui::Color::GrayLight),
+                text(music_on ? "on " : "off") |
+                    color(music_on ? ftxui::Color::GreenLight
+                                   : ftxui::Color::GrayDark),
+                text("  (y)") | color(ftxui::Color::GrayDark),
+            }));
+        }
 #endif
 
-    ftxui::Color lives_color = ftxui::Color::RedLight;
-    if (lives_ > 6) {
-      lives_color = ftxui::Color::GreenLight;
-    } else if (lives_ > 2) {
-      lives_color = ftxui::Color::Yellow1;
+        ftxui::Color lives_color = ftxui::Color::RedLight;
+        if (lives_ > 6) {
+            lives_color = ftxui::Color::GreenLight;
+        } else if (lives_ > 2) {
+            lives_color = ftxui::Color::Yellow1;
+        }
+        lines.push_back(
+            hbox({text("Lives:   "),
+                  text(std::to_string(lives_)) | color(lives_color) | bold}));
+        lines.push_back(
+            hbox({text("Kibbles: "), text(std::to_string(kibbles_)) |
+                                         color(ftxui::Color::Gold1) | bold}));
+        lines.push_back(
+            hbox({text("Cats:    "), text(std::to_string(towers_.size())) |
+                                         color(ftxui::Color::White)}));
+
+        lines.push_back(separator());
+
+        // --- Tower catalogue (always visible) ---
+        const auto defs = SortedDefs();
+
+        // Pre-pass: compute column widths for alignment
+        size_t max_label_w = 0;
+        size_t max_cost_w = 0;
+        for (const auto &def : defs) {
+            const std::string label =
+                " " + std::to_string(TypeKey(def.type)) + ") " + def.name;
+            max_label_w = std::max(max_label_w, label.size());
+            const std::string cost_str =
+                IsUnlocked(def.type)
+                    ? std::to_string(def.cost)
+                    : std::to_string(def.cost * kUnlockCostMultiplier) +
+                          " unlock";
+            max_cost_w = std::max(max_cost_w, cost_str.size());
+        }
+
+        for (const auto &def : defs) {
+            const bool unlocked = IsUnlocked(def.type);
+            const bool sel = selected_type_ == def.type;
+            const ftxui::Color tower_bg = TowerBgColor(def.type);
+            const char base_glyph = TowerBaseGlyph(def.type);
+
+            // Colored tile: 2x2 towers show double glyph to hint at size
+            const bool big = def.size >= 2;
+            const std::string tile_str =
+                big ? std::string(2, base_glyph)
+                    : (std::string(1, base_glyph) + " ");
+            auto tile = text(tile_str) | bgcolor(tower_bg) |
+                        color(ftxui::Color::Black) | bold;
+
+            // Key + name padded to fixed width for cost column alignment
+            const std::string raw_label = (sel ? ">" : " ") +
+                                          std::to_string(TypeKey(def.type)) +
+                                          ") " + def.name;
+            const std::string padded_label = PadRight(raw_label, max_label_w);
+            auto name_part = text(padded_label) |
+                             color(unlocked ? tower_bg : ftxui::Color::Grey35);
+            if (sel) {
+                name_part = name_part | bold;
+            }
+
+            // Cost right-aligned within a fixed-width field
+            const std::string cost_str =
+                unlocked ? std::to_string(def.cost)
+                         : std::to_string(def.cost * kUnlockCostMultiplier) +
+                               " unlock";
+            const std::string padded_cost =
+                " " + std::string(max_cost_w - cost_str.size(), ' ') + cost_str;
+            ftxui::Color cost_color = ftxui::Color::GrayLight;
+            if (unlocked) {
+                cost_color = ftxui::Color::Gold1;
+            }
+            auto cost_part = text(padded_cost) | color(cost_color);
+
+            lines.push_back(hbox({tile, text(" "), name_part, cost_part}));
+        }
+
+        if (game_over_) {
+            lines.push_back(separator());
+            lines.push_back(text("Game Over") | bold |
+                            color(ftxui::Color::RedLight));
+        }
+
+        if (!warning_text_.empty() && warning_timer_ > 0.0F) {
+            lines.push_back(separator());
+            std::stringstream ss(warning_text_);
+            std::string line;
+            while (std::getline(ss, line)) {
+                lines.push_back(text(line) | color(ftxui::Color::YellowLight));
+            }
+        }
+
+        if (show_controls_) {
+            lines.push_back(separator());
+            lines.push_back(text("controls (h to hide):") |
+                            color(ftxui::Color::GrayLight));
+            lines.push_back(text("arrows/WASD - move cursor"));
+            lines.push_back(text("space/c     - place selected cat"));
+            lines.push_back(text("m           - pick up / place tower"));
+            lines.push_back(text("u           - upgrade (2x cost)"));
+            lines.push_back(text("x           - sell (25% refund)"));
+            lines.push_back(text("esc         - cancel / overlay toggle"));
+            lines.push_back(text("1-9         - select cat type"));
+            lines.push_back(text("n / N       - next wave / toggle auto"));
+            lines.push_back(text("f           - fast forward x5"));
+            lines.push_back(text("t / y       - sfx / music toggle"));
+            if (dev_mode_) {
+                lines.push_back(text(">           - skip map (dev)") |
+                                color(ftxui::Color::GrayLight));
+            }
+            lines.push_back(text("q q q       - quit"));
+        } else {
+            lines.push_back(separator());
+            lines.push_back(text("h - controls") |
+                            color(ftxui::Color::GrayLight));
+        }
+
+        lines.push_back(separator());
+
+        return vbox(std::move(lines));
     }
-    lines.push_back(hbox({text("Lives:   "), text(std::to_string(lives_)) |
-                                                 color(lives_color) | bold}));
-    lines.push_back(
-        hbox({text("Kibbles: "), text(std::to_string(kibbles_)) |
-                                     color(ftxui::Color::Gold1) | bold}));
-    lines.push_back(
-        hbox({text("Cats:    "), text(std::to_string(towers_.size())) |
-                                     color(ftxui::Color::White)}));
 
-    lines.push_back(separator());
+    std::vector<Position> path_;
+    std::vector<std::vector<bool>> path_mask_;
+    std::vector<Enemy> enemies_;
+    std::vector<Tower> towers_;
+    std::vector<HitSplat> hit_splats_;
+    std::vector<Projectile> projectiles_;
+    std::vector<ArcProjectile> arc_projectiles_;
+    std::vector<PendingCatastrophe> pending_catastrophes_;
+    std::vector<ToxicZone> toxic_zones_;
+    std::vector<Shockwave> shockwaves_;
+    std::vector<Beam> beams_;
+    std::vector<AreaHighlight> area_highlights_;
+    std::optional<HeldTower> held_tower_;
+    std::vector<MapDef> maps_;
+    Position cursor_{};
 
-    // --- Tower catalogue (always visible) ---
-    const auto defs = SortedDefs();
+    std::mt19937 rng_{std::random_device{}()};
+    std::unique_ptr<AudioSystem> audio_;
 
-    // Pre-pass: compute column widths for alignment
-    size_t max_label_w = 0;
-    size_t max_cost_w = 0;
-    for (const auto &def : defs) {
-      const std::string label =
-          " " + std::to_string(TypeKey(def.type)) + ") " + def.name;
-      max_label_w = std::max(max_label_w, label.size());
-      const std::string cost_str =
-          IsUnlocked(def.type)
-              ? std::to_string(def.cost)
-              : std::to_string(def.cost * kUnlockCostMultiplier) + " unlock";
-      max_cost_w = std::max(max_cost_w, cost_str.size());
-    }
+    Tower::Type selected_type_ = Tower::Type::Default;
+    std::set<Tower::Type> unlocked_types_;
+    bool overlay_enabled_ = false;
+    bool show_controls_ = false;
+    bool auto_waves_ = false;
+    bool fast_forward_ = false;
+    bool dev_mode_ = false;
+    enum class IntroStage { Title, Instructions, Playing };
+    IntroStage intro_stage_ = IntroStage::Title;
+    bool victory_ = false;
+    std::string warning_text_;
+    float warning_timer_ = 0.0F;
+    int map_index_ = 0;
+    int kibbles_ = 0;
+    int lives_ = 0;
+    int wave_ = 0;
+    bool wave_active_ = false;
+    bool game_over_ = false;
+    float game_over_display_timer_ =
+        0.0f; // counts down after game over (live game only)
+    int spawn_remaining_ = 0;
+    int spawn_cooldown_ms_ = 0;
 
-    for (const auto &def : defs) {
-      const bool unlocked = IsUnlocked(def.type);
-      const bool sel = selected_type_ == def.type;
-      const ftxui::Color tower_bg = TowerBgColor(def.type);
-      const char base_glyph = TowerBaseGlyph(def.type);
-
-      // Colored tile: 2x2 towers show double glyph to hint at size
-      const bool big = def.size >= 2;
-      const std::string tile_str =
-          big ? std::string(2, base_glyph) : (std::string(1, base_glyph) + " ");
-      auto tile = text(tile_str) | bgcolor(tower_bg) |
-                  color(ftxui::Color::Black) | bold;
-
-      // Key + name padded to fixed width for cost column alignment
-      const std::string raw_label = (sel ? ">" : " ") +
-                                    std::to_string(TypeKey(def.type)) + ") " +
-                                    def.name;
-      const std::string padded_label = PadRight(raw_label, max_label_w);
-      auto name_part = text(padded_label) |
-                       color(unlocked ? tower_bg : ftxui::Color::Grey35);
-      if (sel) {
-        name_part = name_part | bold;
-      }
-
-      // Cost right-aligned within a fixed-width field
-      const std::string cost_str =
-          unlocked
-              ? std::to_string(def.cost)
-              : std::to_string(def.cost * kUnlockCostMultiplier) + " unlock";
-      const std::string padded_cost =
-          " " + std::string(max_cost_w - cost_str.size(), ' ') + cost_str;
-      ftxui::Color cost_color = ftxui::Color::GrayLight;
-      if (unlocked) {
-        cost_color = ftxui::Color::Gold1;
-      }
-      auto cost_part = text(padded_cost) | color(cost_color);
-
-      lines.push_back(hbox({tile, text(" "), name_part, cost_part}));
-    }
-
-    if (game_over_) {
-      lines.push_back(separator());
-      lines.push_back(text("Game Over") | bold | color(ftxui::Color::RedLight));
-    }
-
-    if (!warning_text_.empty() && warning_timer_ > 0.0F) {
-      lines.push_back(separator());
-      std::stringstream ss(warning_text_);
-      std::string line;
-      while (std::getline(ss, line)) {
-        lines.push_back(text(line) | color(ftxui::Color::YellowLight));
-      }
-    }
-
-    if (show_controls_) {
-      lines.push_back(separator());
-      lines.push_back(text("controls (h to hide):") |
-                      color(ftxui::Color::GrayLight));
-      lines.push_back(text("arrows/WASD - move cursor"));
-      lines.push_back(text("space/c     - place selected cat"));
-      lines.push_back(text("m           - pick up / place tower"));
-      lines.push_back(text("u           - upgrade (2x cost)"));
-      lines.push_back(text("x           - sell (25% refund)"));
-      lines.push_back(text("esc         - cancel / overlay toggle"));
-      lines.push_back(text("1-9         - select cat type"));
-      lines.push_back(text("n / N       - next wave / toggle auto"));
-      lines.push_back(text("f           - fast forward x5"));
-      lines.push_back(text("t / y       - sfx / music toggle"));
-      if (dev_mode_) {
-        lines.push_back(text(">           - skip map (dev)") |
-                        color(ftxui::Color::GrayLight));
-      }
-      lines.push_back(text("q q q       - quit"));
-    } else {
-      lines.push_back(separator());
-      lines.push_back(text("h - controls") | color(ftxui::Color::GrayLight));
-    }
-
-    lines.push_back(separator());
-
-    return vbox(std::move(lines));
-  }
-
-  std::vector<Position> path_;
-  std::vector<std::vector<bool>> path_mask_;
-  std::vector<Enemy> enemies_;
-  std::vector<Tower> towers_;
-  std::vector<HitSplat> hit_splats_;
-  std::vector<Projectile> projectiles_;
-  std::vector<ArcProjectile> arc_projectiles_;
-  std::vector<PendingCatastrophe> pending_catastrophes_;
-  std::vector<ToxicZone> toxic_zones_;
-  std::vector<Shockwave> shockwaves_;
-  std::vector<Beam> beams_;
-  std::vector<AreaHighlight> area_highlights_;
-  std::optional<HeldTower> held_tower_;
-  std::vector<MapDef> maps_;
-  Position cursor_{};
-
-  std::mt19937 rng_{std::random_device{}()};
-  std::unique_ptr<AudioSystem> audio_;
-
-  Tower::Type selected_type_ = Tower::Type::Default;
-  std::set<Tower::Type> unlocked_types_;
-  bool overlay_enabled_ = false;
-  bool show_controls_ = false;
-  bool auto_waves_ = false;
-  bool fast_forward_ = false;
-  bool dev_mode_ = false;
-  enum class IntroStage { Title, Instructions, Playing };
-  IntroStage intro_stage_ = IntroStage::Title;
-  bool victory_ = false;
-  std::string warning_text_;
-  float warning_timer_ = 0.0F;
-  int map_index_ = 0;
-  int kibbles_ = 0;
-  int lives_ = 0;
-  int wave_ = 0;
-  bool wave_active_ = false;
-  bool game_over_ = false;
-  float game_over_display_timer_ =
-      0.0f; // counts down after game over (live game only)
-  int spawn_remaining_ = 0;
-  int spawn_cooldown_ms_ = 0;
-
-  // ── AI mode ──────────────────────────────────────────────────────────────
-  static constexpr int kAIMaxTowersPerType = 5;
-  static constexpr int kAIMapGraceDecisions =
-      8; // free placement decisions after map transition
-  bool ai_mode_ = false;
-  int ai_enemies_killed_ = 0;
-  int ai_lives_lost_ = 0;
-  int ai_grace_decisions_ = 0; // counts down after map transition
-  std::array<int, kAINumTowerTypes> ai_tower_type_counts_{};
-  std::array<int, kAINumTowerTypes> ai_tower_upgrade_counts_{};
-  std::array<int, kAINumTowerTypes> ai_map_tower_counts_{};
-  std::array<int, kAINumTowerTypes> ai_damage_per_type_{};
-  std::vector<Position> ai_candidates_;
-  std::array<float, kAINumCandidates> ai_candidate_coverage_{};
-  std::array<float, kAINumCandidates> ai_candidate_path_pos_{};
+    // ── AI mode ──────────────────────────────────────────────────────────────
+    static constexpr int kAIMaxTowersPerType = 5;
+    static constexpr int kAIMapGraceDecisions =
+        8; // free placement decisions after map transition
+    bool ai_mode_ = false;
+    int ai_enemies_killed_ = 0;
+    int ai_lives_lost_ = 0;
+    int ai_grace_decisions_ = 0; // counts down after map transition
+    std::array<int, kAINumTowerTypes> ai_tower_type_counts_{};
+    std::array<int, kAINumTowerTypes> ai_tower_upgrade_counts_{};
+    std::array<int, kAINumTowerTypes> ai_map_tower_counts_{};
+    std::array<int, kAINumTowerTypes> ai_damage_per_type_{};
+    std::vector<Position> ai_candidates_;
+    std::array<float, kAINumCandidates> ai_candidate_coverage_{};
+    std::array<float, kAINumCandidates> ai_candidate_path_pos_{};
 };
 
 class GameComponent : public ftxui::ComponentBase {
-public:
-  GameComponent(ftxui::ScreenInteractive &screen, bool dev_mode)
-      : game_(dev_mode), screen_(screen) {
-    ticker_ = std::thread([this] {
-      while (running_) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(kTickMs));
-        bool expected = false;
-        if (tick_pending_.compare_exchange_strong(expected, true)) {
-          screen_.Post(ftxui::Event::Custom);
-        }
-      }
-    });
-  }
-
-  ~GameComponent() override {
-    running_ = false;
-    if (ticker_.joinable()) {
-      ticker_.join();
+  public:
+    GameComponent(ftxui::ScreenInteractive &screen, bool dev_mode)
+        : game_(dev_mode), screen_(screen) {
+        ticker_ = std::thread([this] {
+            while (running_) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(kTickMs));
+                bool expected = false;
+                if (tick_pending_.compare_exchange_strong(expected, true)) {
+                    screen_.Post(ftxui::Event::Custom);
+                }
+            }
+        });
     }
-  }
 
-  ftxui::Element OnRender() override {
-    const int w = game_.Wave();
-    if (w != title_wave_) {
-      title_wave_ = w;
-      if (game_.GameOver())
-        SetTerminalTitle("catcat | game over");
-      else if (w == 0)
-        SetTerminalTitle("catcat");
-      else
-        SetTerminalTitle("catcat | wave " + std::to_string(w));
-    }
-    return game_.Render();
-  }
-
-  bool OnEvent(ftxui::Event event) override {
-    if (event == ftxui::Event::Character('q') && !game_.InIntro() &&
-        !game_.GameOver()) {
-      quit_presses_++;
-      if (quit_presses_ >= 3) {
+    ~GameComponent() override {
         running_ = false;
-        screen_.Exit();
-      }
-      return true;
+        if (ticker_.joinable()) {
+            ticker_.join();
+        }
     }
 
-    if (event == ftxui::Event::Custom) {
-      tick_pending_.store(false);
-      game_.Tick();
-      return true;
+    ftxui::Element OnRender() override {
+        const int w = game_.Wave();
+        if (w != title_wave_) {
+            title_wave_ = w;
+            if (game_.GameOver())
+                SetTerminalTitle("catcat | game over");
+            else if (w == 0)
+                SetTerminalTitle("catcat");
+            else
+                SetTerminalTitle("catcat | wave " + std::to_string(w));
+        }
+        return game_.Render();
     }
 
-    quit_presses_ = 0;
-    return game_.HandleEvent(event);
-  }
+    bool OnEvent(ftxui::Event event) override {
+        if (event == ftxui::Event::Character('q') && !game_.InIntro() &&
+            !game_.GameOver()) {
+            quit_presses_++;
+            if (quit_presses_ >= 3) {
+                running_ = false;
+                screen_.Exit();
+            }
+            return true;
+        }
 
-private:
-  Game game_;
-  ftxui::ScreenInteractive &screen_;
-  std::atomic<bool> running_{true};
-  std::atomic<bool> tick_pending_{false};
-  std::thread ticker_;
-  int quit_presses_ = 0;
-  int title_wave_ = -1;
+        if (event == ftxui::Event::Custom) {
+            tick_pending_.store(false);
+            game_.Tick();
+            return true;
+        }
+
+        quit_presses_ = 0;
+        return game_.HandleEvent(event);
+    }
+
+  private:
+    Game game_;
+    ftxui::ScreenInteractive &screen_;
+    std::atomic<bool> running_{true};
+    std::atomic<bool> tick_pending_{false};
+    std::thread ticker_;
+    int quit_presses_ = 0;
+    int title_wave_ = -1;
 };
 
 } // namespace
 
 ftxui::Component MakeGameComponent(ftxui::ScreenInteractive &screen,
                                    bool dev_mode) {
-  return ftxui::Make<GameComponent>(screen, dev_mode);
+    return ftxui::Make<GameComponent>(screen, dev_mode);
 }
 
 // ── GameAIBridge pimpl ───────────────────────────────────────────────────────
 // Lives outside the anonymous namespace so it's visible from game.h.
 struct GameAIBridge::Impl {
-  Game game;
-  explicit Impl(bool headless) : game(false, headless) { game.EnterAIMode(); }
+    Game game;
+    explicit Impl(bool headless) : game(false, headless) { game.EnterAIMode(); }
 };
 
 GameAIBridge::GameAIBridge(bool headless)
@@ -3548,14 +3629,14 @@ GameAIBridge::GameAIBridge(bool headless)
 GameAIBridge::~GameAIBridge() = default;
 
 void GameAIBridge::Reset() {
-  impl_->game.ResetState();
-  impl_->game.EnterAIMode();
+    impl_->game.ResetState();
+    impl_->game.EnterAIMode();
 }
 
 void GameAIBridge::Tick() { impl_->game.Tick(); }
 
 bool GameAIBridge::Act(AICommand cmd) {
-  return impl_->game.ExecuteAICommand(cmd);
+    return impl_->game.ExecuteAICommand(cmd);
 }
 
 AIObservation GameAIBridge::Observe() const { return impl_->game.Observe(); }
@@ -3563,7 +3644,7 @@ AIObservation GameAIBridge::Observe() const { return impl_->game.Observe(); }
 bool GameAIBridge::IsTerminal() const { return impl_->game.IsTerminal(); }
 
 AIEpisodeResult GameAIBridge::GetResult() const {
-  return impl_->game.GetAIResult();
+    return impl_->game.GetAIResult();
 }
 
 ftxui::Element GameAIBridge::Render() const { return impl_->game.Render(); }

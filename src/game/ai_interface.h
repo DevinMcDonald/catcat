@@ -43,26 +43,26 @@ constexpr int kAIActSell = kAIActUpgrade + kAINumCandidates; // + pos
 constexpr int kAINumActions = kAIActSell + kAINumCandidates; // 279
 
 struct AIObservation {
-  std::array<float, kAIObs> features{};
-  std::array<bool, kAINumActions> valid{}; // action mask
+    std::array<float, kAIObs> features{};
+    std::array<bool, kAINumActions> valid{}; // action mask
 };
 
 // The AI returns a single integer index into [0, kAINumActions).
 // Game::AIAct() decodes and executes it (noop if invalid).
 struct AICommand {
-  int action = kAIActNoop;
+    int action = kAIActNoop;
 };
 
 // Returned by Game::AIFitness() after a terminal episode.
 struct AIEpisodeResult {
-  float fitness = 0.0f;
-  int waves_cleared = 0;
-  bool victory = false;
-  // per-type count of towers placed during the episode (for diversity bonus)
-  std::array<int, kAINumTowerTypes> tower_type_counts{};
-  // per-type count of upgrades applied (subset of tower_type_counts; never
-  // decrements)
-  std::array<int, kAINumTowerTypes> tower_upgrade_counts{};
-  // per-type accumulated (damage × shots) — proxy for damage contribution
-  std::array<int, kAINumTowerTypes> tower_damage_dealt{};
+    float fitness = 0.0f;
+    int waves_cleared = 0;
+    bool victory = false;
+    // per-type count of towers placed during the episode (for diversity bonus)
+    std::array<int, kAINumTowerTypes> tower_type_counts{};
+    // per-type count of upgrades applied (subset of tower_type_counts; never
+    // decrements)
+    std::array<int, kAINumTowerTypes> tower_upgrade_counts{};
+    // per-type accumulated (damage × shots) — proxy for damage contribution
+    std::array<int, kAINumTowerTypes> tower_damage_dealt{};
 };
