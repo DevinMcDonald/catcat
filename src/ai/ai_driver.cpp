@@ -352,6 +352,12 @@ float Trainer::RunBatch(AIStats &stats, const std::atomic<bool> &running) {
     if (!running.load())
         return 0.f;
 
+    // Capture parent fitness before perturbations so the 1/5 rule counts
+    // "beats this batch's starting point", not "beats all-time best".
+    // Without this, once a good solution is found no candidate ever clears
+    // the all-time bar, success_count stays 0, and sigma grows to max forever.
+    const float parent_fitness = best_fitness_;
+
     // Generate all candidate perturbations up front.
     std::vector<AIPlayer> candidates;
     candidates.reserve(static_cast<std::size_t>(candidates_));
@@ -405,8 +411,9 @@ float Trainer::RunBatch(AIStats &stats, const std::atomic<bool> &running) {
             best_fitness_ = fitness;
             best_player_.Save(weights_path_);
             stats.best_fitness.store(best_fitness_);
-            ++success_count_;
         }
+        if (fitness > parent_fitness)
+            ++success_count_;
         batch_best = std::max(batch_best, fitness);
     }
 
