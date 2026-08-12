@@ -467,30 +467,29 @@ class AIGameComponent : public ftxui::ComponentBase {
           candidates_(candidates), eval_games_(eval_games) {
         display_game_ = std::make_unique<GameAIBridge>(/*headless=*/false);
 
-        training_thread_ =
-            std::thread([this, weights_path, fresh, candidates,
-                         eval_games] { // NOLINT(bugprone-exception-escape)
-                try {
-                    Trainer trainer(weights_path, fresh, candidates,
-                                    eval_games);
-                    {
-                        std::scoped_lock lock(player_mutex_);
-                        display_player_ = trainer.BestPlayer();
-                    }
-                    while (running_) {
-                        trainer.RunBatch(stats_, running_);
-                        if (!running_)
-                            break;
-                        std::scoped_lock lock(player_mutex_);
-                        display_player_ = trainer.BestPlayer();
-                    }
-                } catch (const std::exception &e) {
-                    training_error_ =
-                        std::string("Training error: ") + e.what();
-                } catch (...) {
-                    training_error_ = "Training crashed (unknown exception)";
+        // NOLINTBEGIN(bugprone-exception-escape)
+        training_thread_ = std::thread([this, weights_path, fresh, candidates,
+                                        eval_games] {
+            try {
+                Trainer trainer(weights_path, fresh, candidates, eval_games);
+                {
+                    std::scoped_lock lock(player_mutex_);
+                    display_player_ = trainer.BestPlayer();
                 }
-            });
+                while (running_) {
+                    trainer.RunBatch(stats_, running_);
+                    if (!running_)
+                        break;
+                    std::scoped_lock lock(player_mutex_);
+                    display_player_ = trainer.BestPlayer();
+                }
+            } catch (const std::exception &e) {
+                training_error_ = std::string("Training error: ") + e.what();
+            } catch (...) {
+                training_error_ = "Training crashed (unknown exception)";
+            }
+        });
+        // NOLINTEND(bugprone-exception-escape)
 
         ticker_ = std::thread([this] {
             while (running_) {

@@ -1098,12 +1098,12 @@ class Game {
         sorted.reserve(enemies_.size());
         for (const auto &e : enemies_)
             sorted.push_back(&e);
-        std::
-            stable_sort( // NOLINT(bugprone-nondeterministic-pointer-iteration-order)
-                sorted.begin(), sorted.end(),
-                [](const Enemy *a, const Enemy *b) {
-                    return a->path_progress > b->path_progress;
-                });
+        // NOLINTBEGIN(bugprone-nondeterministic-pointer-iteration-order)
+        std::stable_sort(sorted.begin(), sorted.end(),
+                         [](const Enemy *a, const Enemy *b) {
+                             return a->path_progress > b->path_progress;
+                         });
+        // NOLINTEND(bugprone-nondeterministic-pointer-iteration-order)
         const float path_len =
             static_cast<float>(std::max<std::size_t>(1, path_.size()));
         for (int i = 0; i < kAINumEnemies; ++i) {
