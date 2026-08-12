@@ -35,8 +35,9 @@ UpdateAction CheckForUpdates(bool interactive_prompt, bool show_up_to_date) {
     return UpdateAction::Continue;
   }
   if (!interactive_prompt) {
-    std::cout << "catcat " << current_raw << " (latest " << *latest
-              << "). Run: brew update && brew upgrade devinmcdonald/catcat/catcat\n";
+    std::cout
+        << "catcat " << current_raw << " (latest " << *latest
+        << "). Run: brew update && brew upgrade devinmcdonald/catcat/catcat\n";
     return UpdateAction::Continue;
   }
 
@@ -55,7 +56,8 @@ UpdateAction CheckForUpdates(bool interactive_prompt, bool show_up_to_date) {
   if (!choice.empty()) {
     const char c = static_cast<char>(std::tolower(choice[0]));
     if (c == 'u') {
-      std::cout << "Run: brew update && brew upgrade devinmcdonald/catcat/catcat\n";
+      std::cout
+          << "Run: brew update && brew upgrade devinmcdonald/catcat/catcat\n";
       return UpdateAction::Exit;
     }
     if (c == 'k') {

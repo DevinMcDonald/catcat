@@ -4,13 +4,13 @@
 #include <vector>
 
 class AudioSystem {
- public:
+public:
   AudioSystem();
   ~AudioSystem();
 
-  bool Init(const std::string& config_path);
+  bool Init(const std::string &config_path);
   void ReloadConfig();
-  void PlayEvent(const std::string& name);
+  void PlayEvent(const std::string &name);
   void SetMusicForMap(int map_index);
   void Update();
   void ToggleSfx();
@@ -18,7 +18,7 @@ class AudioSystem {
   bool SfxEnabled() const;
   bool MusicEnabled() const;
 
- private:
+private:
   class Impl;
-  Impl* impl_;
+  Impl *impl_;
 };

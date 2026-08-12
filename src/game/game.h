@@ -20,14 +20,15 @@ public:
   GameAIBridge(const GameAIBridge &) = delete;
   GameAIBridge &operator=(const GameAIBridge &) = delete;
 
-  void Reset();            // start a new episode
-  void Tick();             // advance one game frame (~16 ms)
-  bool Act(AICommand cmd); // execute action; returns false if action was invalid
+  void Reset(); // start a new episode
+  void Tick();  // advance one game frame (~16 ms)
+  bool
+  Act(AICommand cmd); // execute action; returns false if action was invalid
   AIObservation Observe() const;
   bool IsTerminal() const;
   AIEpisodeResult GetResult() const;
   ftxui::Element Render() const;
-  int Wave()     const;
+  int Wave() const;
   int MapIndex() const;
 
   void ToggleSfx();

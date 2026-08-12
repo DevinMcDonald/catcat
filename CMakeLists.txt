@@ -125,6 +125,45 @@ if(BUILD_TESTS)
   gtest_discover_tests(catcat_tests)
 endif()
 
+# ── Lint ─────────────────────────────────────────────────────────────────────
+find_program(CLANG_TIDY clang-tidy HINTS /opt/homebrew/opt/llvm/bin)
+if(CLANG_TIDY)
+  set(LINT_SOURCES
+    src/main.cpp
+    src/game/game.cpp
+    src/audio/audio.cpp
+    src/version/version.cpp
+    src/version/update_checker.cpp
+    src/ai/nn.cpp
+    src/ai/ai_driver.cpp)
+  list(TRANSFORM LINT_SOURCES PREPEND ${CMAKE_SOURCE_DIR}/)
+
+  set(CLANG_TIDY_EXTRA_ARGS "")
+  if(APPLE)
+    execute_process(
+      COMMAND xcrun --show-sdk-path
+      OUTPUT_VARIABLE APPLE_SDK_PATH
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(APPLE_SDK_PATH)
+      set(CLANG_TIDY_EXTRA_ARGS "--extra-arg=--sysroot=${APPLE_SDK_PATH}")
+    endif()
+  endif()
+
+  add_custom_target(lint
+    COMMAND ${CLANG_TIDY}
+      -p ${CMAKE_BINARY_DIR}
+      --header-filter=${CMAKE_SOURCE_DIR}/src/.*
+      ${CLANG_TIDY_EXTRA_ARGS}
+      ${LINT_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Running clang-tidy"
+    VERBATIM)
+else()
+  add_custom_target(lint
+    COMMAND ${CMAKE_COMMAND} -E echo "clang-tidy not found"
+    VERBATIM)
+endif()
+
 # ── Packaging ────────────────────────────────────────────────────────────────
 set(CATCAT_PACKAGE_DIR ${CMAKE_BINARY_DIR}/catcat_package)
 file(GLOB_RECURSE CATCAT_AUDIO_FILES CONFIGURE_DEPENDS

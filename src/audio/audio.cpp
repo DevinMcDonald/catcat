@@ -1,7 +1,7 @@
 #include "audio.hpp"
 
-#include <memory>
 #include <algorithm>
+#include <memory>
 #include <random>
 #include <string>
 #include <unordered_map>
@@ -10,8 +10,8 @@
 #ifdef ENABLE_AUDIO
 #define MINIAUDIO_IMPLEMENTATION
 #include "miniaudio.h"
-#include <nlohmann/json.hpp>
 #include <fstream>
+#include <nlohmann/json.hpp>
 
 struct EventEntry {
   std::vector<std::string> files;
@@ -29,11 +29,11 @@ struct MusicEntry {
 };
 
 class AudioSystem::Impl {
- public:
+public:
   Impl() = default;
   ~Impl() { Shutdown(); }
 
-  bool Init(const std::string& config_path) {
+  bool Init(const std::string &config_path) {
     config_path_ = config_path;
     if (!engine_init_) {
       if (ma_engine_init(nullptr, &engine_) != MA_SUCCESS) {
@@ -45,9 +45,10 @@ class AudioSystem::Impl {
     return true;
   }
 
-  static void IntroEnded(void* user_data, ma_sound* /*sound*/) {
-    if (user_data == nullptr) return;
-    static_cast<Impl*>(user_data)->OnIntroEnded();
+  static void IntroEnded(void *user_data, ma_sound * /*sound*/) {
+    if (user_data == nullptr)
+      return;
+    static_cast<Impl *>(user_data)->OnIntroEnded();
   }
 
   void Shutdown() {
@@ -74,19 +75,24 @@ class AudioSystem::Impl {
 
   void ReloadConfig() { LoadConfig(); }
 
-  void PlayEvent(const std::string& name) {
-    if (!engine_init_ || !sfx_enabled_) return;
+  void PlayEvent(const std::string &name) {
+    if (!engine_init_ || !sfx_enabled_)
+      return;
     auto it = events_.find(name);
-    if (it == events_.end() || it->second.files.empty()) return;
-    const auto& entry = it->second;
-    const auto& list = entry.files;
+    if (it == events_.end() || it->second.files.empty())
+      return;
+    const auto &entry = it->second;
+    const auto &list = entry.files;
     const size_t idx =
-        list.size() == 1 ? 0U : static_cast<size_t>(dist_(rng_) % static_cast<int>(list.size()));
+        list.size() == 1
+            ? 0U
+            : static_cast<size_t>(dist_(rng_) % static_cast<int>(list.size()));
     const float vol = std::clamp(entry.volume, 0.0F, 2.0F);
     CleanupSounds(false);
 
     auto sound = std::make_unique<ma_sound>();
-    if (ma_sound_init_from_file(&engine_, list[idx].c_str(), MA_SOUND_FLAG_ASYNC, nullptr, nullptr,
+    if (ma_sound_init_from_file(&engine_, list[idx].c_str(),
+                                MA_SOUND_FLAG_ASYNC, nullptr, nullptr,
                                 sound.get()) != MA_SUCCESS) {
       return;
     }
@@ -96,9 +102,11 @@ class AudioSystem::Impl {
   }
 
   void SetMusicForMap(int map_index) {
-    if (!engine_init_) return;
+    if (!engine_init_)
+      return;
     StopMusic();
-    if (!music_enabled_) return;
+    if (!music_enabled_)
+      return;
     current_music_path_.clear();
     current_loop_start_sec_ = -1.0F;
     current_loop_end_sec_ = -1.0F;
@@ -107,12 +115,14 @@ class AudioSystem::Impl {
     current_initial_seek_sec_ = -1.0F;
     shared_intro_ = false;
     const auto it = music_.find(map_index);
-    if (it == music_.end() || it->second.files.empty()) return;
-    const auto& tracks = it->second.files;
+    if (it == music_.end() || it->second.files.empty())
+      return;
+    const auto &tracks = it->second.files;
     const size_t idx = tracks.size() == 1
                            ? 0U
-                           : static_cast<size_t>(dist_(rng_) % static_cast<int>(tracks.size()));
-    const std::string& path = tracks[idx];
+                           : static_cast<size_t>(
+                                 dist_(rng_) % static_cast<int>(tracks.size()));
+    const std::string &path = tracks[idx];
     current_music_path_ = path;
     current_loop_start_sec_ = it->second.loop_start_sec;
     current_loop_end_sec_ = it->second.loop_end_sec;
@@ -120,15 +130,17 @@ class AudioSystem::Impl {
     current_intro_end_sec_ = it->second.intro_end_sec;
     current_music_gain_ = std::clamp(it->second.volume, 0.0F, 2.0F);
     if (!it->second.intro_files.empty()) {
-      const auto& intro_list = it->second.intro_files;
+      const auto &intro_list = it->second.intro_files;
       const size_t intro_idx =
           intro_list.size() == 1
               ? 0U
-              : static_cast<size_t>(dist_(rng_) % static_cast<int>(intro_list.size()));
-      const std::string& intro_path = intro_list[intro_idx];
+              : static_cast<size_t>(dist_(rng_) %
+                                    static_cast<int>(intro_list.size()));
+      const std::string &intro_path = intro_list[intro_idx];
       if (intro_path == current_music_path_) {
         shared_intro_ = true;
-        current_initial_seek_sec_ = current_intro_start_sec_ >= 0.0F ? current_intro_start_sec_ : 0.0F;
+        current_initial_seek_sec_ =
+            current_intro_start_sec_ >= 0.0F ? current_intro_start_sec_ : 0.0F;
       } else if (InitIntro(intro_path)) {
         return;
       }
@@ -147,23 +159,28 @@ class AudioSystem::Impl {
   bool SfxEnabled() const { return sfx_enabled_; }
   bool MusicEnabled() const { return music_enabled_; }
 
- private:
-  std::string ResolvePath(const std::string& base, const std::string& path) {
-    if (path.empty()) return path;
+private:
+  std::string ResolvePath(const std::string &base, const std::string &path) {
+    if (path.empty())
+      return path;
     if (path[0] == '/' || (path.size() > 1 && path[1] == ':')) {
-      return path;  // absolute (unix or windows)
+      return path; // absolute (unix or windows)
     }
-    if (base.empty()) return path;
-    if (base.back() == '/') return base + path;
+    if (base.empty())
+      return path;
+    if (base.back() == '/')
+      return base + path;
     return base + "/" + path;
   }
 
   void LoadConfig() {
     events_.clear();
     music_.clear();
-    if (config_path_.empty()) return;
+    if (config_path_.empty())
+      return;
     std::ifstream in(config_path_);
-    if (!in) return;
+    if (!in)
+      return;
     nlohmann::json j;
     in >> j;
     std::string base_dir;
@@ -174,27 +191,31 @@ class AudioSystem::Impl {
       }
     }
     if (j.contains("volume")) {
-      const auto& v = j["volume"];
-      if (v.contains("sfx")) sfx_volume_ = std::clamp(v["sfx"].get<float>(), 0.0F, 1.0F);
-      if (v.contains("music")) music_volume_ = std::clamp(v["music"].get<float>(), 0.0F, 1.0F);
+      const auto &v = j["volume"];
+      if (v.contains("sfx"))
+        sfx_volume_ = std::clamp(v["sfx"].get<float>(), 0.0F, 1.0F);
+      if (v.contains("music"))
+        music_volume_ = std::clamp(v["music"].get<float>(), 0.0F, 1.0F);
       ma_engine_set_volume(&engine_, sfx_volume_);
-      if (music_loaded_) ma_sound_set_volume(&music_sound_, music_volume_);
+      if (music_loaded_)
+        ma_sound_set_volume(&music_sound_, music_volume_);
     }
     if (j.contains("events")) {
       for (auto it = j["events"].begin(); it != j["events"].end(); ++it) {
         EventEntry entry;
-        const auto& v = it.value();
-          if (v.is_array()) {
-            for (const auto& f : v) {
+        const auto &v = it.value();
+        if (v.is_array()) {
+          for (const auto &f : v) {
             entry.files.push_back(ResolvePath(base_dir, f.get<std::string>()));
+          }
+        } else if (v.is_object()) {
+          if (v.contains("files")) {
+            for (const auto &f : v["files"]) {
+              entry.files.push_back(
+                  ResolvePath(base_dir, f.get<std::string>()));
             }
-          } else if (v.is_object()) {
-            if (v.contains("files")) {
-              for (const auto& f : v["files"]) {
-              entry.files.push_back(ResolvePath(base_dir, f.get<std::string>()));
-              }
-            }
-            if (v.contains("volume") && v["volume"].is_number()) {
+          }
+          if (v.contains("volume") && v["volume"].is_number()) {
             entry.volume = std::clamp(v["volume"].get<float>(), 0.0F, 2.0F);
           }
         }
@@ -217,24 +238,27 @@ class AudioSystem::Impl {
           continue;
         }
         MusicEntry entry;
-        const auto& v = it.value();
+        const auto &v = it.value();
         if (v.is_array()) {
-          for (const auto& f : v) {
+          for (const auto &f : v) {
             entry.files.push_back(ResolvePath(base_dir, f.get<std::string>()));
           }
         } else if (v.is_object()) {
           if (v.contains("files")) {
-            for (const auto& f : v["files"]) {
-              entry.files.push_back(ResolvePath(base_dir, f.get<std::string>()));
+            for (const auto &f : v["files"]) {
+              entry.files.push_back(
+                  ResolvePath(base_dir, f.get<std::string>()));
             }
           }
           if (v.contains("intro")) {
             if (v["intro"].is_array()) {
-              for (const auto& f : v["intro"]) {
-                entry.intro_files.push_back(ResolvePath(base_dir, f.get<std::string>()));
+              for (const auto &f : v["intro"]) {
+                entry.intro_files.push_back(
+                    ResolvePath(base_dir, f.get<std::string>()));
               }
             } else if (v["intro"].is_string()) {
-              entry.intro_files.push_back(ResolvePath(base_dir, v["intro"].get<std::string>()));
+              entry.intro_files.push_back(
+                  ResolvePath(base_dir, v["intro"].get<std::string>()));
             }
           }
           if (v.contains("volume") && v["volume"].is_number()) {
@@ -269,27 +293,31 @@ class AudioSystem::Impl {
     }
   }
 
-  bool InitIntro(const std::string& path) {
+  bool InitIntro(const std::string &path) {
     constexpr ma_uint32 kFlags = MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_ASYNC;
-    if (ma_sound_init_from_file(&engine_, path.c_str(), kFlags, nullptr, nullptr,
-                                &intro_sound_) != MA_SUCCESS) {
+    if (ma_sound_init_from_file(&engine_, path.c_str(), kFlags, nullptr,
+                                nullptr, &intro_sound_) != MA_SUCCESS) {
       intro_loaded_ = false;
       return false;
     }
     ma_uint32 rate = 0;
-    ma_sound_get_data_format(&intro_sound_, nullptr, nullptr, &rate, nullptr, 0);
+    ma_sound_get_data_format(&intro_sound_, nullptr, nullptr, &rate, nullptr,
+                             0);
     ma_uint64 length_frames = 0;
     ma_sound_get_length_in_pcm_frames(&intro_sound_, &length_frames);
-    if (rate == 0) rate = 44100;
+    if (rate == 0)
+      rate = 44100;
     ma_uint64 start_frame = 0;
     ma_uint64 end_frame = length_frames;
     if (current_intro_start_sec_ >= 0.0F) {
-      start_frame = static_cast<ma_uint64>(current_intro_start_sec_ * static_cast<float>(rate));
+      start_frame = static_cast<ma_uint64>(current_intro_start_sec_ *
+                                           static_cast<float>(rate));
       start_frame = std::min(start_frame, length_frames);
       ma_sound_seek_to_pcm_frame(&intro_sound_, start_frame);
     }
     if (current_intro_end_sec_ > 0.0F) {
-      end_frame = static_cast<ma_uint64>(current_intro_end_sec_ * static_cast<float>(rate));
+      end_frame = static_cast<ma_uint64>(current_intro_end_sec_ *
+                                         static_cast<float>(rate));
       end_frame = std::min(end_frame, length_frames);
       if (end_frame > start_frame) {
         ma_sound_set_stop_time_in_pcm_frames(&intro_sound_, end_frame);
@@ -312,26 +340,33 @@ class AudioSystem::Impl {
   }
 
   bool StartMainMusic() {
-    if (current_music_path_.empty()) return false;
+    if (current_music_path_.empty())
+      return false;
     constexpr ma_uint32 kMusicFlags =
-        MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_ASYNC;  // fully decode for seamless looping
-    if (ma_sound_init_from_file(&engine_, current_music_path_.c_str(), kMusicFlags, nullptr,
-                                nullptr, &music_sound_) != MA_SUCCESS) {
+        MA_SOUND_FLAG_DECODE |
+        MA_SOUND_FLAG_ASYNC; // fully decode for seamless looping
+    if (ma_sound_init_from_file(&engine_, current_music_path_.c_str(),
+                                kMusicFlags, nullptr, nullptr,
+                                &music_sound_) != MA_SUCCESS) {
       music_loaded_ = false;
       return false;
     }
     ma_uint32 rate = 0;
-    ma_sound_get_data_format(&music_sound_, nullptr, nullptr, &rate, nullptr, 0);
+    ma_sound_get_data_format(&music_sound_, nullptr, nullptr, &rate, nullptr,
+                             0);
     ma_uint64 length_frames = 0;
     ma_sound_get_length_in_pcm_frames(&music_sound_, &length_frames);
-    if (rate == 0) rate = 44100;
+    if (rate == 0)
+      rate = 44100;
     ma_uint64 loop_start_frame = 0;
     ma_uint64 loop_end_frame = length_frames;
     if (current_loop_start_sec_ >= 0.0F) {
-      loop_start_frame = static_cast<ma_uint64>(current_loop_start_sec_ * static_cast<float>(rate));
+      loop_start_frame = static_cast<ma_uint64>(current_loop_start_sec_ *
+                                                static_cast<float>(rate));
     }
     if (current_loop_end_sec_ > 0.0F) {
-      loop_end_frame = static_cast<ma_uint64>(current_loop_end_sec_ * static_cast<float>(rate));
+      loop_end_frame = static_cast<ma_uint64>(current_loop_end_sec_ *
+                                              static_cast<float>(rate));
     }
 
     // Clamp and fallback sensibly if values are out of bounds.
@@ -348,8 +383,9 @@ class AudioSystem::Impl {
     }
 
     if (loop_start_frame < loop_end_frame) {
-      ma_data_source_set_loop_point_in_pcm_frames(ma_sound_get_data_source(&music_sound_),
-                                                  loop_start_frame, loop_end_frame);
+      ma_data_source_set_loop_point_in_pcm_frames(
+          ma_sound_get_data_source(&music_sound_), loop_start_frame,
+          loop_end_frame);
     }
     float seek_sec = -1.0F;
     if (current_initial_seek_sec_ >= 0.0F) {
@@ -358,7 +394,8 @@ class AudioSystem::Impl {
       seek_sec = current_loop_start_sec_;
     }
     if (seek_sec > 0.0F) {
-      ma_uint64 seek_frame = static_cast<ma_uint64>(seek_sec * static_cast<float>(rate));
+      ma_uint64 seek_frame =
+          static_cast<ma_uint64>(seek_sec * static_cast<float>(rate));
       seek_frame = std::min(seek_frame, length_frames);
       ma_sound_seek_to_pcm_frame(&music_sound_, seek_frame);
     }
@@ -370,12 +407,15 @@ class AudioSystem::Impl {
   }
 
   void CleanupSounds(bool force_all) {
-    if (active_sounds_.empty()) return;
+    if (active_sounds_.empty())
+      return;
     active_sounds_.erase(
         std::remove_if(active_sounds_.begin(), active_sounds_.end(),
-                       [&](std::unique_ptr<ma_sound>& s) {
-                         if (!s) return true;
-                         if (force_all || ma_sound_is_playing(s.get()) == MA_FALSE) {
+                       [&](std::unique_ptr<ma_sound> &s) {
+                         if (!s)
+                           return true;
+                         if (force_all ||
+                             ma_sound_is_playing(s.get()) == MA_FALSE) {
                            ma_sound_uninit(s.get());
                            return true;
                          }
@@ -412,10 +452,14 @@ class AudioSystem::Impl {
 
 AudioSystem::AudioSystem() : impl_(new Impl()) {}
 AudioSystem::~AudioSystem() { delete impl_; }
-bool AudioSystem::Init(const std::string& config_path) { return impl_->Init(config_path); }
+bool AudioSystem::Init(const std::string &config_path) {
+  return impl_->Init(config_path);
+}
 void AudioSystem::ReloadConfig() { impl_->ReloadConfig(); }
-void AudioSystem::PlayEvent(const std::string& name) { impl_->PlayEvent(name); }
-void AudioSystem::SetMusicForMap(int map_index) { impl_->SetMusicForMap(map_index); }
+void AudioSystem::PlayEvent(const std::string &name) { impl_->PlayEvent(name); }
+void AudioSystem::SetMusicForMap(int map_index) {
+  impl_->SetMusicForMap(map_index);
+}
 void AudioSystem::Update() { impl_->Update(); }
 void AudioSystem::ToggleSfx() { impl_->ToggleSfx(); }
 void AudioSystem::ToggleMusic() { impl_->ToggleMusic(); }
@@ -427,9 +471,9 @@ bool AudioSystem::MusicEnabled() const { return impl_->MusicEnabled(); }
 class AudioSystem::Impl {};
 AudioSystem::AudioSystem() : impl_(new Impl()) {}
 AudioSystem::~AudioSystem() { delete impl_; }
-bool AudioSystem::Init(const std::string&) { return false; }
+bool AudioSystem::Init(const std::string &) { return false; }
 void AudioSystem::ReloadConfig() {}
-void AudioSystem::PlayEvent(const std::string&) {}
+void AudioSystem::PlayEvent(const std::string &) {}
 void AudioSystem::SetMusicForMap(int) {}
 void AudioSystem::ToggleSfx() {}
 void AudioSystem::ToggleMusic() {}

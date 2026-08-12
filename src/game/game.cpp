@@ -31,9 +31,10 @@
 #include "game/game_logic.h"
 
 // Emit an xterm-compatible window title. No-op on dumb terminals or pipes.
-static void SetTerminalTitle(const std::string& title) {
-  const char* term = std::getenv("TERM");
-  if (term && std::string_view(term) == "dumb") return;
+static void SetTerminalTitle(const std::string &title) {
+  const char *term = std::getenv("TERM");
+  if (term && std::string_view(term) == "dumb")
+    return;
   // OSC 0: sets both icon name and window title; BEL-terminated.
   std::printf("\033]0;%s\007", title.c_str());
   std::fflush(stdout);
@@ -55,23 +56,27 @@ constexpr int kBoardWidth = 48;
 constexpr int kBoardHeight = 28;
 constexpr int kTickMs = 16; // ~60 FPS
 constexpr float kTickSeconds = kTickMs / 1000.0F;
-constexpr int kStartingKibbles       = 90;
-constexpr int kUnlockCostMultiplier  = 8;  // tower unlock costs this multiple of base cost
-constexpr int kUpgradeCostMultiplier = 2;  // tower upgrade costs this multiple of base cost
+constexpr int kStartingKibbles = 90;
+constexpr int kUnlockCostMultiplier =
+    8; // tower unlock costs this multiple of base cost
+constexpr int kUpgradeCostMultiplier =
+    2; // tower upgrade costs this multiple of base cost
 constexpr float kSpeedFactor = 1.3F; // Global pacing multiplier (~30% faster).
 constexpr float kFastForwardMultiplier = 5.0F;
 constexpr int kStartingLives = 9;
 constexpr float kCatSleepBase = 1.0F;
 constexpr float kCatSleepUpgrade = 1.6F;
 constexpr float kCatSleepCap = 5.0F;
-constexpr float kGalacticResetChance  = 0.10F; // base chance; ×3 when upgraded
-constexpr float kGalacticRewindSpeed  = 15.0F; // cells/sec during rewind animation
+constexpr float kGalacticResetChance = 0.10F; // base chance; ×3 when upgraded
+constexpr float kGalacticRewindSpeed =
+    15.0F; // cells/sec during rewind animation
 constexpr float kKittyJumpBonusRange = 1.5F; // extra reach for upgraded jumps
 
 // Catastrophe
 constexpr float kCatastropheTravelTime = 1.8F; // seconds of flight time
 constexpr float kCatastropheArcHeight = 3.5F;  // visual height peak in cells
-constexpr float kCatastropheSplashRadius = 2.9F; // covers full 5×5 square (corners at √8≈2.83)
+constexpr float kCatastropheSplashRadius =
+    2.9F; // covers full 5×5 square (corners at √8≈2.83)
 constexpr float kCatastropheZoneDuration = 3.0F;
 constexpr float kCatastropheZoneTickInterval = 0.40F;
 constexpr int kCatastropheZoneDamagePerTick = 3;
@@ -131,23 +136,29 @@ struct Enemy {
   int lane_offset = 0; // lateral offset from center path
   EnemyType type = EnemyType::Rat;
   float sleep_timer = 0.0F;
-  float rewind_speed = 0.0F;  // > 0 while Galacticat rewind is active
+  float rewind_speed = 0.0F; // > 0 while Galacticat rewind is active
 };
 
 struct Tower {
   enum class Type {
-    Default, Fat, Kitty, Thunder, Catatonic, Catastrophe, Galactic
+    Default,
+    Fat,
+    Kitty,
+    Thunder,
+    Catatonic,
+    Catastrophe,
+    Galactic
   };
 
-  Position   pos{};
-  Position   home{};
-  int        damage    = 2;
-  float      range     = 3.2F;
-  float      cooldown  = 0.0F;   // time until next shot
-  float      fire_rate = 1.2F;   // seconds between shots
-  Type       type      = Type::Default;
-  int        size      = 1;      // 1x1 or 2x2 for Fat
-  bool       upgraded  = false;
+  Position pos{};
+  Position home{};
+  int damage = 2;
+  float range = 3.2F;
+  float cooldown = 0.0F;  // time until next shot
+  float fire_rate = 1.2F; // seconds between shots
+  Type type = Type::Default;
+  int size = 1; // 1x1 or 2x2 for Fat
+  bool upgraded = false;
 };
 
 struct HitSplat {
@@ -207,8 +218,8 @@ struct ArcProjectile {
 // Explosion-in-progress: crater and toxic zone form after a short delay.
 struct PendingCatastrophe {
   Position target{};
-  bool     upgraded = false;
-  float    timer    = 0.35F; // seconds until crater forms
+  bool upgraded = false;
+  float timer = 0.35F; // seconds until crater forms
 };
 
 // Lingering damage zone left by a landed Catastrophe projectile.
@@ -243,8 +254,8 @@ struct MapDef {
 // Single source of truth for all tower types. SortedDefs, TypeKey, and
 // HandleEvent key bindings all derive their ordering from this array.
 constexpr std::array<Tower::Type, 7> kAllTowerTypes = {
-    Tower::Type::Default,  Tower::Type::Fat,          Tower::Type::Kitty,
-    Tower::Type::Thunder,  Tower::Type::Catatonic,    Tower::Type::Catastrophe,
+    Tower::Type::Default,  Tower::Type::Fat,       Tower::Type::Kitty,
+    Tower::Type::Thunder,  Tower::Type::Catatonic, Tower::Type::Catastrophe,
     Tower::Type::Galactic,
 };
 
@@ -314,7 +325,8 @@ public:
     rng_ = std::mt19937(std::random_device{}());
     unlocked_types_ = {Tower::Type::Default};
     if (dev_mode_) {
-      for (auto t : kAllTowerTypes) unlocked_types_.insert(t);
+      for (auto t : kAllTowerTypes)
+        unlocked_types_.insert(t);
     }
     BuildPath();
 #ifdef ENABLE_AUDIO
@@ -612,7 +624,8 @@ public:
     }
     if (game_over_ || victory_) {
       if (game_over_display_timer_ > 0.0f) {
-        game_over_display_timer_ = std::max(0.0f, game_over_display_timer_ - kTickSeconds);
+        game_over_display_timer_ =
+            std::max(0.0f, game_over_display_timer_ - kTickSeconds);
       }
       return;
     }
@@ -636,14 +649,16 @@ public:
         game_over_ = true;
         auto_waves_ = false;
         SetMusic(-1);
-        if (!ai_mode_) game_over_display_timer_ = 5.0f;
+        if (!ai_mode_)
+          game_over_display_timer_ = 5.0f;
       }
     }
   }
 
   bool HandleEvent(const ftxui::Event &event) {
     if ((game_over_ || victory_) && event != ftxui::Event::Custom) {
-      if (game_over_display_timer_ > 0.0f) return true;
+      if (game_over_display_timer_ > 0.0f)
+        return true;
       ResetState();
       return true;
     }
@@ -894,16 +909,16 @@ public:
 
   bool GameOver() const { return game_over_; }
   bool InIntro() const { return intro_stage_ != IntroStage::Playing; }
-  int  Wave()     const { return wave_; }
-  int  MapIndex() const { return map_index_; }
+  int Wave() const { return wave_; }
+  int MapIndex() const { return map_index_; }
 
   // ── AI interface ──────────────────────────────────────────────────────────
   void EnterAIMode() {
-    ai_mode_    = true;
+    ai_mode_ = true;
     auto_waves_ = true;
-    intro_stage_= IntroStage::Playing;
+    intro_stage_ = IntroStage::Playing;
     ai_enemies_killed_ = 0;
-    ai_lives_lost_     = 0;
+    ai_lives_lost_ = 0;
     ai_tower_type_counts_.fill(0);
     ai_tower_upgrade_counts_.fill(0);
     ai_map_tower_counts_.fill(0);
@@ -917,53 +932,64 @@ public:
 
   AIObservation Observe() const {
     AIObservation obs;
-    auto& f = obs.features;
+    auto &f = obs.features;
 
     f[0] = std::min(static_cast<float>(kibbles_), 500.0f) / 500.0f;
     f[1] = static_cast<float>(lives_) / static_cast<float>(kStartingLives);
     f[2] = static_cast<float>(wave_) / 100.0f;
     f[3] = static_cast<float>(map_index_) / 9.0f;
     f[4] = wave_active_ ? 1.0f : 0.0f;
-    f[5] = static_cast<float>(wave_ % kWavesPerMap) / static_cast<float>(kWavesPerMap);
-    f[6] = wave_active_
-               ? static_cast<float>(spawn_remaining_) /
-                     static_cast<float>(std::max(1, SpawnCount(DifficultyLevel())))
-               : 0.0f;
+    f[5] = static_cast<float>(wave_ % kWavesPerMap) /
+           static_cast<float>(kWavesPerMap);
+    f[6] =
+        wave_active_
+            ? static_cast<float>(spawn_remaining_) /
+                  static_cast<float>(std::max(1, SpawnCount(DifficultyLevel())))
+            : 0.0f;
 
     // Precompute which path cells are already covered by existing towers
     constexpr float kCoverageR2 = 3.5f * 3.5f;
     std::vector<bool> path_covered(path_.size(), false);
-    for (const auto& tower : towers_) {
+    for (const auto &tower : towers_) {
       const float tr = GetDef(tower.type).range;
       const float tr2 = tr * tr;
       for (std::size_t pi = 0; pi < path_.size(); ++pi) {
-        const auto& p = path_[pi];
+        const auto &p = path_[pi];
         const float dx = static_cast<float>(tower.pos.x - p.x);
         const float dy = static_cast<float>(tower.pos.y - p.y);
-        if (dx*dx + dy*dy <= tr2) path_covered[pi] = true;
+        if (dx * dx + dy * dy <= tr2)
+          path_covered[pi] = true;
       }
     }
 
     int base = kAIObsGlobal;
     for (int i = 0; i < kAINumTowerTypes; ++i) {
-      const Tower::Type t   = kAllTowerTypes[static_cast<std::size_t>(i)];
-      const TowerDef    def = GetDef(t);
-      f[static_cast<std::size_t>(base + i)]                       = IsUnlocked(t) ? 1.0f : 0.0f;
-      f[static_cast<std::size_t>(base + kAINumTowerTypes   + i)]  = (kibbles_ >= def.cost) ? 1.0f : 0.0f;
-      f[static_cast<std::size_t>(base + kAINumTowerTypes*2 + i)]  =
-          (!IsUnlocked(t) && kibbles_ >= def.cost * kUnlockCostMultiplier) ? 1.0f : 0.0f;
+      const Tower::Type t = kAllTowerTypes[static_cast<std::size_t>(i)];
+      const TowerDef def = GetDef(t);
+      f[static_cast<std::size_t>(base) + static_cast<std::size_t>(i)] =
+          IsUnlocked(t) ? 1.0f : 0.0f;
+      f[static_cast<std::size_t>(base) +
+        static_cast<std::size_t>(kAINumTowerTypes) +
+        static_cast<std::size_t>(i)] = (kibbles_ >= def.cost) ? 1.0f : 0.0f;
+      f[static_cast<std::size_t>(base) +
+        static_cast<std::size_t>(kAINumTowerTypes * 2) +
+        static_cast<std::size_t>(i)] =
+          (!IsUnlocked(t) && kibbles_ >= def.cost * kUnlockCostMultiplier)
+              ? 1.0f
+              : 0.0f;
     }
 
     base = kAIObsGlobal + kAIObsTowerInfo;
     for (int j = 0; j < kAINumCandidates; ++j) {
-      const Position& pos = ai_candidates_[static_cast<std::size_t>(j)];
-      const int off = base + j * kAICandidateFeats;
+      const Position &pos = ai_candidates_[static_cast<std::size_t>(j)];
+      const std::size_t off = static_cast<std::size_t>(base) +
+                              static_cast<std::size_t>(j) * kAICandidateFeats;
       const auto tidx = TowerIndexAt(pos);
 
       // off+0: buildable for 1×1 towers; off+1: buildable for 2×2 (Fat Cat)
-      f[static_cast<std::size_t>(off+0)] =
+      f[off + 0] =
           CanPlace(pos, 1, Tower::Type::Default, 3.2f, false) ? 1.0f : 0.0f;
-      f[static_cast<std::size_t>(off+1)] =
+      f[off + 1] =
           CanPlace(pos, 2, Tower::Type::Fat, 2.4f, false) ? 1.0f : 0.0f;
 
       // off+5..7: incremental coverage (uncovered path cells) at three radii
@@ -973,134 +999,173 @@ public:
       if (!path_.empty()) {
         int us = 0, um = 0, ul = 0;
         for (std::size_t pi = 0; pi < path_.size(); ++pi) {
-          if (path_covered[pi]) continue;
-          const auto& p = path_[pi];
+          if (path_covered[pi])
+            continue;
+          const auto &p = path_[pi];
           const float dx = static_cast<float>(pos.x - p.x);
           const float dy = static_cast<float>(pos.y - p.y);
-          const float d2 = dx*dx + dy*dy;
-          if (d2 <= kSmallR2) ++us;
-          if (d2 <= kCoverageR2) ++um;
-          if (d2 <= kLargeR2) ++ul;
+          const float d2 = dx * dx + dy * dy;
+          if (d2 <= kSmallR2)
+            ++us;
+          if (d2 <= kCoverageR2)
+            ++um;
+          if (d2 <= kLargeR2)
+            ++ul;
         }
         const float path_len = static_cast<float>(path_.size());
         inc_small = static_cast<float>(us) / path_len;
-        inc_mid   = static_cast<float>(um) / path_len;
+        inc_mid = static_cast<float>(um) / path_len;
         inc_large = static_cast<float>(ul) / path_len;
       }
 
       if (tidx.has_value()) {
-        const Tower& t = towers_[*tidx];
+        const Tower &t = towers_[*tidx];
         int ti = 0;
         for (int i = 0; i < kAINumTowerTypes; ++i)
-          if (kAllTowerTypes[static_cast<std::size_t>(i)] == t.type) { ti = i; break; }
-        f[static_cast<std::size_t>(off+2)]  = 1.0f;
-        f[static_cast<std::size_t>(off+3)]  = static_cast<float>(ti) / static_cast<float>(kAINumTowerTypes-1);
-        f[static_cast<std::size_t>(off+4)]  = t.upgraded ? 1.0f : 0.0f;
-        f[static_cast<std::size_t>(off+5)]  = inc_small;
-        f[static_cast<std::size_t>(off+6)]  = inc_mid;
-        f[static_cast<std::size_t>(off+7)]  = inc_large;
-        f[static_cast<std::size_t>(off+8)]  = std::min(t.cooldown / t.fire_rate, 1.0f);
-        f[static_cast<std::size_t>(off+9)]  = (!t.upgraded && kibbles_ >= GetDef(t.type).cost * kUpgradeCostMultiplier) ? 1.0f : 0.0f;
-        f[static_cast<std::size_t>(off+10)] = ai_candidate_path_pos_[static_cast<std::size_t>(j)];
+          if (kAllTowerTypes[static_cast<std::size_t>(i)] == t.type) {
+            ti = i;
+            break;
+          }
+        f[off + 2] = 1.0f;
+        f[off + 3] =
+            static_cast<float>(ti) / static_cast<float>(kAINumTowerTypes - 1);
+        f[off + 4] = t.upgraded ? 1.0f : 0.0f;
+        f[off + 5] = inc_small;
+        f[off + 6] = inc_mid;
+        f[off + 7] = inc_large;
+        f[off + 8] = std::min(t.cooldown / t.fire_rate, 1.0f);
+        f[off + 9] = (!t.upgraded &&
+                      kibbles_ >= GetDef(t.type).cost * kUpgradeCostMultiplier)
+                         ? 1.0f
+                         : 0.0f;
+        f[off + 10] = ai_candidate_path_pos_[static_cast<std::size_t>(j)];
       } else {
-        f[static_cast<std::size_t>(off+2)]  = 0.0f;
-        f[static_cast<std::size_t>(off+3)]  = 0.0f;
-        f[static_cast<std::size_t>(off+4)]  = 0.0f;
-        f[static_cast<std::size_t>(off+5)]  = inc_small;
-        f[static_cast<std::size_t>(off+6)]  = inc_mid;
-        f[static_cast<std::size_t>(off+7)]  = inc_large;
-        f[static_cast<std::size_t>(off+8)]  = 0.0f;
-        f[static_cast<std::size_t>(off+9)]  = 0.0f;
-        f[static_cast<std::size_t>(off+10)] = ai_candidate_path_pos_[static_cast<std::size_t>(j)];
+        f[off + 2] = 0.0f;
+        f[off + 3] = 0.0f;
+        f[off + 4] = 0.0f;
+        f[off + 5] = inc_small;
+        f[off + 6] = inc_mid;
+        f[off + 7] = inc_large;
+        f[off + 8] = 0.0f;
+        f[off + 9] = 0.0f;
+        f[off + 10] = ai_candidate_path_pos_[static_cast<std::size_t>(j)];
       }
 
       // off+11..17: neighbor presence per tower type within coverage radius
       for (int k = 0; k < kAINumTowerTypes; ++k) {
         const Tower::Type kt = kAllTowerTypes[static_cast<std::size_t>(k)];
         bool found = false;
-        for (const auto& tower : towers_) {
-          if (tower.type != kt) continue;
+        for (const auto &tower : towers_) {
+          if (tower.type != kt)
+            continue;
           const float dx = static_cast<float>(tower.pos.x - pos.x);
           const float dy = static_cast<float>(tower.pos.y - pos.y);
-          if (dx*dx + dy*dy <= kCoverageR2) { found = true; break; }
+          if (dx * dx + dy * dy <= kCoverageR2) {
+            found = true;
+            break;
+          }
         }
-        f[static_cast<std::size_t>(off+11+k)] = found ? 1.0f : 0.0f;
+        f[off + 11 + static_cast<std::size_t>(k)] = found ? 1.0f : 0.0f;
       }
     }
 
     base = kAIObsGlobal + kAIObsTowerInfo + kAIObsCandidates;
-    std::vector<const Enemy*> sorted;
+    std::vector<const Enemy *> sorted;
     sorted.reserve(enemies_.size());
-    for (const auto& e : enemies_) sorted.push_back(&e);
-    std::sort(sorted.begin(), sorted.end(),
-              [](const Enemy* a, const Enemy* b) {
-                return a->path_progress > b->path_progress;
-              });
-    const float path_len = static_cast<float>(std::max<std::size_t>(1, path_.size()));
+    for (const auto &e : enemies_)
+      sorted.push_back(&e);
+    std::stable_sort(
+        sorted.begin(),
+        sorted
+            .end(), // NOLINT(bugprone-nondeterministic-pointer-iteration-order)
+        [](const Enemy *a, const Enemy *b) {
+          return a->path_progress > b->path_progress;
+        });
+    const float path_len =
+        static_cast<float>(std::max<std::size_t>(1, path_.size()));
     for (int i = 0; i < kAINumEnemies; ++i) {
-      const std::size_t off = static_cast<std::size_t>(base + i * 3);
+      const std::size_t off =
+          static_cast<std::size_t>(base) + static_cast<std::size_t>(i) * 3;
       if (i < static_cast<int>(sorted.size())) {
-        const Enemy* e = sorted[static_cast<std::size_t>(i)];
+        const Enemy *e = sorted[static_cast<std::size_t>(i)];
         const int max_hp = EnemyMaxHP(e->type, DifficultyLevel());
-        f[off+0] = e->path_progress / path_len;
-        f[off+1] = static_cast<float>(e->hp) / static_cast<float>(std::max(1, max_hp));
-        f[off+2] = static_cast<float>(static_cast<int>(e->type)) / 3.0f;
+        f[off + 0] = e->path_progress / path_len;
+        f[off + 1] =
+            static_cast<float>(e->hp) / static_cast<float>(std::max(1, max_hp));
+        f[off + 2] = static_cast<float>(static_cast<int>(e->type)) / 3.0f;
       } else {
-        f[off] = 0.0f; f[off+1] = 0.0f; f[off+2] = 0.0f;
+        f[off] = 0.0f;
+        f[off + 1] = 0.0f;
+        f[off + 2] = 0.0f;
       }
     }
 
     // Action mask
     obs.valid.fill(false);
-    obs.valid[kAIActNoop]      = true;
+    obs.valid[kAIActNoop] = true;
     obs.valid[kAIActStartWave] = !wave_active_ && !game_over_ && !victory_;
     for (int i = 0; i < kAINumTowerTypes; ++i) {
-      const Tower::Type t   = kAllTowerTypes[static_cast<std::size_t>(i)];
-      const TowerDef    def = GetDef(t);
-      obs.valid[static_cast<std::size_t>(kAIActUnlock + i)] =
+      const Tower::Type t = kAllTowerTypes[static_cast<std::size_t>(i)];
+      const TowerDef def = GetDef(t);
+      obs.valid[static_cast<std::size_t>(kAIActUnlock) +
+                static_cast<std::size_t>(i)] =
           !IsUnlocked(t) && kibbles_ >= def.cost * kUnlockCostMultiplier;
-      const bool under_cap = ai_map_tower_counts_[static_cast<std::size_t>(i)] < kAIMaxTowersPerType;
+      const bool under_cap = ai_map_tower_counts_[static_cast<std::size_t>(i)] <
+                             kAIMaxTowersPerType;
       for (int j = 0; j < kAINumCandidates; ++j) {
-        obs.valid[static_cast<std::size_t>(kAIActPlace + i*kAINumCandidates + j)] =
+        obs.valid[static_cast<std::size_t>(kAIActPlace) +
+                  static_cast<std::size_t>(i) * kAINumCandidates +
+                  static_cast<std::size_t>(j)] =
             under_cap && IsUnlocked(t) && kibbles_ >= def.cost &&
-            CanPlace(ai_candidates_[static_cast<std::size_t>(j)],
-                     def.size, t, def.range, false);
+            CanPlace(ai_candidates_[static_cast<std::size_t>(j)], def.size, t,
+                     def.range, false);
       }
     }
     for (int j = 0; j < kAINumCandidates; ++j) {
-      const auto tidx = TowerIndexAt(ai_candidates_[static_cast<std::size_t>(j)]);
+      const auto tidx =
+          TowerIndexAt(ai_candidates_[static_cast<std::size_t>(j)]);
       if (tidx.has_value()) {
-        const Tower& t  = towers_[*tidx];
+        const Tower &t = towers_[*tidx];
         const TowerDef def = GetDef(t.type);
-        obs.valid[static_cast<std::size_t>(kAIActUpgrade + j)] =
+        obs.valid[static_cast<std::size_t>(kAIActUpgrade) +
+                  static_cast<std::size_t>(j)] =
             !t.upgraded && kibbles_ >= def.cost * kUpgradeCostMultiplier;
-        obs.valid[static_cast<std::size_t>(kAIActSell + j)] = true;
+        obs.valid[static_cast<std::size_t>(kAIActSell) +
+                  static_cast<std::size_t>(j)] = true;
       }
     }
     return obs;
   }
 
   bool ExecuteAICommand(AICommand cmd) {
-    // Burn down the post-map-transition grace period; auto-start wave when done.
+    // Burn down the post-map-transition grace period; auto-start wave when
+    // done.
     if (ai_grace_decisions_ > 0) {
-      if (--ai_grace_decisions_ == 0) StartWave();
+      if (--ai_grace_decisions_ == 0)
+        StartWave();
     }
 
     const int a = cmd.action;
-    if (a == kAIActNoop) return true;
+    if (a == kAIActNoop)
+      return true;
 
     if (a == kAIActStartWave) {
-      if (wave_active_ || game_over_ || victory_) return false;
-      StartWave(); return true;
+      if (wave_active_ || game_over_ || victory_)
+        return false;
+      StartWave();
+      return true;
     }
 
     if (a >= kAIActUnlock && a < kAIActPlace) {
       const int ti = a - kAIActUnlock;
-      if (ti >= kAINumTowerTypes) return false;
+      if (ti >= kAINumTowerTypes)
+        return false;
       const Tower::Type type = kAllTowerTypes[static_cast<std::size_t>(ti)];
       const TowerDef def = GetDef(type);
-      if (IsUnlocked(type) || kibbles_ < def.cost * kUnlockCostMultiplier) return false;
-      Unlock(type); kibbles_ -= def.cost * kUnlockCostMultiplier;
+      if (IsUnlocked(type) || kibbles_ < def.cost * kUnlockCostMultiplier)
+        return false;
+      Unlock(type);
+      kibbles_ -= def.cost * kUnlockCostMultiplier;
       Sfx("unlock");
       return true;
     }
@@ -1108,17 +1173,24 @@ public:
     if (a >= kAIActPlace && a < kAIActUpgrade) {
       const int ti = (a - kAIActPlace) / kAINumCandidates;
       const int pi = (a - kAIActPlace) % kAINumCandidates;
-      if (ti >= kAINumTowerTypes || pi >= kAINumCandidates) return false;
+      if (ti >= kAINumTowerTypes || pi >= kAINumCandidates)
+        return false;
       const Tower::Type type = kAllTowerTypes[static_cast<std::size_t>(ti)];
-      const TowerDef    def  = GetDef(type);
-      const Position&   pos  = ai_candidates_[static_cast<std::size_t>(pi)];
-      if (!IsUnlocked(type) || kibbles_ < def.cost) return false;
-      if (!CanPlace(pos, def.size, type, def.range, false)) return false;
+      const TowerDef def = GetDef(type);
+      const Position &pos = ai_candidates_[static_cast<std::size_t>(pi)];
+      if (!IsUnlocked(type) || kibbles_ < def.cost)
+        return false;
+      if (!CanPlace(pos, def.size, type, def.range, false))
+        return false;
       Tower t;
-      t.pos = pos; t.home = pos;
-      t.damage = def.damage; t.range = def.range; t.fire_rate = def.fire_rate;
+      t.pos = pos;
+      t.home = pos;
+      t.damage = def.damage;
+      t.range = def.range;
+      t.fire_rate = def.fire_rate;
       t.cooldown = Rand(0.05f, def.fire_rate);
-      t.type = type; t.size = def.size;
+      t.type = type;
+      t.size = def.size;
       towers_.push_back(t);
       kibbles_ -= def.cost;
       ai_tower_type_counts_[static_cast<std::size_t>(ti)]++;
@@ -1129,30 +1201,41 @@ public:
 
     if (a >= kAIActUpgrade && a < kAIActSell) {
       const int pi = a - kAIActUpgrade;
-      if (pi >= kAINumCandidates) return false;
-      const auto tidx = TowerIndexAt(ai_candidates_[static_cast<std::size_t>(pi)]);
-      if (!tidx.has_value()) return false;
-      Tower& t = towers_[*tidx];
-      if (t.upgraded) return false;
+      if (pi >= kAINumCandidates)
+        return false;
+      const auto tidx =
+          TowerIndexAt(ai_candidates_[static_cast<std::size_t>(pi)]);
+      if (!tidx.has_value())
+        return false;
+      Tower &t = towers_[*tidx];
+      if (t.upgraded)
+        return false;
       const TowerDef def = GetDef(t.type);
-      if (kibbles_ < def.cost * kUpgradeCostMultiplier) return false;
-      kibbles_ -= def.cost * kUpgradeCostMultiplier; t.upgraded = true;
+      if (kibbles_ < def.cost * kUpgradeCostMultiplier)
+        return false;
+      kibbles_ -= def.cost * kUpgradeCostMultiplier;
+      t.upgraded = true;
       for (int i = 0; i < kAINumTowerTypes; ++i)
         if (kAllTowerTypes[static_cast<std::size_t>(i)] == t.type) {
           ai_tower_upgrade_counts_[static_cast<std::size_t>(i)]++;
           break;
         }
-      if      (t.type == Tower::Type::Fat)     t.range += 1.0f;
-      else if (t.type == Tower::Type::Default) t.range += 2.0f;
+      if (t.type == Tower::Type::Fat)
+        t.range += 1.0f;
+      else if (t.type == Tower::Type::Default)
+        t.range += 2.0f;
       Sfx("unlock");
       return true;
     }
 
     if (a >= kAIActSell && a < kAINumActions) {
       const int pi = a - kAIActSell;
-      if (pi >= kAINumCandidates) return false;
-      const auto tidx = TowerIndexAt(ai_candidates_[static_cast<std::size_t>(pi)]);
-      if (!tidx.has_value()) return false;
+      if (pi >= kAINumCandidates)
+        return false;
+      const auto tidx =
+          TowerIndexAt(ai_candidates_[static_cast<std::size_t>(pi)]);
+      if (!tidx.has_value())
+        return false;
       const Tower::Type sold_type = towers_[*tidx].type;
       kibbles_ += SellRefund(GetDef(sold_type).cost);
       towers_.erase(towers_.begin() + static_cast<long>(*tidx));
@@ -1169,7 +1252,8 @@ public:
   }
 
   void AITrackDamage(Tower::Type type, int amount) {
-    if (!ai_mode_) return;
+    if (!ai_mode_)
+      return;
     for (int i = 0; i < kAINumTowerTypes; ++i)
       if (kAllTowerTypes[static_cast<std::size_t>(i)] == type) {
         ai_damage_per_type_[static_cast<std::size_t>(i)] += amount;
@@ -1180,19 +1264,21 @@ public:
   AIEpisodeResult GetAIResult() const {
     AIEpisodeResult r;
     r.waves_cleared = map_index_ * kWavesPerMap + (wave_ % kWavesPerMap);
-    r.victory       = victory_;
-    r.tower_type_counts    = ai_tower_type_counts_;
+    r.victory = victory_;
+    r.tower_type_counts = ai_tower_type_counts_;
     r.tower_upgrade_counts = ai_tower_upgrade_counts_;
-    r.tower_damage_dealt   = ai_damage_per_type_;
-    r.fitness =
-        static_cast<float>(r.waves_cleared) * 10.0f
-      + (r.victory ? 200.0f : 0.0f);
+    r.tower_damage_dealt = ai_damage_per_type_;
+    r.fitness = static_cast<float>(r.waves_cleared) * 10.0f +
+                (r.victory ? 200.0f : 0.0f);
     return r;
   }
 
   void ToggleSfx() {
 #ifdef ENABLE_AUDIO
-    if (audio_) { audio_->ToggleSfx(); SaveSettings(); }
+    if (audio_) {
+      audio_->ToggleSfx();
+      SaveSettings();
+    }
 #endif
   }
 
@@ -1200,45 +1286,55 @@ public:
 #ifdef ENABLE_AUDIO
     if (audio_) {
       audio_->ToggleMusic();
-      if (audio_->MusicEnabled()) audio_->SetMusicForMap(map_index_);
+      if (audio_->MusicEnabled())
+        audio_->SetMusicForMap(map_index_);
       SaveSettings();
     }
 #endif
   }
 
   std::filesystem::path SettingsPath() const {
-    const char* home = std::getenv("HOME");
-    return std::filesystem::path(home ? home : ".") / ".config" / "catcat" / "settings.dat";
+    const char *home = std::getenv("HOME");
+    return std::filesystem::path(home ? home : ".") / ".config" / "catcat" /
+           "settings.dat";
   }
 
   void SaveSettings() {
 #ifdef ENABLE_AUDIO
-    if (!audio_) return;
+    if (!audio_)
+      return;
     try {
       auto path = SettingsPath();
       std::filesystem::create_directories(path.parent_path());
       std::ofstream f(path, std::ios::binary);
-      if (!f) return;
-      bool sfx_on   = audio_->SfxEnabled();
+      if (!f)
+        return;
+      bool sfx_on = audio_->SfxEnabled();
       bool music_on = audio_->MusicEnabled();
-      f.write(reinterpret_cast<const char*>(&sfx_on),   sizeof(sfx_on));
-      f.write(reinterpret_cast<const char*>(&music_on), sizeof(music_on));
-    } catch (...) {}
+      f.write(reinterpret_cast<const char *>(&sfx_on), sizeof(sfx_on));
+      f.write(reinterpret_cast<const char *>(&music_on), sizeof(music_on));
+    } catch (...) {
+    }
 #endif
   }
 
   void LoadSettings() {
 #ifdef ENABLE_AUDIO
-    if (!audio_) return;
+    if (!audio_)
+      return;
     try {
       std::ifstream f(SettingsPath(), std::ios::binary);
-      if (!f) return;
+      if (!f)
+        return;
       bool sfx_on = true, music_on = true;
-      f.read(reinterpret_cast<char*>(&sfx_on),   sizeof(sfx_on));
-      f.read(reinterpret_cast<char*>(&music_on), sizeof(music_on));
-      if (audio_->SfxEnabled()   != sfx_on)   audio_->ToggleSfx();
-      if (audio_->MusicEnabled() != music_on) audio_->ToggleMusic();
-    } catch (...) {}
+      f.read(reinterpret_cast<char *>(&sfx_on), sizeof(sfx_on));
+      f.read(reinterpret_cast<char *>(&music_on), sizeof(music_on));
+      if (audio_->SfxEnabled() != sfx_on)
+        audio_->ToggleSfx();
+      if (audio_->MusicEnabled() != music_on)
+        audio_->ToggleMusic();
+    } catch (...) {
+    }
 #endif
   }
 
@@ -1277,53 +1373,67 @@ private:
         }
       }
     }
-    if (ai_mode_) ComputeAICandidates();
+    if (ai_mode_)
+      ComputeAICandidates();
   }
 
   // Score non-path cells by path coverage and pick the top kAINumCandidates,
   // spread out so they don't all cluster around the same bend.
   void ComputeAICandidates() {
     constexpr float kCoverageR2 = 3.5f * 3.5f;
-    constexpr float kMinDist2   = 2.0f * 2.0f;
+    constexpr float kMinDist2 = 2.0f * 2.0f;
 
-    struct Scored { int x, y; float score; float mean_path_pos; };
+    struct Scored {
+      int x, y;
+      float score;
+      float mean_path_pos;
+    };
     std::vector<Scored> cells;
-    cells.reserve(kBoardWidth * kBoardHeight);
+    cells.reserve(static_cast<std::size_t>(kBoardWidth) * kBoardHeight);
 
-    const float path_len = static_cast<float>(std::max<std::size_t>(1, path_.size()));
+    const float path_len =
+        static_cast<float>(std::max<std::size_t>(1, path_.size()));
 
     for (int y = 0; y < kBoardHeight; ++y) {
       for (int x = 0; x < kBoardWidth; ++x) {
-        if (path_mask_[static_cast<std::size_t>(y)][static_cast<std::size_t>(x)]) continue;
+        if (path_mask_[static_cast<std::size_t>(y)]
+                      [static_cast<std::size_t>(x)])
+          continue;
         float s = 0.0f;
         float pos_sum = 0.0f;
         for (int pi = 0; pi < static_cast<int>(path_.size()); ++pi) {
-          const auto& p = path_[static_cast<std::size_t>(pi)];
+          const auto &p = path_[static_cast<std::size_t>(pi)];
           const float dx = static_cast<float>(x - p.x);
           const float dy = static_cast<float>(y - p.y);
-          if (dx*dx + dy*dy <= kCoverageR2) {
+          if (dx * dx + dy * dy <= kCoverageR2) {
             s += 1.0f;
             pos_sum += static_cast<float>(pi) / path_len;
           }
         }
-        if (s > 0.0f) cells.push_back({x, y, s, pos_sum / s});
+        if (s > 0.0f)
+          cells.push_back({x, y, s, pos_sum / s});
       }
     }
-    std::sort(cells.begin(), cells.end(),
-              [](const Scored& a, const Scored& b) { return a.score > b.score; });
+    std::sort(cells.begin(), cells.end(), [](const Scored &a, const Scored &b) {
+      return a.score > b.score;
+    });
 
     ai_candidates_.clear();
     ai_candidate_coverage_.fill(0.0f);
     ai_candidate_path_pos_.fill(0.0f);
     const float max_cov = cells.empty() ? 1.0f : cells[0].score;
 
-    for (const auto& c : cells) {
-      if (static_cast<int>(ai_candidates_.size()) >= kAINumCandidates) break;
+    for (const auto &c : cells) {
+      if (static_cast<int>(ai_candidates_.size()) >= kAINumCandidates)
+        break;
       bool too_close = false;
-      for (const auto& existing : ai_candidates_) {
+      for (const auto &existing : ai_candidates_) {
         const float dx = static_cast<float>(c.x - existing.x);
         const float dy = static_cast<float>(c.y - existing.y);
-        if (dx*dx + dy*dy < kMinDist2) { too_close = true; break; }
+        if (dx * dx + dy * dy < kMinDist2) {
+          too_close = true;
+          break;
+        }
       }
       if (!too_close) {
         const std::size_t idx = ai_candidates_.size();
@@ -1378,13 +1488,15 @@ private:
   }
 
   void MoveEnemies() {
+#ifdef ENABLE_AUDIO
     int lives_before = lives_;
+#endif
     for (auto &e : enemies_) {
       if (e.rewind_speed > 0.0F) {
         e.path_progress -= e.rewind_speed * Dt();
         if (e.path_progress <= 0.0F) {
           e.path_progress = 0.0F;
-          e.rewind_speed  = 0.0F;
+          e.rewind_speed = 0.0F;
         }
         continue;
       }
@@ -1400,7 +1512,8 @@ private:
       if (static_cast<int>(std::floor(e.path_progress)) >= end_index) {
         e.hp = 0;
         lives_ = std::max(0, lives_ - 1);
-        if (ai_mode_) ++ai_lives_lost_;
+        if (ai_mode_)
+          ++ai_lives_lost_;
       }
     }
 #ifdef ENABLE_AUDIO
@@ -1731,7 +1844,8 @@ private:
     // Preserve kibbles across maps to let players invest between stages.
     lives_ = kStartingLives;
     auto_waves_ = ai_mode_;
-    if (ai_mode_) ai_map_tower_counts_.fill(0);
+    if (ai_mode_)
+      ai_map_tower_counts_.fill(0);
     BuildPath();
     if (dev_skip) {
       wave_ = map_index_ * kWavesPerMap;
@@ -1860,7 +1974,8 @@ private:
 
   void AwardBounty(EnemyType type) {
     kibbles_ += Bounty(type);
-    if (ai_mode_) ++ai_enemies_killed_;
+    if (ai_mode_)
+      ++ai_enemies_killed_;
   }
 
   void PlayDeathSfx(EnemyType type) {
@@ -1905,11 +2020,13 @@ private:
     return s + std::string(w - s.size(), ' ');
   }
 
-  // Key number (1-based) for a tower type, derived from its cost-sorted position.
+  // Key number (1-based) for a tower type, derived from its cost-sorted
+  // position.
   int TypeKey(Tower::Type t) const {
     const auto defs = SortedDefs();
     for (size_t i = 0; i < defs.size(); ++i) {
-      if (defs[i].type == t) return static_cast<int>(i + 1);
+      if (defs[i].type == t)
+        return static_cast<int>(i + 1);
     }
     return 0;
   }
@@ -1919,11 +2036,14 @@ private:
   std::vector<TowerDef> SortedDefs() const {
     std::vector<TowerDef> defs;
     defs.reserve(kAllTowerTypes.size());
-    for (auto t : kAllTowerTypes) defs.push_back(GetDef(t));
-    std::sort(defs.begin(), defs.end(), [](const TowerDef &a, const TowerDef &b) {
-      if (a.cost == b.cost) return a.name < b.name;
-      return a.cost < b.cost;
-    });
+    for (auto t : kAllTowerTypes)
+      defs.push_back(GetDef(t));
+    std::sort(defs.begin(), defs.end(),
+              [](const TowerDef &a, const TowerDef &b) {
+                if (a.cost == b.cost)
+                  return a.name < b.name;
+                return a.cost < b.cost;
+              });
     return defs;
   }
 
@@ -1931,9 +2051,7 @@ private:
     return unlocked_types_.count(type) > 0;
   }
 
-  void Unlock(Tower::Type type) {
-    unlocked_types_.insert(type);
-  }
+  void Unlock(Tower::Type type) { unlocked_types_.insert(type); }
 
   void TryUnlockOrSelect(Tower::Type type) {
     if (IsUnlocked(type)) {
@@ -2306,9 +2424,8 @@ private:
       }
     }
 
-    const float reset_chance = t.upgraded
-        ? kGalacticResetChance * 3.0F
-        : kGalacticResetChance;
+    const float reset_chance =
+        t.upgraded ? kGalacticResetChance * 3.0F : kGalacticResetChance;
     bool any_rewind = false;
     for (auto &e : enemies_) {
       const auto pos = EnemyCell(e);
@@ -2367,7 +2484,8 @@ private:
 
     for (auto &e : enemies_) {
       const auto pos = EnemyCell(e);
-      if (std::max(std::abs(pos.x - cx), std::abs(pos.y - cy)) > kCraterRadius) continue;
+      if (std::max(std::abs(pos.x - cx), std::abs(pos.y - cy)) > kCraterRadius)
+        continue;
       e.hp -= ap.damage;
       AITrackDamage(Tower::Type::Catastrophe, ap.damage);
       if (e.hp <= 0) {
@@ -2381,28 +2499,35 @@ private:
     std::vector<Position> ring0, ring1, ring2;
     for (int y = cy - kCraterRadius; y <= cy + kCraterRadius; ++y) {
       for (int x = cx - kCraterRadius; x <= cx + kCraterRadius; ++x) {
-        if (x < 0 || x >= kBoardWidth || y < 0 || y >= kBoardHeight) continue;
+        if (x < 0 || x >= kBoardWidth || y < 0 || y >= kBoardHeight)
+          continue;
         const int ring = std::max(std::abs(x - cx), std::abs(y - cy));
-        if      (ring == 0) ring0.push_back({x, y});
-        else if (ring == 1) ring1.push_back({x, y});
-        else                ring2.push_back({x, y});
+        if (ring == 0)
+          ring0.push_back({x, y});
+        else if (ring == 1)
+          ring1.push_back({x, y});
+        else
+          ring2.push_back({x, y});
       }
     }
 
     // Expanding shockwave from impact point.
     Shockwave sw;
-    sw.center    = {static_cast<float>(cx), static_cast<float>(cy)};
-    sw.radius    = 0.0F;
+    sw.center = {static_cast<float>(cx), static_cast<float>(cy)};
+    sw.radius = 0.0F;
     sw.max_radius = static_cast<float>(kCraterRadius) + 0.8F;
-    sw.speed     = 7.0F;
+    sw.speed = 7.0F;
     sw.time_left = 0.45F;
-    sw.max_time  = 0.45F;
+    sw.max_time = 0.45F;
     shockwaves_.push_back(sw);
 
     // Bright explosion flash: white core → yellow mid-ring → orange outer.
-    if (!ring0.empty()) area_highlights_.push_back({ring0, 0.45F, ftxui::Color::White,   '*'});
-    if (!ring1.empty()) area_highlights_.push_back({ring1, 0.38F, ftxui::Color::Yellow1, '*'});
-    if (!ring2.empty()) area_highlights_.push_back({ring2, 0.30F, ftxui::Color::Orange1, '*'});
+    if (!ring0.empty())
+      area_highlights_.push_back({ring0, 0.45F, ftxui::Color::White, '*'});
+    if (!ring1.empty())
+      area_highlights_.push_back({ring1, 0.38F, ftxui::Color::Yellow1, '*'});
+    if (!ring2.empty())
+      area_highlights_.push_back({ring2, 0.30F, ftxui::Color::Orange1, '*'});
 
     Sfx("tower_catastrophe_detonation");
 
@@ -2419,22 +2544,29 @@ private:
     std::vector<Position> ring0, ring1, ring2, splash_cells;
     for (int y = cy - kCraterRadius; y <= cy + kCraterRadius; ++y) {
       for (int x = cx - kCraterRadius; x <= cx + kCraterRadius; ++x) {
-        if (x < 0 || x >= kBoardWidth || y < 0 || y >= kBoardHeight) continue;
+        if (x < 0 || x >= kBoardWidth || y < 0 || y >= kBoardHeight)
+          continue;
         const int ring = std::max(std::abs(x - cx), std::abs(y - cy));
         splash_cells.push_back({x, y});
-        if      (ring == 0) ring0.push_back({x, y});
-        else if (ring == 1) ring1.push_back({x, y});
-        else                ring2.push_back({x, y});
+        if (ring == 0)
+          ring0.push_back({x, y});
+        else if (ring == 1)
+          ring1.push_back({x, y});
+        else
+          ring2.push_back({x, y});
       }
     }
 
-    if (!ring0.empty()) area_highlights_.push_back({ring0, 0.4F, ftxui::Color::White,      '!'});
-    if (!ring1.empty()) area_highlights_.push_back({ring1, 0.4F, ftxui::Color::OrangeRed1, ':'});
-    if (!ring2.empty()) area_highlights_.push_back({ring2, 0.4F, ftxui::Color::DarkKhaki,  '.'});
+    if (!ring0.empty())
+      area_highlights_.push_back({ring0, 0.4F, ftxui::Color::White, '!'});
+    if (!ring1.empty())
+      area_highlights_.push_back({ring1, 0.4F, ftxui::Color::OrangeRed1, ':'});
+    if (!ring2.empty())
+      area_highlights_.push_back({ring2, 0.4F, ftxui::Color::DarkKhaki, '.'});
 
     ToxicZone zone;
-    zone.cells          = splash_cells;
-    zone.center         = {static_cast<float>(cx), static_cast<float>(cy)};
+    zone.cells = splash_cells;
+    zone.center = {static_cast<float>(cx), static_cast<float>(cy)};
     zone.explode_on_expire = pc.upgraded;
     toxic_zones_.push_back(std::move(zone));
   }
@@ -2457,8 +2589,10 @@ private:
     for (auto &ap : arc_projectiles_) {
       ap.progress += Dt() / ap.total_time;
       const float t = std::min(ap.progress, 1.0F);
-      ap.ground.x = ap.start.x + t * (static_cast<float>(ap.target.x) - ap.start.x);
-      ap.ground.y = ap.start.y + t * (static_cast<float>(ap.target.y) - ap.start.y);
+      ap.ground.x =
+          ap.start.x + t * (static_cast<float>(ap.target.x) - ap.start.x);
+      ap.ground.y =
+          ap.start.y + t * (static_cast<float>(ap.target.y) - ap.start.y);
       if (ap.progress >= 1.0F) {
         ExplodeCatastrophe(ap);
       } else {
@@ -2481,7 +2615,8 @@ private:
           const bool in_zone = std::any_of(
               zone.cells.begin(), zone.cells.end(),
               [&](const Position &c) { return c.x == pos.x && c.y == pos.y; });
-          if (!in_zone) continue;
+          if (!in_zone)
+            continue;
           e.hp -= zone.damage_per_tick;
           AITrackDamage(Tower::Type::Catastrophe, zone.damage_per_tick);
           if (e.hp <= 0) {
@@ -2504,10 +2639,12 @@ private:
           sw.max_time = 0.4F;
           shockwaves_.push_back(sw);
           for (auto &e : enemies_) {
-            if (!InRange(zone.center, EnemyCell(e), kCatastropheExplosionRadius))
+            if (!InRange(zone.center, EnemyCell(e),
+                         kCatastropheExplosionRadius))
               continue;
             e.hp -= kCatastropheExplosionDamage;
-            AITrackDamage(Tower::Type::Catastrophe, kCatastropheExplosionDamage);
+            AITrackDamage(Tower::Type::Catastrophe,
+                          kCatastropheExplosionDamage);
             if (e.hp <= 0) {
               AwardBounty(e.type);
               PlayDeathSfx(e.type);
@@ -2657,25 +2794,39 @@ private:
 
   static ftxui::Color TowerBgColor(Tower::Type t) {
     switch (t) {
-    case Tower::Type::Thunder:      return ftxui::Color::Blue1;
-    case Tower::Type::Fat:          return ftxui::Color::DarkOliveGreen3;
-    case Tower::Type::Kitty:        return ftxui::Color::Pink1;
-    case Tower::Type::Catatonic:    return ftxui::Color::Purple;
-    case Tower::Type::Galactic:     return ftxui::Color::LightSteelBlue;
-    case Tower::Type::Catastrophe:  return ftxui::Color::DarkKhaki;
-    default:                        return ftxui::Color::Gold1;
+    case Tower::Type::Thunder:
+      return ftxui::Color::Blue1;
+    case Tower::Type::Fat:
+      return ftxui::Color::DarkOliveGreen3;
+    case Tower::Type::Kitty:
+      return ftxui::Color::Pink1;
+    case Tower::Type::Catatonic:
+      return ftxui::Color::Purple;
+    case Tower::Type::Galactic:
+      return ftxui::Color::LightSteelBlue;
+    case Tower::Type::Catastrophe:
+      return ftxui::Color::DarkKhaki;
+    default:
+      return ftxui::Color::Gold1;
     }
   }
 
   static char TowerBaseGlyph(Tower::Type t) {
     switch (t) {
-    case Tower::Type::Thunder:      return 't';
-    case Tower::Type::Fat:          return 'f';
-    case Tower::Type::Kitty:        return 'k';
-    case Tower::Type::Catatonic:    return 'c';
-    case Tower::Type::Galactic:     return 'g';
-    case Tower::Type::Catastrophe:  return 'z';
-    default:                        return 'd';
+    case Tower::Type::Thunder:
+      return 't';
+    case Tower::Type::Fat:
+      return 'f';
+    case Tower::Type::Kitty:
+      return 'k';
+    case Tower::Type::Catatonic:
+      return 'c';
+    case Tower::Type::Galactic:
+      return 'g';
+    case Tower::Type::Catastrophe:
+      return 'z';
+    default:
+      return 'd';
     }
   }
 
@@ -2955,10 +3106,12 @@ private:
     for (const auto &hs : hit_splats_) {
       for (int dy = -hs.radius; dy <= hs.radius; ++dy) {
         for (int dx = -hs.radius; dx <= hs.radius; ++dx) {
-          if (std::abs(dx) + std::abs(dy) > hs.radius) continue; // diamond shape
+          if (std::abs(dx) + std::abs(dy) > hs.radius)
+            continue; // diamond shape
           const int cx = hs.pos.x + dx;
           const int cy = hs.pos.y + dy;
-          if (cy < 0 || cy >= kBoardHeight || cx < 0 || cx >= kBoardWidth) continue;
+          if (cy < 0 || cy >= kBoardHeight || cx < 0 || cx >= kBoardWidth)
+            continue;
           const auto yi = static_cast<size_t>(cy);
           const auto xi = static_cast<size_t>(cx);
           glyphs[yi][xi] = 'x';
@@ -3115,19 +3268,20 @@ private:
 
 #ifdef ENABLE_AUDIO
     if (audio_) {
-      const bool sfx_on   = audio_->SfxEnabled();
+      const bool sfx_on = audio_->SfxEnabled();
       const bool music_on = audio_->MusicEnabled();
       lines.push_back(hbox({
-        text("SFX:     ") | color(ftxui::Color::GrayLight),
-        text(sfx_on ? "on " : "off") |
-            color(sfx_on ? ftxui::Color::GreenLight : ftxui::Color::GrayDark),
-        text("  (t)") | color(ftxui::Color::GrayDark),
+          text("SFX:     ") | color(ftxui::Color::GrayLight),
+          text(sfx_on ? "on " : "off") |
+              color(sfx_on ? ftxui::Color::GreenLight : ftxui::Color::GrayDark),
+          text("  (t)") | color(ftxui::Color::GrayDark),
       }));
       lines.push_back(hbox({
-        text("Music:   ") | color(ftxui::Color::GrayLight),
-        text(music_on ? "on " : "off") |
-            color(music_on ? ftxui::Color::GreenLight : ftxui::Color::GrayDark),
-        text("  (y)") | color(ftxui::Color::GrayDark),
+          text("Music:   ") | color(ftxui::Color::GrayLight),
+          text(music_on ? "on " : "off") |
+              color(music_on ? ftxui::Color::GreenLight
+                             : ftxui::Color::GrayDark),
+          text("  (y)") | color(ftxui::Color::GrayDark),
       }));
     }
 #endif
@@ -3160,8 +3314,9 @@ private:
           " " + std::to_string(TypeKey(def.type)) + ") " + def.name;
       max_label_w = std::max(max_label_w, label.size());
       const std::string cost_str =
-          IsUnlocked(def.type) ? std::to_string(def.cost)
-                               : std::to_string(def.cost * kUnlockCostMultiplier) + " unlock";
+          IsUnlocked(def.type)
+              ? std::to_string(def.cost)
+              : std::to_string(def.cost * kUnlockCostMultiplier) + " unlock";
       max_cost_w = std::max(max_cost_w, cost_str.size());
     }
 
@@ -3191,8 +3346,9 @@ private:
 
       // Cost right-aligned within a fixed-width field
       const std::string cost_str =
-          unlocked ? std::to_string(def.cost)
-                   : std::to_string(def.cost * kUnlockCostMultiplier) + " unlock";
+          unlocked
+              ? std::to_string(def.cost)
+              : std::to_string(def.cost * kUnlockCostMultiplier) + " unlock";
       const std::string padded_cost =
           " " + std::string(max_cost_w - cost_str.size(), ' ') + cost_str;
       ftxui::Color cost_color = ftxui::Color::GrayLight;
@@ -3253,9 +3409,9 @@ private:
   std::vector<Tower> towers_;
   std::vector<HitSplat> hit_splats_;
   std::vector<Projectile> projectiles_;
-  std::vector<ArcProjectile>       arc_projectiles_;
-  std::vector<PendingCatastrophe>  pending_catastrophes_;
-  std::vector<ToxicZone>           toxic_zones_;
+  std::vector<ArcProjectile> arc_projectiles_;
+  std::vector<PendingCatastrophe> pending_catastrophes_;
+  std::vector<ToxicZone> toxic_zones_;
   std::vector<Shockwave> shockwaves_;
   std::vector<Beam> beams_;
   std::vector<AreaHighlight> area_highlights_;
@@ -3283,23 +3439,25 @@ private:
   int lives_ = 0;
   int wave_ = 0;
   bool wave_active_ = false;
-  bool  game_over_ = false;
-  float game_over_display_timer_ = 0.0f; // counts down after game over (live game only)
+  bool game_over_ = false;
+  float game_over_display_timer_ =
+      0.0f; // counts down after game over (live game only)
   int spawn_remaining_ = 0;
   int spawn_cooldown_ms_ = 0;
 
   // ── AI mode ──────────────────────────────────────────────────────────────
-  static constexpr int kAIMaxTowersPerType    = 5;
-  static constexpr int kAIMapGraceDecisions   = 8; // free placement decisions after map transition
+  static constexpr int kAIMaxTowersPerType = 5;
+  static constexpr int kAIMapGraceDecisions =
+      8; // free placement decisions after map transition
   bool ai_mode_ = false;
-  int  ai_enemies_killed_ = 0;
-  int  ai_lives_lost_  = 0;
-  int  ai_grace_decisions_ = 0; // counts down after map transition
+  int ai_enemies_killed_ = 0;
+  int ai_lives_lost_ = 0;
+  int ai_grace_decisions_ = 0; // counts down after map transition
   std::array<int, kAINumTowerTypes> ai_tower_type_counts_{};
   std::array<int, kAINumTowerTypes> ai_tower_upgrade_counts_{};
   std::array<int, kAINumTowerTypes> ai_map_tower_counts_{};
   std::array<int, kAINumTowerTypes> ai_damage_per_type_{};
-  std::vector<Position>  ai_candidates_;
+  std::vector<Position> ai_candidates_;
   std::array<float, kAINumCandidates> ai_candidate_coverage_{};
   std::array<float, kAINumCandidates> ai_candidate_path_pos_{};
 };
@@ -3400,9 +3558,7 @@ bool GameAIBridge::Act(AICommand cmd) {
   return impl_->game.ExecuteAICommand(cmd);
 }
 
-AIObservation GameAIBridge::Observe() const {
-  return impl_->game.Observe();
-}
+AIObservation GameAIBridge::Observe() const { return impl_->game.Observe(); }
 
 bool GameAIBridge::IsTerminal() const { return impl_->game.IsTerminal(); }
 
@@ -3410,11 +3566,9 @@ AIEpisodeResult GameAIBridge::GetResult() const {
   return impl_->game.GetAIResult();
 }
 
-ftxui::Element GameAIBridge::Render() const {
-  return impl_->game.Render();
-}
+ftxui::Element GameAIBridge::Render() const { return impl_->game.Render(); }
 
-void GameAIBridge::ToggleSfx()   { impl_->game.ToggleSfx(); }
+void GameAIBridge::ToggleSfx() { impl_->game.ToggleSfx(); }
 void GameAIBridge::ToggleMusic() { impl_->game.ToggleMusic(); }
-int  GameAIBridge::Wave()        const { return impl_->game.Wave(); }
-int  GameAIBridge::MapIndex()    const { return impl_->game.MapIndex(); }
+int GameAIBridge::Wave() const { return impl_->game.Wave(); }
+int GameAIBridge::MapIndex() const { return impl_->game.MapIndex(); }

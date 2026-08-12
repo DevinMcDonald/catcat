@@ -5,8 +5,8 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <future>
 #include <functional>
+#include <future>
 #include <optional>
 #include <string>
 
@@ -40,7 +40,7 @@ std::optional<std::string> StableVersionFromJson(const std::string &data) {
 }
 
 std::optional<std::string> FetchLatestForCmd(const std::string &cmd) {
-  FILE *pipe = popen(cmd.c_str(), "r");
+  FILE *pipe = popen(cmd.c_str(), "r"); // NOLINT(bugprone-command-processor)
   if (!pipe) {
     return std::nullopt;
   }
@@ -66,9 +66,11 @@ std::string NormalizeVersion(const std::string &v) {
 }
 
 bool IsCleanVersion(const std::string &v) {
-  if (v.empty()) return false;
+  if (v.empty())
+    return false;
   for (char c : v) {
-    if (!std::isdigit(static_cast<unsigned char>(c)) && c != '.') return false;
+    if (!std::isdigit(static_cast<unsigned char>(c)) && c != '.')
+      return false;
   }
   return true;
 }

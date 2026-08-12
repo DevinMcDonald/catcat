@@ -1,0 +1,10 @@
+Checks: >
+  bugprone-*,
+  clang-analyzer-*,
+  modernize-use-scoped-lock,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions
+
+WarningsAsErrors: ""
+
+HeaderFilterRegex: ".*/catcat/src/.*"
