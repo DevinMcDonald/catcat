@@ -24,7 +24,7 @@ static void TrainSignalHandler(int) { g_train_running = false; }
 #include <unistd.h>
 static void CrashHandler(int sig) {
     const char *msg = "catcat: fatal signal — stack trace:\n";
-    (void)write(STDERR_FILENO, msg, __builtin_strlen(msg));
+    std::ignore = write(STDERR_FILENO, msg, __builtin_strlen(msg));
     void *frames[64];
     int n = backtrace(frames, 64);
     backtrace_symbols_fd(frames, n, STDERR_FILENO);
